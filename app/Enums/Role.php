@@ -31,4 +31,32 @@ enum Role: string
             self::Manager => 'manager.home',
         };
     }
+
+    /**
+     * Side menu items for this role, as [label => route name].
+     *
+     * @return array<string, string>
+     */
+    public function menu(): array
+    {
+        return match ($this) {
+            self::Reservation => [
+                'New reservation' => 'reservation.create',
+                'Find reservation' => 'reservation.search',
+            ],
+            self::Checkin => [
+                'Check in passenger' => 'checkin.home',
+            ],
+            self::Gate => [
+                'Manifest' => 'gate.home',
+            ],
+            self::Manager => [
+                'Flight lists' => 'manager.home',
+                'Flights and aircraft' => 'manager.flights',
+                'Staff accounts' => 'manager.accounts',
+                'Rules and allowances' => 'manager.rules',
+                'Audit log' => 'manager.audit',
+            ],
+        };
+    }
 }
