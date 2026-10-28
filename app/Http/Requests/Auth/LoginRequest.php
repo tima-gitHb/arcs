@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Auth;
 
+use App\Models\User;
 use Illuminate\Auth\Events\Lockout;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -12,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class LoginRequest extends FormRequest
 {
+    private const MAX_FAILED_LOGINS = 5;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -42,13 +45,38 @@ class LoginRequest extends FormRequest
     {
         $this->ensureIsNotRateLimited();
 
+        $user = User::where('email', $this->string('email'))->first();
+
+        // SR-15: a locked account is refused even with the right password.
+        if ($user?->locked) {
+            throw ValidationException::withMessages([
+                'email' => 'Account locked. Ask the Manager to unlock it.',
+            ]);
+        }
+
+        if ($user && ! $user->active) {
+            throw ValidationException::withMessages([
+                'email' => 'This account is deactivated.',
+            ]);
+        }
+
         if (! Auth::attempt($this->only('email', 'password'), $this->boolean('remember'))) {
             RateLimiter::hit($this->throttleKey());
+
+            // SR-15: count wrong passwords; lock the account at 5.
+            if ($user) {
+                $user->failed_logins++;
+                $user->locked = $user->failed_logins >= self::MAX_FAILED_LOGINS;
+                $user->save();
+            }
 
             throw ValidationException::withMessages([
                 'email' => trans('auth.failed'),
             ]);
         }
+
+        $user->failed_logins = 0;
+        $user->save();
 
         RateLimiter::clear($this->throttleKey());
     }

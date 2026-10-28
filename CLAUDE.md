@@ -59,5 +59,6 @@ gate_overrides, settings.
   Each Must SR has at least one feature test named after it (e.g. `test_SR7_two_agents_cannot_take_same_seat`).
 - Commit messages start with the task ID: `C3: seat map with taken seats blocked (SR-7)`.
 - Before a pull request: `php artisan test` passes, `./vendor/bin/pint` run, page tested in the browser.
+- pint.json keeps the php_unit_method_casing rule off so test names like test_SR7_... are not renamed.
 - If a request conflicts with a rule above or with the BRD scope, **stop and say so** instead of building it.
 - Every member must be able to explain the code in their branch.

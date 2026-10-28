@@ -18,4 +18,17 @@ enum Role: string
             self::Manager => 'Manager',
         };
     }
+
+    /**
+     * Name of the route each role lands on after login (SR-13).
+     */
+    public function homeRoute(): string
+    {
+        return match ($this) {
+            self::Reservation => 'reservation.home',
+            self::Checkin => 'checkin.home',
+            self::Gate => 'gate.home',
+            self::Manager => 'manager.home',
+        };
+    }
 }
