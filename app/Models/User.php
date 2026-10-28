@@ -3,8 +3,10 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\Role;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -22,6 +24,8 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
+        'active',
     ];
 
     /**
@@ -44,6 +48,20 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'role' => Role::class,
+            'failed_logins' => 'integer',
+            'locked' => 'boolean',
+            'active' => 'boolean',
         ];
+    }
+
+    public function createdReservations(): HasMany
+    {
+        return $this->hasMany(Reservation::class, 'created_by');
+    }
+
+    public function auditEntries(): HasMany
+    {
+        return $this->hasMany(AuditEntry::class);
     }
 }
