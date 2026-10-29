@@ -37,7 +37,7 @@ Requirements: `docs/ARCS_BRD_v0.5.docx` (BRD). Every feature traces to an SR-ID 
 users, aircraft, seats, flights, reservations, passengers, seat_assignments, bags,
 boarding_passes, special_services, travel_documents, audit_log, baggage_allowances,
 gate_overrides, settings.
-- **Never edit an existing migration** once it is on `main`. Schema change = new migration,
+- **Never edit an existing migration** once it is on `dev` or `main`. Schema change = new migration,
   agreed with the team first.
 - Foreign keys always declared (`constrained()`), with `cascadeOnDelete()` only for seats → aircraft.
 
@@ -53,8 +53,12 @@ gate_overrides, settings.
   routes `role.resource.action` (e.g. `checkin.seats.assign`).
 
 ## How we work
-- One task = one branch = one Claude conversation. Branch name: `feature/<task-id>-<short-name>`
-  (e.g. `feature/C3-seat-map`). Never commit straight to `main`; merge through a pull request.
+- **Branches:** `main` = milestone releases, `dev` = integration, one `feature/<task-id>-<short-name>` per task.
+  - One task = one branch = one Claude conversation (e.g. `feature/C3-seat-map`).
+  - Create every feature branch from an up-to-date `dev`.
+  - Merge the feature branch into `dev` through a pull request, only when CI is green.
+  - Only the team lead merges `dev` into `main`, at milestones.
+  - **Never push or commit directly to `main` or `dev`.**
 - **Test first:** write the test from the SR's acceptance criterion, see it fail, then write the code.
   Each Must SR has at least one feature test named after it (e.g. `test_SR7_two_agents_cannot_take_same_seat`).
 - Commit messages start with the task ID: `C3: seat map with taken seats blocked (SR-7)`.
