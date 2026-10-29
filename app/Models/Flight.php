@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\FlightStatus;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -10,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Flight extends Model
 {
+    use HasFactory;
+
     /**
      * 'status' and 'boarding_closed_at' are deliberately not fillable:
      * they only change through StatusService.

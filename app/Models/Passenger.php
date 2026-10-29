@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -11,6 +12,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Passenger extends Model
 {
+    use HasFactory;
+
     /**
      * 'status', 'checked_in_at' and 'boarded_at' are deliberately not fillable:
      * they only change through StatusService (SR-26).
