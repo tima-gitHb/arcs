@@ -20,6 +20,8 @@ class FlightFactory extends Factory
 
         return [
             'flight_no' => 'ME'.fake()->numerify('###'),
+            'origin' => 'BEY',
+            'destination' => fake()->randomElement(['CDG', 'DXB', 'LHR', 'FCO']),
             'aircraft_id' => Aircraft::factory(),
             'departure_at' => $departure,
             'checkin_opens_at' => $departure->copy()->subHours(3),

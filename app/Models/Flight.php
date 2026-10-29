@@ -21,6 +21,8 @@ class Flight extends Model
      */
     protected $fillable = [
         'flight_no',
+        'origin',
+        'destination',
         'aircraft_id',
         'departure_at',
         'gate',
