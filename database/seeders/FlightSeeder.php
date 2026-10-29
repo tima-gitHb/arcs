@@ -1,0 +1,311 @@
+<?php
+
+namespace Database\Seeders;
+
+use App\Enums\CabinClass;
+use App\Enums\DocumentType;
+use App\Enums\FlightStatus;
+use App\Enums\PassengerType;
+use App\Enums\Role;
+use App\Models\Aircraft;
+use App\Models\Bag;
+use App\Models\Flight;
+use App\Models\Passenger;
+use App\Models\Reservation;
+use App\Models\Seat;
+use App\Models\SeatAssignment;
+use App\Models\TravelDocument;
+use App\Models\User;
+use App\Services\PnrGenerator;
+use App\Services\StatusService;
+use Illuminate\Database\Seeder;
+use Illuminate\Support\Carbon;
+
+/**
+ * Four sample flights on OD-MRA, with times relative to now().
+ * Every status is reached through StatusService, so audit_log fills naturally.
+ *
+ * StatusService only allows check-in inside the check-in window. For flights whose
+ * window is already over (ME 305, ME 110), we briefly move the clock back with at().
+ */
+class FlightSeeder extends Seeder
+{
+    private const FIRST_NAMES = [
+        'Karim', 'Lara', 'Nadim', 'Rita', 'Fadi', 'Nour', 'Elie', 'Yara', 'Marc', 'Dana',
+        'Ziad', 'Christelle', 'Hadi', 'Maria', 'Tarek', 'Joelle', 'Samir', 'Rania', 'Georges', 'Lina',
+        'Walid', 'Carla', 'Bassam', 'Sara', 'Antoine', 'Mira', 'Omar', 'Tania', 'Charbel', 'Reem',
+    ];
+
+    private const LAST_NAMES = [
+        'Haddad', 'Khalil', 'Aoun', 'Frem', 'Mansour', 'Sleiman', 'Hajj', 'Karam', 'Rizk', 'Chami',
+        'Najjar', 'Tannous', 'Saad', 'Gemayel', 'Azar', 'Bou Khalil', 'Hamdan', 'Sfeir', 'Kassab', 'Yammine',
+    ];
+
+    private StatusService $status;
+
+    private PnrGenerator $pnr;
+
+    private Carbon $base;
+
+    private User $reservationAgent;
+
+    private User $checkinAgent;
+
+    private User $gateAgent;
+
+    private User $manager;
+
+    private Aircraft $aircraft;
+
+    private int $nameIndex = 0;
+
+    private int $documentNo = 1000000;
+
+    private int $tagNo = 100000;
+
+    /** @var array<int, int> next free seat index per flight id */
+    private array $nextSeat = [];
+
+    public function run(StatusService $status, PnrGenerator $pnr): void
+    {
+        $this->status = $status;
+        $this->pnr = $pnr;
+        $this->base = now()->startOfMinute();
+
+        $this->reservationAgent = User::where('role', Role::Reservation)->firstOrFail();
+        $this->checkinAgent = User::where('role', Role::Checkin)->firstOrFail();
+        $this->gateAgent = User::where('role', Role::Gate)->firstOrFail();
+        $this->manager = User::where('role', Role::Manager)->firstOrFail();
+        $this->aircraft = Aircraft::where('registration', 'OD-MRA')->firstOrFail();
+
+        $this->seedParis();
+        $this->seedDubai();
+        $this->seedLondon();
+        $this->seedRome();
+    }
+
+    /**
+     * ME 201 Beirut → Paris: check-in open now.
+     * 10 Booked (incl. an adult with an infant, and one expired passport),
+     * 2 CheckedIn with seats and bags, 1 Cancelled.
+     */
+    private function seedParis(): void
+    {
+        $flight = $this->flight('ME201', 'BEY', 'CDG', gate: 'A3', departs: 180, opens: -60, closes: 135);
+        $this->status->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->manager);
+
+        // 7 ordinary Booked passengers, some with a visa for France.
+        for ($i = 0; $i < 7; $i++) {
+            $this->passenger($flight, visaCountry: $i % 3 === 0 ? 'FR' : null);
+        }
+
+        // An adult travelling with an infant on the same booking (infant: no seat, SR-24).
+        $adult = $this->passenger($flight);
+        $this->passenger($flight, type: PassengerType::Infant, adult: $adult);
+
+        // Passport already expired: check-in will be refused with "Document expired".
+        $this->passenger($flight, passportExpiry: $this->base->copy()->subMonths(2));
+
+        // 2 checked in, each with a seat and a bag.
+        for ($i = 0; $i < 2; $i++) {
+            $passenger = $this->passenger($flight);
+            $this->seat($flight, $passenger);
+            $this->status->checkIn($passenger, $this->checkinAgent);
+            $this->bag($passenger);
+        }
+
+        // Booked with a seat, then cancelled: the seat is released (SR-5).
+        $cancelled = $this->passenger($flight);
+        $this->seat($flight, $cancelled);
+        $this->status->cancel($cancelled, $this->reservationAgent);
+    }
+
+    /**
+     * ME 305 Beirut → Dubai: boarding now, departs in 40 minutes.
+     * 8 CheckedIn with seats and bags, of which 5 already Boarded.
+     */
+    private function seedDubai(): void
+    {
+        $flight = $this->flight('ME305', 'BEY', 'DXB', gate: 'B7', departs: 40, opens: -140, closes: -5);
+
+        $passengers = $this->at(-120, function () use ($flight) {
+            $this->status->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->manager);
+
+            $passengers = [];
+            for ($i = 0; $i < 8; $i++) {
+                $passenger = $this->passenger($flight, visaCountry: $i % 2 === 0 ? 'AE' : null);
+                $this->seat($flight, $passenger);
+                $this->status->checkIn($passenger, $this->checkinAgent);
+                $this->bag($passenger);
+                $passengers[] = $passenger;
+            }
+
+            return $passengers;
+        });
+
+        $this->at(-10, fn () => $this->status->setFlightStatus($flight, FlightStatus::Boarding, $this->gateAgent));
+
+        foreach (array_slice($passengers, 0, 5) as $passenger) {
+            $this->status->board($passenger, $this->gateAgent);
+        }
+    }
+
+    /**
+     * ME 110 Beirut → London: boarding closed earlier today through closeBoarding().
+     * 6 Boarded, 2 NoShow whose bags are returned for offloading (SR-12).
+     */
+    private function seedLondon(): void
+    {
+        $flight = $this->flight('ME110', 'BEY', 'LHR', gate: 'A1', departs: -60, opens: -240, closes: -105);
+
+        $passengers = $this->at(-180, function () use ($flight) {
+            $this->status->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->manager);
+
+            $passengers = [];
+            for ($i = 0; $i < 8; $i++) {
+                $passenger = $this->passenger($flight, visaCountry: $i < 3 ? 'GB' : null);
+                $this->seat($flight, $passenger);
+                $this->status->checkIn($passenger, $this->checkinAgent);
+                $this->bag($passenger);
+                $passengers[] = $passenger;
+            }
+
+            return $passengers;
+        });
+
+        $this->at(-100, function () use ($flight, $passengers) {
+            $this->status->setFlightStatus($flight, FlightStatus::Boarding, $this->gateAgent);
+
+            foreach (array_slice($passengers, 0, 6) as $passenger) {
+                $this->status->board($passenger, $this->gateAgent);
+            }
+        });
+
+        // The last 2 never came to the gate: they become NoShow.
+        $this->at(-75, fn () => $this->status->closeBoarding($flight, $this->gateAgent));
+    }
+
+    /**
+     * ME 422 Beirut → Rome: tomorrow, still Scheduled, no passengers yet.
+     */
+    private function seedRome(): void
+    {
+        $this->flight('ME422', 'BEY', 'FCO', gate: null, departs: 24 * 60, opens: 24 * 60 - 180, closes: 24 * 60 - 45);
+    }
+
+    /**
+     * Create a flight on OD-MRA. Times are minutes from now.
+     */
+    private function flight(string $number, string $origin, string $destination, ?string $gate, int $departs, int $opens, int $closes): Flight
+    {
+        return Flight::create([
+            'flight_no' => $number,
+            'origin' => $origin,
+            'destination' => $destination,
+            'aircraft_id' => $this->aircraft->id,
+            'departure_at' => $this->minutes($departs),
+            'gate' => $gate,
+            'checkin_opens_at' => $this->minutes($opens),
+            'checkin_closes_at' => $this->minutes($closes),
+        ]);
+    }
+
+    /**
+     * Create a Booked passenger with a valid passport (unless an expiry is given).
+     * An infant joins the adult's reservation; everyone else gets their own.
+     */
+    private function passenger(
+        Flight $flight,
+        PassengerType $type = PassengerType::Adult,
+        ?Passenger $adult = null,
+        ?Carbon $passportExpiry = null,
+        ?string $visaCountry = null,
+    ): Passenger {
+        $reservationId = $adult?->reservation_id ?? Reservation::create([
+            'pnr' => $this->pnr->generate(),
+            'flight_id' => $flight->id,
+            'created_by' => $this->reservationAgent->id,
+        ])->id;
+
+        $passenger = Passenger::create([
+            'reservation_id' => $reservationId,
+            'first_name' => self::FIRST_NAMES[$this->nameIndex % count(self::FIRST_NAMES)],
+            'last_name' => $adult?->last_name ?? self::LAST_NAMES[$this->nameIndex % count(self::LAST_NAMES)],
+            'type' => $type,
+            'date_of_birth' => $type === PassengerType::Infant
+                ? $this->base->copy()->subMonths(8)
+                : $this->base->copy()->subYears(25 + $this->nameIndex % 40),
+            'accompanying_adult_id' => $adult?->id,
+        ]);
+        $this->nameIndex++;
+
+        $this->document($passenger, DocumentType::Passport, 'LB', $passportExpiry ?? $this->base->copy()->addYears(4));
+
+        if ($visaCountry) {
+            $this->document($passenger, DocumentType::Visa, $visaCountry, $this->base->copy()->addYear());
+        }
+
+        return $passenger;
+    }
+
+    private function document(Passenger $passenger, DocumentType $type, string $country, Carbon $expiry): void
+    {
+        TravelDocument::create([
+            'passenger_id' => $passenger->id,
+            'type' => $type,
+            'number' => ($type === DocumentType::Passport ? 'LR' : 'V').$this->documentNo++,
+            'issuing_country' => $country,
+            'expiry_date' => $expiry->toDateString(),
+        ]);
+    }
+
+    /**
+     * Give the passenger the next free Economy seat (rows 6–30) on this flight.
+     */
+    private function seat(Flight $flight, Passenger $passenger): void
+    {
+        $index = $this->nextSeat[$flight->id] ?? 0;
+        $this->nextSeat[$flight->id] = $index + 1;
+
+        $seat = Seat::where('aircraft_id', $this->aircraft->id)
+            ->where('cabin_class', CabinClass::Economy)
+            ->orderBy('id')
+            ->skip($index)
+            ->firstOrFail();
+
+        SeatAssignment::create([
+            'flight_id' => $flight->id,
+            'seat_id' => $seat->id,
+            'passenger_id' => $passenger->id,
+        ]);
+    }
+
+    private function bag(Passenger $passenger): void
+    {
+        Bag::create([
+            'passenger_id' => $passenger->id,
+            'tag_no' => 'ME'.$this->tagNo++,
+            'weight_kg' => 15 + ($this->tagNo % 8),
+        ]);
+    }
+
+    private function minutes(int $minutes): Carbon
+    {
+        return $this->base->copy()->addMinutes($minutes);
+    }
+
+    /**
+     * Run $action as if the clock showed now + $minutes, then put the clock back.
+     */
+    private function at(int $minutes, callable $action): mixed
+    {
+        $previous = Carbon::getTestNow();
+        Carbon::setTestNow($this->minutes($minutes));
+
+        try {
+            return $action();
+        } finally {
+            Carbon::setTestNow($previous);
+        }
+    }
+}

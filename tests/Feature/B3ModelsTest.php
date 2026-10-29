@@ -40,6 +40,8 @@ class B3ModelsTest extends TestCase
 
         $flight = Flight::create([
             'flight_no' => 'ME201',
+            'origin' => 'BEY',
+            'destination' => 'CDG',
             'aircraft_id' => $aircraft->id,
             'departure_at' => now()->addHours(5),
             'checkin_opens_at' => now()->addHours(2),
@@ -143,6 +145,8 @@ class B3ModelsTest extends TestCase
 
         $flight = Flight::create([
             'flight_no' => 'ME202',
+            'origin' => 'BEY',
+            'destination' => 'CDG',
             'aircraft_id' => $aircraft->id,
             'departure_at' => now()->addHours(5),
             'checkin_opens_at' => now()->addHours(2),
