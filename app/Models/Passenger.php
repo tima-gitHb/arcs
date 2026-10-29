@@ -97,4 +97,40 @@ class Passenger extends Model
     {
         return $this->hasOne(GateOverride::class);
     }
+
+    /*
+     * "Who did it" (SR-45): the audit_log row of a status change, with ->user and ->changed_at,
+     * or null if it never happened. Eager-load for lists: Passenger::with('checkedInBy.user').
+     */
+
+    public function checkedInBy(): HasOne
+    {
+        return $this->statusChangeTo(PassengerStatus::CheckedIn);
+    }
+
+    public function boardedBy(): HasOne
+    {
+        return $this->statusChangeTo(PassengerStatus::Boarded);
+    }
+
+    public function cancelledBy(): HasOne
+    {
+        return $this->statusChangeTo(PassengerStatus::Cancelled);
+    }
+
+    public function markedNoShowBy(): HasOne
+    {
+        return $this->statusChangeTo(PassengerStatus::NoShow);
+    }
+
+    /**
+     * The latest audit_log row where this passenger's status became $status.
+     */
+    private function statusChangeTo(PassengerStatus $status): HasOne
+    {
+        return $this->hasOne(AuditEntry::class)->ofMany(
+            ['id' => 'max'],
+            fn ($query) => $query->where('field', 'status')->where('new_value', $status->value),
+        );
+    }
 }

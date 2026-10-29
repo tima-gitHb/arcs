@@ -69,7 +69,7 @@ php artisan key:generate
 
 Leave both empty: Laravel creates the tables.
 
-**5. Point `.env` at MySQL**
+**5. Set up `.env`**
 
 Open `.env` and replace the `DB_` lines with (use your own MySQL password):
 
@@ -83,6 +83,13 @@ DB_PASSWORD=your_mysql_password
 ```
 
 Make sure none of these lines start with `#` or a space.
+
+Check these two lines too (they are already in `.env.example`; add them if your `.env` is older):
+
+```env
+APP_TIMEZONE=Asia/Beirut   # all flight times are Beirut time
+SESSION_LIFETIME=15        # log out after 15 minutes without activity (SR-39)
+```
 
 **6. Create the tables and the sample data**
 

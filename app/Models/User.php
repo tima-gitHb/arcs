@@ -52,6 +52,7 @@ class User extends Authenticatable
             'failed_logins' => 'integer',
             'locked' => 'boolean',
             'active' => 'boolean',
+            'last_login_at' => 'datetime',
         ];
     }
 

@@ -1,9 +1,12 @@
 <?php
 
+use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cookie;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -15,6 +18,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
         ]);
+
+        // SR-39: a guest who still has the login marker cookie had a session that timed out.
+        $middleware->redirectGuestsTo(function (Request $request) {
+            if ($request->cookie(AuthenticatedSessionController::SESSION_MARKER)) {
+                $request->session()->flash('status', 'Session expired, please log in again.');
+                Cookie::queue(Cookie::forget(AuthenticatedSessionController::SESSION_MARKER));
+            }
+
+            return route('login');
+        });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
