@@ -1,7 +1,14 @@
 <?php
 
-use App\Enums\Role;
+use App\Http\Controllers\Checkin\CheckinController;
+use App\Http\Controllers\Gate\GateController;
+use App\Http\Controllers\Manager\AccountController;
+use App\Http\Controllers\Manager\AuditController;
+use App\Http\Controllers\Manager\FlightController;
+use App\Http\Controllers\Manager\FlightListController;
+use App\Http\Controllers\Manager\RuleController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Reservation\ReservationController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -23,22 +30,28 @@ Route::middleware('auth')->group(function () {
 
 // Reservation staff
 Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('reservation.')->group(function () {
-    Route::view('/', 'reservation.home', ['role' => Role::Reservation])->name('home');
+    Route::get('/', fn () => redirect()->route('reservation.create'))->name('home');
+    Route::get('/create', [ReservationController::class, 'create'])->name('create');
+    Route::get('/search', [ReservationController::class, 'search'])->name('search');
 });
 
 // Check-in staff
 Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')->group(function () {
-    Route::view('/', 'checkin.home', ['role' => Role::Checkin])->name('home');
+    Route::get('/', [CheckinController::class, 'home'])->name('home');
 });
 
 // Gate staff
 Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(function () {
-    Route::view('/', 'gate.home', ['role' => Role::Gate])->name('home');
+    Route::get('/', [GateController::class, 'home'])->name('home');
 });
 
 // Manager
 Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')->group(function () {
-    Route::view('/', 'manager.home', ['role' => Role::Manager])->name('home');
+    Route::get('/', [FlightListController::class, 'index'])->name('home');
+    Route::get('/flights', [FlightController::class, 'index'])->name('flights');
+    Route::get('/accounts', [AccountController::class, 'index'])->name('accounts');
+    Route::get('/rules', [RuleController::class, 'index'])->name('rules');
+    Route::get('/audit', [AuditController::class, 'index'])->name('audit');
 });
 
 require __DIR__.'/auth.php';

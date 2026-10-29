@@ -27,7 +27,7 @@ class B4RolesTest extends TestCase
             $this->login($user)->assertRedirect(route($role->homeRoute(), absolute: false));
             $this->get('/dashboard')->assertRedirect(route($role->homeRoute()));
             $this->get('/')->assertRedirect(route($role->homeRoute()));
-            $this->get(route($role->homeRoute()))->assertOk()->assertSee('Welcome, '.$role->label());
+            $this->followingRedirects()->get(route($role->homeRoute()))->assertOk()->assertSee($role->label());
 
             $this->post('/logout');
         }

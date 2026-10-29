@@ -16,7 +16,7 @@ class B5LayoutTest extends TestCase
         foreach (Role::cases() as $role) {
             $user = User::factory()->create(['role' => $role, 'name' => 'Agent '.$role->value]);
 
-            $response = $this->actingAs($user)->get(route($role->homeRoute()));
+            $response = $this->actingAs($user)->followingRedirects()->get(route($role->homeRoute()));
 
             $response->assertOk()
                 ->assertSee($role->label())
@@ -43,19 +43,14 @@ class B5LayoutTest extends TestCase
             ->assertDontSee('Staff accounts');
     }
 
-    public function test_current_page_is_highlighted_and_missing_routes_are_greyed_out(): void
+    public function test_current_page_is_highlighted(): void
     {
         $user = User::factory()->create(['role' => Role::Manager]);
 
-        $response = $this->actingAs($user)->get('/manager');
-
         // "Flight lists" is manager.home: a link marked as the current page.
-        $response->assertSee('href="'.route('manager.home').'"', false)
+        $this->actingAs($user)->get('/manager')
+            ->assertSee('href="'.route('manager.home').'"', false)
             ->assertSee('aria-current="page"', false);
-
-        // manager.accounts does not exist yet: shown, but not as a link.
-        $response->assertSee('aria-disabled="true"', false)
-            ->assertSee('Staff accounts');
     }
 
     public function test_flash_messages_are_displayed(): void
