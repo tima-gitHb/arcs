@@ -1,59 +1,176 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ARCS — Airline Reservation & Check-in System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+ARCS is a staff-only web app for an airline: reservation → check-in → baggage → seat → boarding, in that order.
+Four roles (reservation, check-in, gate, manager) each see only their own pages. Built with Laravel 12 + MySQL.
 
-## About Laravel
+Team project, Software Development course (Antonine University). Rules for the code are in [CLAUDE.md](CLAUDE.md).
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Requirements
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Install these on Windows before you start:
 
-## Learning Laravel
+| Tool | Version | Notes |
+|---|---|---|
+| PHP | 8.2 | Comes with XAMPP 8.2. Enable the extensions `zip`, `fileinfo`, `pdo_mysql` and `intl` (see [Common problems](#common-problems)). |
+| Composer | latest | [getcomposer.org](https://getcomposer.org/download/). Point it at the XAMPP `php.exe` during install. |
+| Node.js | 22 | [nodejs.org](https://nodejs.org/). Includes npm. |
+| MySQL | 8 | XAMPP's MySQL or MySQL Server, managed with **MySQL Workbench**. |
+| Git | latest | [git-scm.com](https://git-scm.com/). Includes **Git Bash** — use it for all commands below. |
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+Check everything in Git Bash:
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+```bash
+php -v          # PHP 8.2.x
+php -m | grep -E "zip|fileinfo|pdo_mysql|intl"   # all four must be listed
+composer -V
+node -v         # v22.x
+git --version
+```
 
-## Laravel Sponsors
+---
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Install
 
-### Premium Partners
+All commands run in **Git Bash**.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+**1. Clone the project into `C:\softwareProject`**
 
-## Contributing
+```bash
+mkdir -p /c/softwareProject
+cd /c/softwareProject
+git clone https://github.com/tima-gitHb/arcs.git
+cd arcs
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+**2. Install dependencies and build the CSS/JS**
 
-## Code of Conduct
+```bash
+composer install
+npm install
+npm run build
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+**3. Create your `.env` file and app key**
 
-## Security Vulnerabilities
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+**4. Create the two databases in MySQL Workbench**
 
-## License
+1. Open MySQL Workbench and connect to your local MySQL.
+2. Click **Create a new schema** (the cylinder icon with a "+").
+3. Name: `arcs` — Charset `utf8mb4`, Collation `utf8mb4_unicode_ci` → **Apply** → **Apply** → **Finish**.
+4. Repeat for `arcs_test` (used by `composer test:mysql`).
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Leave both empty: Laravel creates the tables.
+
+**5. Point `.env` at MySQL**
+
+Open `.env` and replace the `DB_` lines with (use your own MySQL password):
+
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=arcs
+DB_USERNAME=root
+DB_PASSWORD=your_mysql_password
+```
+
+Make sure none of these lines start with `#` or a space.
+
+**6. Create the tables and the sample data**
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+This creates the 15 ARCS tables plus four sample flights (ME 201, ME 305, ME 110, ME 422) with passengers.
+Times are relative to now, so the data works on the day you seed it. Run it again any time to reset.
+
+**7. Start the app**
+
+```bash
+php artisan serve
+```
+
+Open <http://127.0.0.1:8000> in Chrome or Edge.
+
+---
+
+## Seeded logins
+
+All passwords are `password` (development only).
+
+| Role | Email | Name |
+|---|---|---|
+| Reservation | `reservation@arcs.test` | Rami Nassar |
+| Check-in | `checkin@arcs.test` | Maya Khoury |
+| Gate | `gate@arcs.test` | Joe Saliba |
+| Manager | `manager@arcs.test` | Hiba Daher |
+
+After 5 wrong passwords an account locks. To unlock, run `php artisan migrate:fresh --seed` again.
+
+---
+
+## How we work
+
+The full rules are in [CLAUDE.md](CLAUDE.md). In short:
+
+- **One task = one branch:** `feature/<ID>-<name>`, e.g. `feature/C3-seat-map`.
+  ```bash
+  git checkout main && git pull
+  git checkout -b feature/C3-seat-map
+  ```
+- **Test first:** write the feature test from the SR in the BRD (named `test_SR7_...`), see it fail, then write the code.
+- **Before every commit:** `php artisan test` must pass and `./vendor/bin/pint` must be run.
+  Commit messages start with the task ID: `C3: seat map with taken seats blocked (SR-7)`.
+- **Pull request:** push your branch and open a pull request on GitHub. **CI must be green** before it is merged.
+- **Never push to `main`.**
+- **After every `git pull`:** `composer install`, `npm install`, `npm run build`, `php artisan migrate`.
+
+---
+
+## Common problems
+
+**Composer asks for a GitHub token**
+
+An old or wrong token is saved. Remove it and run `composer install` again:
+
+```bash
+composer config --global --unset github-oauth.github.com
+```
+
+**"The ... PHP extension is required" / missing PHP extension**
+
+Open `php.ini` (find it with `php --ini`, e.g. `C:\xampp82\php\php.ini`), remove the `;` at the start of the line,
+save, and open a new Git Bash window:
+
+```ini
+extension=zip
+extension=fileinfo
+extension=pdo_mysql
+extension=intl
+```
+
+**Pages look unstyled (plain HTML, no colours)**
+
+The CSS has not been built. Run:
+
+```bash
+npm run build
+```
+
+**403 errors, "wrong role", or you cannot log in with a seeded account**
+
+Your database is out of date or an account is locked. Reset it:
+
+```bash
+php artisan migrate:fresh --seed
+```
+
+This deletes all data in `arcs` and recreates the sample data.
