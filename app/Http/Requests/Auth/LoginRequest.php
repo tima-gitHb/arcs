@@ -76,6 +76,7 @@ class LoginRequest extends FormRequest
         }
 
         $user->failed_logins = 0;
+        $user->last_login_at = now(); // SR-40
         $user->save();
 
         RateLimiter::clear($this->throttleKey());

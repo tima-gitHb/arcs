@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Password;
@@ -11,6 +12,8 @@ use Illuminate\View\View;
 
 class PasswordResetLinkController extends Controller
 {
+    public const GENERIC_MESSAGE = 'If that email exists in ARCS, a password reset link has been sent to it.';
+
     /**
      * Display the password reset link request view.
      */
@@ -30,16 +33,15 @@ class PasswordResetLinkController extends Controller
             'email' => ['required', 'email'],
         ]);
 
-        // We will send the password reset link to this user. Once we have attempted
-        // to send the link, we will examine the response then see the message we
-        // need to show to the user. Finally, we'll send out a proper response.
-        $status = Password::sendResetLink(
-            $request->only('email')
-        );
+        // SR-37 / SR-35: only an active, unlocked account gets a link, so a reset can never
+        // get round a lock (only the Manager unlocks). Everyone sees the same message,
+        // so the page does not reveal which emails exist or which accounts are locked.
+        $user = User::where('email', $request->string('email'))->first();
 
-        return $status == Password::RESET_LINK_SENT
-                    ? back()->with('status', __($status))
-                    : back()->withInput($request->only('email'))
-                        ->withErrors(['email' => __($status)]);
+        if ($user && $user->active && ! $user->locked) {
+            Password::sendResetLink($request->only('email'));
+        }
+
+        return back()->with('status', self::GENERIC_MESSAGE);
     }
 }

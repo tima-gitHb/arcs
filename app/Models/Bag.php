@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\BagHandling;
+use App\Enums\BagType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -16,6 +18,8 @@ class Bag extends Model
     protected $fillable = [
         'passenger_id',
         'tag_no',
+        'type',
+        'handling',
         'weight_kg',
         'over_allowance',
         'offloaded_at',
@@ -28,6 +32,8 @@ class Bag extends Model
     protected function casts(): array
     {
         return [
+            'type' => BagType::class,
+            'handling' => BagHandling::class,
             'weight_kg' => 'decimal:1',
             'over_allowance' => 'boolean',
             'offloaded_at' => 'datetime',

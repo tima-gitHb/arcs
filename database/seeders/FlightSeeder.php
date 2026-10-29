@@ -2,11 +2,14 @@
 
 namespace Database\Seeders;
 
+use App\Enums\BagHandling;
+use App\Enums\BagType;
 use App\Enums\CabinClass;
 use App\Enums\DocumentType;
 use App\Enums\FlightStatus;
 use App\Enums\PassengerType;
 use App\Enums\Role;
+use App\Enums\SpecialServiceCode;
 use App\Models\Aircraft;
 use App\Models\Bag;
 use App\Models\Flight;
@@ -14,6 +17,7 @@ use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Models\Seat;
 use App\Models\SeatAssignment;
+use App\Models\SpecialService;
 use App\Models\TravelDocument;
 use App\Models\User;
 use App\Services\PnrGenerator;
@@ -86,8 +90,9 @@ class FlightSeeder extends Seeder
 
     /**
      * ME 201 Beirut → Paris: check-in open now.
-     * 10 Booked (incl. an adult with an infant, and one expired passport),
-     * 2 CheckedIn with seats and bags, 1 Cancelled.
+     * 8 Booked (incl. one expired passport, a BLND and a PETC passenger),
+     * 4 CheckedIn (an adult with an infant and a stroller; a WCHR passenger with a wheelchair;
+     * one with sports equipment), 1 Cancelled.
      */
     private function seedParis(): void
     {
@@ -95,24 +100,42 @@ class FlightSeeder extends Seeder
         $this->status->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->manager);
 
         // 7 ordinary Booked passengers, some with a visa for France.
+        $booked = [];
         for ($i = 0; $i < 7; $i++) {
-            $this->passenger($flight, visaCountry: $i % 3 === 0 ? 'FR' : null);
+            $booked[] = $this->passenger($flight, visaCountry: $i % 3 === 0 ? 'FR' : null);
         }
+        $this->specialService($booked[0], SpecialServiceCode::BLND);
+        $this->specialService($booked[1], SpecialServiceCode::PETC, 'Cat, 6 kg with carrier');
 
         // An adult travelling with an infant on the same booking (infant: no seat, SR-24).
+        // Both checked in; the stroller is delivered at the aircraft door and is free (SR-43).
         $adult = $this->passenger($flight);
-        $this->passenger($flight, type: PassengerType::Infant, adult: $adult);
+        $infant = $this->passenger($flight, type: PassengerType::Infant, adult: $adult);
+        $this->seat($flight, $adult);
+        $this->status->checkIn($adult, $this->checkinAgent);
+        $this->status->checkIn($infant, $this->checkinAgent);
+        $this->bag($adult);
+        $this->bag($adult, BagType::Stroller, BagHandling::GateDelivery, 9.0);
 
         // Passport already expired: check-in will be refused with "Document expired".
         $this->passenger($flight, passportExpiry: $this->base->copy()->subMonths(2));
 
-        // 2 checked in, each with a seat and a bag.
+        // 2 more checked in, each with a seat and a bag.
+        $checkedIn = [];
         for ($i = 0; $i < 2; $i++) {
             $passenger = $this->passenger($flight);
             $this->seat($flight, $passenger);
             $this->status->checkIn($passenger, $this->checkinAgent);
             $this->bag($passenger);
+            $checkedIn[] = $passenger;
         }
+
+        // The first needs a wheelchair to the aircraft door (SR-44); it is free (SR-43).
+        $this->specialService($checkedIn[0], SpecialServiceCode::WCHR);
+        $this->bag($checkedIn[0], BagType::Wheelchair, BagHandling::GateDelivery, 14.0);
+
+        // The second also checks in a bike.
+        $this->bag($checkedIn[1], BagType::SportsEquipment, BagHandling::Hold, 21.5);
 
         // Booked with a seat, then cancelled: the seat is released (SR-5).
         $cancelled = $this->passenger($flight);
@@ -280,12 +303,27 @@ class FlightSeeder extends Seeder
         ]);
     }
 
-    private function bag(Passenger $passenger): void
-    {
+    private function bag(
+        Passenger $passenger,
+        BagType $type = BagType::Standard,
+        BagHandling $handling = BagHandling::Hold,
+        ?float $weight = null,
+    ): void {
         Bag::create([
             'passenger_id' => $passenger->id,
             'tag_no' => 'ME'.$this->tagNo++,
-            'weight_kg' => 15 + ($this->tagNo % 8),
+            'type' => $type,
+            'handling' => $handling,
+            'weight_kg' => $weight ?? 15 + ($this->tagNo % 8),
+        ]);
+    }
+
+    private function specialService(Passenger $passenger, SpecialServiceCode $code, ?string $details = null): void
+    {
+        SpecialService::create([
+            'passenger_id' => $passenger->id,
+            'type' => $code,
+            'details' => $details,
         ]);
     }
 
