@@ -63,3 +63,17 @@ gate_overrides, settings.
 - After every git pull: composer install, npm install, npm run build, php artisan migrate.
 - If a request conflicts with a rule above or with the BRD scope, **stop and say so** instead of building it.
 - Every member must be able to explain the code in their branch.
+
+## Testing
+- **Test first:** write the feature test from the SR's acceptance criterion, run it and see it fail, then write the code.
+- Name tests after the SR: `test_SR<n>_<what_it_checks>` (e.g. `test_SR7_two_agents_cannot_take_same_seat`).
+- Use the helpers in `tests/TestCase.php`:
+  - `actingAsRole('checkin')` — creates a user with that role and logs in.
+  - `flightWithStatus(FlightStatus::Boarding)` — a flight in that status, reached through `StatusService`,
+    with the check-in window open around `now()`. Use `$this->travelTo()` for fixed times.
+  - Never set a status directly in a test; reach it through `StatusService`.
+- `php artisan test` (SQLite in memory, fast) before every commit.
+  `composer test:mysql` runs the same suite on the local MySQL database `arcs_test` — use it when a change
+  depends on MySQL behaviour (unique keys, row locks, transactions). See `.env.testing.example`.
+- GitHub Actions (`.github/workflows/tests.yml`) runs tests on SQLite and MySQL 8, plus Pint, on every push and
+  pull request. **CI must be green before merging.**

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Enums\Role;
-use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -36,9 +35,9 @@ class B6RoutesTest extends TestCase
     #[DataProvider('pages')]
     public function test_route_returns_200_for_its_own_role(string $route, Role $role, string $title, string $task): void
     {
-        $user = User::factory()->create(['role' => $role]);
+        $this->actingAsRole($role);
 
-        $this->actingAs($user)->get(route($route))
+        $this->get(route($route))
             ->assertOk()
             ->assertSee($title)
             ->assertSee('Coming soon — task '.$task);
@@ -52,9 +51,8 @@ class B6RoutesTest extends TestCase
                 continue;
             }
 
-            $user = User::factory()->create(['role' => $other]);
-
-            $this->actingAs($user)->get(route($route))->assertForbidden();
+            $this->actingAsRole($other);
+            $this->get(route($route))->assertForbidden();
         }
     }
 
@@ -66,9 +64,9 @@ class B6RoutesTest extends TestCase
 
     public function test_reservation_home_redirects_to_new_reservation(): void
     {
-        $user = User::factory()->create(['role' => Role::Reservation]);
+        $this->actingAsRole('reservation');
 
-        $this->actingAs($user)->get(route('reservation.home'))
+        $this->get(route('reservation.home'))
             ->assertRedirect(route('reservation.create'));
     }
 
@@ -79,9 +77,9 @@ class B6RoutesTest extends TestCase
                 $this->assertTrue(Route::has($routeName), "Missing route {$routeName}");
             }
 
-            $user = User::factory()->create(['role' => $role]);
+            $this->actingAsRole($role);
 
-            $this->actingAs($user)->followingRedirects()->get(route($role->homeRoute()))
+            $this->followingRedirects()->get(route($role->homeRoute()))
                 ->assertOk()
                 ->assertDontSee('aria-disabled="true"', false);
         }

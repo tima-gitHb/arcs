@@ -36,27 +36,10 @@ class B7StatusServiceTest extends TestCase
         parent::setUp();
 
         $this->status = app(StatusService::class);
-        $this->agent = User::factory()->create(['role' => Role::Checkin]);
+        $this->agent = $this->actingAsRole(Role::Checkin);
 
-        // Check-in window for every test flight: 09:00 to 11:15, departure 12:00.
+        // flightWithStatus() opens the window around now: 09:00 to 11:15, departure 12:00.
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
-    }
-
-    private function flight(): Flight
-    {
-        return Flight::factory()->create([
-            'departure_at' => '2026-11-10 12:00',
-            'checkin_opens_at' => '2026-11-10 09:00',
-            'checkin_closes_at' => '2026-11-10 11:15',
-        ]);
-    }
-
-    private function openFlight(): Flight
-    {
-        $flight = $this->flight();
-        $this->status->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->agent);
-
-        return $flight;
     }
 
     private function passenger(Flight $flight, ?string $passportExpiry = '2030-01-01'): Passenger
@@ -88,41 +71,9 @@ class B7StatusServiceTest extends TestCase
         $this->fail("Expected the change to be refused with '{$message}'.");
     }
 
-    /**
-     * Bring a new flight into the given status using only allowed moves.
-     */
-    private function flightIn(FlightStatus $target): Flight
-    {
-        $flight = $this->flight();
-
-        $path = match ($target) {
-            FlightStatus::Scheduled => [],
-            FlightStatus::CheckinOpen => [FlightStatus::CheckinOpen],
-            FlightStatus::Boarding => [FlightStatus::CheckinOpen, FlightStatus::Boarding],
-            FlightStatus::Delayed => [FlightStatus::Delayed],
-            FlightStatus::Cancelled => [FlightStatus::Cancelled],
-            FlightStatus::Closed, FlightStatus::Departed => [FlightStatus::CheckinOpen, FlightStatus::Boarding],
-        };
-
-        foreach ($path as $step) {
-            $this->status->setFlightStatus($flight, $step, $this->agent);
-        }
-
-        if (in_array($target, [FlightStatus::Closed, FlightStatus::Departed], true)) {
-            $this->status->closeBoarding($flight, $this->agent);
-        }
-        if ($target === FlightStatus::Departed) {
-            $this->status->setFlightStatus($flight, FlightStatus::Departed, $this->agent);
-        }
-
-        $this->assertSame($target, $flight->fresh()->status);
-
-        return $flight;
-    }
-
     public function test_SR6_cancelled_passenger_cannot_check_in(): void
     {
-        $passenger = $this->passenger($this->openFlight());
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::CheckinOpen));
         $this->status->cancel($passenger, $this->agent);
 
         $this->assertRefused('Reservation cancelled', fn () => $this->status->checkIn($passenger, $this->agent));
@@ -131,7 +82,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_check_in_twice_is_refused(): void
     {
-        $passenger = $this->passenger($this->openFlight());
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::CheckinOpen));
         $this->status->checkIn($passenger, $this->agent);
 
         $this->assertRefused('Already checked in', fn () => $this->status->checkIn($passenger, $this->agent));
@@ -139,7 +90,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_SR30_check_in_refused_outside_window(): void
     {
-        $passenger = $this->passenger($this->openFlight());
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::CheckinOpen));
 
         $this->travelTo(Carbon::parse('2026-11-10 08:59'));
         $this->assertRefused('Check-in closed', fn () => $this->status->checkIn($passenger, $this->agent));
@@ -154,7 +105,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_SR25_check_in_refused_when_flight_not_checkin_open(): void
     {
-        $passenger = $this->passenger($this->flight()); // still Scheduled
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::Scheduled)); // still Scheduled
 
         $this->assertRefused('Check-in closed', fn () => $this->status->checkIn($passenger, $this->agent));
         $this->assertSame(PassengerStatus::Booked, $passenger->fresh()->status);
@@ -162,14 +113,14 @@ class B7StatusServiceTest extends TestCase
 
     public function test_SR23_check_in_refused_with_expired_passport(): void
     {
-        $passenger = $this->passenger($this->openFlight(), passportExpiry: '2026-11-09');
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::CheckinOpen), passportExpiry: '2026-11-09');
 
         $this->assertRefused('Document expired', fn () => $this->status->checkIn($passenger, $this->agent));
     }
 
     public function test_SR23_check_in_refused_without_travel_document(): void
     {
-        $passenger = $this->passenger($this->openFlight(), passportExpiry: null);
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::CheckinOpen), passportExpiry: null);
 
         $this->assertRefused('No travel document', fn () => $this->status->checkIn($passenger, $this->agent));
     }
@@ -177,7 +128,7 @@ class B7StatusServiceTest extends TestCase
     public function test_SR31_check_in_refused_when_passport_expires_too_soon(): void
     {
         Setting::create(['key' => 'passport_min_months', 'value' => '6']);
-        $flight = $this->openFlight();
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen);
 
         $tooSoon = $this->passenger($flight, passportExpiry: '2027-02-10'); // 3 months after departure
         $this->assertRefused('Document expired', fn () => $this->status->checkIn($tooSoon, $this->agent));
@@ -189,7 +140,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_check_in_succeeds_and_writes_audit_log(): void
     {
-        $passenger = $this->passenger($this->openFlight());
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::CheckinOpen));
 
         $this->status->checkIn($passenger, $this->agent);
 
@@ -208,7 +159,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_SR5_cancel_releases_seat(): void
     {
-        $flight = $this->flight();
+        $flight = $this->flightWithStatus(FlightStatus::Scheduled);
         $seat = Seat::factory()->create(['aircraft_id' => $flight->aircraft_id]);
         $passenger = $this->passenger($flight);
         SeatAssignment::create(['flight_id' => $flight->id, 'seat_id' => $seat->id, 'passenger_id' => $passenger->id]);
@@ -230,7 +181,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_SR10_cannot_board_unless_checked_in(): void
     {
-        $flight = $this->openFlight();
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen);
         $booked = $this->passenger($flight);
         $checkedIn = $this->passenger($flight);
         $this->status->checkIn($checkedIn, $this->agent);
@@ -250,7 +201,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_SR12_close_boarding_sets_missing_passengers_no_show_and_returns_their_bags(): void
     {
-        $flight = $this->openFlight();
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen);
         $boarded = $this->passenger($flight);
         $missing = $this->passenger($flight);
         $neverCame = $this->passenger($flight);
@@ -296,7 +247,8 @@ class B7StatusServiceTest extends TestCase
 
         foreach (FlightStatus::cases() as $from) {
             foreach (FlightStatus::cases() as $to) {
-                $flight = $this->flightIn($from);
+                $flight = $this->flightWithStatus($from);
+                $this->assertSame($from, $flight->fresh()->status);
                 $shouldWork = in_array($to->value, $allowed[$from->value], true);
 
                 try {
@@ -315,7 +267,7 @@ class B7StatusServiceTest extends TestCase
     public function test_SR1_pnr_is_6_chars_unique_and_has_no_ambiguous_letters(): void
     {
         $generator = app(PnrGenerator::class);
-        $flight = $this->flight();
+        $flight = $this->flightWithStatus(FlightStatus::Scheduled);
         $pnrs = [];
 
         for ($i = 0; $i < 50; $i++) {
@@ -332,7 +284,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_SR1_pnr_generator_retries_on_collision(): void
     {
-        Reservation::factory()->for($this->flight())->create(['pnr' => 'TAKEN2']);
+        Reservation::factory()->for($this->flightWithStatus(FlightStatus::Scheduled))->create(['pnr' => 'TAKEN2']);
 
         $generator = new class extends PnrGenerator
         {
@@ -349,7 +301,7 @@ class B7StatusServiceTest extends TestCase
 
     public function test_failed_change_writes_nothing(): void
     {
-        $passenger = $this->passenger($this->openFlight());
+        $passenger = $this->passenger($this->flightWithStatus(FlightStatus::CheckinOpen));
 
         // Make the audit insert fail after the status has been saved.
         AuditEntry::creating(fn () => throw new RuntimeException('audit_log unavailable'));

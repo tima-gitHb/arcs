@@ -49,6 +49,12 @@
             "@php artisan config:clear --ansi",
             "@php artisan test"
         ],
+        "test:mysql": [
+            "@php artisan config:clear --ansi",
+            "@putenv DB_CONNECTION=mysql",
+            "@putenv DB_DATABASE=arcs_test",
+            "@php artisan test"
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
@@ -83,5 +89,8 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "scripts-descriptions": {
+        "test:mysql": "Run the test suite against the local MySQL database arcs_test (see .env.testing.example)."
+    }
 }
