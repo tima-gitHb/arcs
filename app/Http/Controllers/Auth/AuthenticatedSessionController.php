@@ -13,7 +13,7 @@ use Illuminate\View\View;
 class AuthenticatedSessionController extends Controller
 {
     /**
-     * Cookie set at login that outlives the 15-minute session (SR-39). If a guest still has it,
+     * Cookie set at login that outlives the 90-minute session (SR-39). If a guest still has it,
      * their session timed out, so the login page says "Session expired" (see bootstrap/app.php).
      */
     public const SESSION_MARKER = 'arcs_had_session';

@@ -153,7 +153,7 @@ class B11BaseExtrasTest extends TestCase
 
     public function test_SR39_expired_session_redirects_to_login_with_message(): void
     {
-        $this->assertStringContainsString('SESSION_LIFETIME=15', file_get_contents(base_path('.env.example')));
+        $this->assertStringContainsString('SESSION_LIFETIME=90', file_get_contents(base_path('.env.example')));
 
         // Logging in leaves a marker cookie that outlives the session.
         $user = User::factory()->create(['role' => Role::Checkin]);

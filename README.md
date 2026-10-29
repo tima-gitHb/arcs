@@ -88,7 +88,7 @@ Check these two lines too (they are already in `.env.example`; add them if your 
 
 ```env
 APP_TIMEZONE=Asia/Beirut   # all flight times are Beirut time
-SESSION_LIFETIME=15        # log out after 15 minutes without activity (SR-39)
+SESSION_LIFETIME=90        # log out after 90 minutes without activity (SR-39)
 ```
 
 **6. Create the tables and the sample data**
