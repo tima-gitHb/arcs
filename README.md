@@ -42,6 +42,7 @@ mkdir -p /c/softwareProject
 cd /c/softwareProject
 git clone https://github.com/tima-gitHb/arcs.git
 cd arcs
+git checkout dev      # day-to-day work starts from dev, not main
 ```
 
 **2. Install dependencies and build the CSS/JS**
@@ -121,16 +122,20 @@ After 5 wrong passwords an account locks. To unlock, run `php artisan migrate:fr
 
 The full rules are in [CLAUDE.md](CLAUDE.md). In short:
 
-- **One task = one branch:** `feature/<ID>-<name>`, e.g. `feature/C3-seat-map`.
+- **Branches:**
+  - `main` — milestone releases. Only the team lead merges `dev` into `main`, at milestones.
+  - `dev` — where all finished work comes together.
+  - `feature/<ID>-<name>` — one per task, e.g. `feature/C3-seat-map`, always created from an up-to-date `dev`:
   ```bash
-  git checkout main && git pull
+  git checkout dev && git pull
   git checkout -b feature/C3-seat-map
   ```
 - **Test first:** write the feature test from the SR in the BRD (named `test_SR7_...`), see it fail, then write the code.
 - **Before every commit:** `php artisan test` must pass and `./vendor/bin/pint` must be run.
   Commit messages start with the task ID: `C3: seat map with taken seats blocked (SR-7)`.
-- **Pull request:** push your branch and open a pull request on GitHub. **CI must be green** before it is merged.
-- **Never push to `main`.**
+- **Pull request:** push your branch and open a pull request **into `dev`** on GitHub
+  (check the "base" dropdown says `dev`, not `main`). **CI must be green** before it is merged.
+- **Never push or commit directly to `main` or `dev`.**
 - **After every `git pull`:** `composer install`, `npm install`, `npm run build`, `php artisan migrate`.
 
 ---
