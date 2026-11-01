@@ -144,9 +144,16 @@ class R1CreateReservationTest extends TestCase
             ->assertSee('ME703')
             ->assertSee('Closed')
             ->assertSee('Check-in open')
-            ->assertSee('Boarding')
-            ->assertDontSee('ME704')
-            ->assertDontSee('ME705');
+            ->assertSee('Boarding');
+
+        preg_match('/<select[^>]*id="flight_id"[\s\S]*?<\/select>/', $page->getContent(), $bookingList);
+
+        $this->assertArrayHasKey(0, $bookingList);
+        $this->assertStringContainsString('ME701', $bookingList[0]);
+        $this->assertStringContainsString('ME702', $bookingList[0]);
+        $this->assertStringContainsString('ME703', $bookingList[0]);
+        $this->assertStringNotContainsString('ME704', $bookingList[0]);
+        $this->assertStringNotContainsString('ME705', $bookingList[0]);
 
         foreach ([$closed, $checkin, $boarding] as $flight) {
             $seatIds = $this->seatsFor($flight, 1);
