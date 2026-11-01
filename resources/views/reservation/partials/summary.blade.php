@@ -33,7 +33,21 @@
         <tbody>
             @foreach ($reservation->passengers as $passenger)
                 <tr class="border-b border-gray-100">
-                    <td class="py-3">{{ $passenger->first_name }} {{ $passenger->last_name }}</td>
+                    <td class="py-3">
+                        <div>{{ $passenger->first_name }} {{ $passenger->last_name }}</div>
+                        @if ($passenger->status === App\Enums\PassengerStatus::Booked)
+                            <details class="mt-1">
+                                <summary class="inline cursor-pointer text-sm font-medium text-red-700">Cancel</summary>
+                                <form method="POST" action="{{ route('reservation.cancel', $passenger) }}" class="mt-2">
+                                    @csrf
+                                    <p class="text-sm text-gray-600">Are you sure? Their seat will be freed.</p>
+                                    <button type="submit" class="mt-2 rounded bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800">
+                                        Yes, cancel
+                                    </button>
+                                </form>
+                            </details>
+                        @endif
+                    </td>
                     <td class="py-3">{{ $passenger->type->label() }}</td>
                     <td class="py-3">{{ $passenger->status->label() }}</td>
                     <td class="py-3">

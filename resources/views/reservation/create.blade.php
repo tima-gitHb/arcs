@@ -56,7 +56,7 @@
             @endif
         </div>
 
-        <div class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        <div class="mt-6 grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_20rem]">
         <div>
         <div id="passengers" class="space-y-4">
             @foreach ($passengers as $index => $passenger)
@@ -89,7 +89,7 @@
         </div>
         </div>
 
-        <aside class="rounded-[2rem] bg-[#14213d] px-4 py-5 text-white lg:sticky lg:top-4">
+        <aside id="seat-map-panel" class="rounded-[2rem] bg-[#14213d] px-4 py-5 text-white md:sticky md:top-4">
             <div class="mx-auto mb-3 h-8 w-20 rounded-t-full bg-[#2c406e]"></div>
             <p class="text-center text-xs uppercase tracking-[0.2em] text-white/70">Cabin</p>
             <h2 class="mt-1 text-center text-lg font-semibold">Seat map</h2>
@@ -417,6 +417,7 @@
                 if (row.querySelector('.passenger-type').value !== 'Infant') {
                     activeIndex = row.dataset.index;
                     paintMap();
+                    document.getElementById('seat-map-panel').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
                 }
 
                 return;
