@@ -3,6 +3,7 @@
 namespace Tests\Feature\Manager;
 
 use App\Enums\CabinClass;
+use App\Enums\Role;
 use App\Models\BaggageAllowance;
 use App\Models\Setting;
 use Database\Seeders\SettingSeeder;
@@ -70,12 +71,22 @@ class RuleTest extends TestCase
 
     public function test_non_manager_cannot_open_rules_page(): void
     {
-        $this->actingAsRole('checkin');
+        foreach (Role::cases() as $role) {
+            if ($role === Role::Manager) {
+                continue;
+            }
 
-        $this->get('/manager/rules')->assertForbidden();
-        $this->put('/manager/rules', $this->payload(['passport_min_months' => 3]))->assertForbidden();
+            $this->actingAsRole($role);
+            $this->get('/manager/rules')->assertForbidden();
+            $this->put('/manager/rules', $this->payload(['passport_min_months' => 3]))->assertForbidden();
+        }
 
         $this->assertSame('6', Setting::find('passport_min_months')->value);
+    }
+
+    public function test_guest_is_redirected_to_login(): void
+    {
+        $this->get('/manager/rules')->assertRedirect(route('login'));
     }
 
     public function test_negative_values_are_rejected(): void

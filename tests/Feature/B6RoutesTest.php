@@ -27,7 +27,6 @@ class B6RoutesTest extends TestCase
             'manager.home' => ['manager.home', Role::Manager, 'Flight lists', 'M3'],
             'manager.flights' => ['manager.flights', Role::Manager, 'Flights and aircraft', 'M1'],
             'manager.accounts' => ['manager.accounts', Role::Manager, 'Staff accounts', 'M2'],
-            'manager.rules' => ['manager.rules', Role::Manager, 'Rules and allowances', 'M4'],
             'manager.audit' => ['manager.audit', Role::Manager, 'Audit log', 'M5'],
         ];
     }
