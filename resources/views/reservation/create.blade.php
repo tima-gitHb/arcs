@@ -16,6 +16,10 @@
         <h1 class="text-2xl font-semibold text-navy">New reservation</h1>
     </x-slot>
 
+    <div class="mb-6 max-w-6xl">
+        <x-todays-flights :role="'reservation'" />
+    </div>
+
     <form method="POST" action="{{ route('reservation.store') }}" class="max-w-6xl rounded-lg bg-white p-6 shadow-sm" autocomplete="off">
         @csrf
 
