@@ -58,6 +58,10 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/flights', [FlightController::class, 'index'])->name('flights');
     Route::get('/accounts', [AccountController::class, 'index'])->name('accounts');
+    Route::post('/accounts', [AccountController::class, 'store'])->name('accounts.store');
+    Route::patch('/accounts/{user}/active', [AccountController::class, 'setActive'])->name('accounts.active');
+    Route::patch('/accounts/{user}/unlock', [AccountController::class, 'unlock'])->name('accounts.unlock');
+    Route::post('/accounts/{user}/reset-link', [AccountController::class, 'sendResetLink'])->name('accounts.reset-link');
     Route::get('/rules', [RuleController::class, 'index'])->name('rules');
     Route::put('/rules', [RuleController::class, 'update'])->name('rules.update');
     Route::get('/audit', [AuditController::class, 'index'])->name('audit');
