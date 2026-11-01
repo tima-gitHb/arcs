@@ -8,11 +8,13 @@ use App\Exceptions\InvalidStatusChange;
 use App\Exceptions\SeatTaken;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Reservation\StoreReservationRequest;
+use App\Http\Requests\Reservation\UpdatePassengerRequest;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Models\Seat;
 use App\Models\SeatAssignment;
+use App\Services\CorrectionService;
 use App\Services\PnrGenerator;
 use App\Services\ReservationService;
 use App\Services\StatusService;
@@ -174,6 +176,34 @@ class ReservationController extends Controller
             'flights' => $flights,
             'selectedFlight' => $selectedFlight,
         ]);
+    }
+
+    public function edit(Passenger $passenger): View
+    {
+        $passenger->load([
+            'reservation.flight',
+            'auditEntries' => fn ($query) => $query->orderByDesc('changed_at')->orderByDesc('id'),
+            'auditEntries.user',
+        ]);
+
+        return view('reservation.edit', [
+            'passenger' => $passenger,
+        ]);
+    }
+
+    public function update(UpdatePassengerRequest $request, Passenger $passenger, CorrectionService $corrections): RedirectResponse
+    {
+        $corrections->correctPassenger(
+            $passenger,
+            $request->safe()->only(['first_name', 'last_name']),
+            $request->user(),
+        );
+
+        $passenger->refresh();
+
+        return redirect()
+            ->route('reservation.edit', $passenger)
+            ->with('success', $passenger->first_name.' '.$passenger->last_name.' updated.');
     }
 
     public function cancel(Request $request, Passenger $passenger, StatusService $statuses): RedirectResponse

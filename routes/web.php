@@ -36,6 +36,8 @@ Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('re
     Route::post('/', [ReservationController::class, 'store'])->name('store');
     Route::get('/search', [ReservationController::class, 'search'])->name('search');
     Route::get('/confirmation/{reservation}', [ReservationController::class, 'confirmation'])->name('confirmation');
+    Route::get('/passengers/{passenger}/edit', [ReservationController::class, 'edit'])->name('edit');
+    Route::put('/passengers/{passenger}', [ReservationController::class, 'update'])->name('update');
     Route::post('/passengers/{passenger}/cancel', [ReservationController::class, 'cancel'])->name('cancel');
 });
 

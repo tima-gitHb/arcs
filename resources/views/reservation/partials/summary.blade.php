@@ -35,6 +35,9 @@
                 <tr class="border-b border-gray-100">
                     <td class="py-3">
                         <div>{{ $passenger->first_name }} {{ $passenger->last_name }}</div>
+                        <a href="{{ route('reservation.edit', $passenger) }}" class="mt-1 inline-block text-sm font-medium text-navy hover:underline">
+                            Correct name
+                        </a>
                         @if ($passenger->status === App\Enums\PassengerStatus::Booked)
                             <details class="mt-1">
                                 <summary class="inline cursor-pointer text-sm font-medium text-red-700">Cancel</summary>
