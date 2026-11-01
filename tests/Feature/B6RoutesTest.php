@@ -14,14 +14,15 @@ class B6RoutesTest extends TestCase
 
     /**
      * Every role page: [route name, owning role, page title, task ID].
+     * A null task ID means the page is built, so it no longer shows "Coming soon".
      *
-     * @return array<string, array{string, Role, string, string}>
+     * @return array<string, array{string, Role, string, string|null}>
      */
     public static function pages(): array
     {
         return [
-            'reservation.create' => ['reservation.create', Role::Reservation, 'New reservation', 'R1'],
-            'reservation.search' => ['reservation.search', Role::Reservation, 'Find reservation', 'R2'],
+            'reservation.create' => ['reservation.create', Role::Reservation, 'New reservation', null],
+            'reservation.search' => ['reservation.search', Role::Reservation, 'Find reservation', null],
             'checkin.home' => ['checkin.home', Role::Checkin, 'Check in passenger', 'C1'],
             'gate.home' => ['gate.home', Role::Gate, 'Manifest', 'G1'],
             'manager.home' => ['manager.home', Role::Manager, 'Flight lists', 'M3'],
@@ -33,14 +34,17 @@ class B6RoutesTest extends TestCase
     }
 
     #[DataProvider('pages')]
-    public function test_route_returns_200_for_its_own_role(string $route, Role $role, string $title, string $task): void
+    public function test_route_returns_200_for_its_own_role(string $route, Role $role, string $title, ?string $task): void
     {
         $this->actingAsRole($role);
 
-        $this->get(route($route))
+        $response = $this->get(route($route))
             ->assertOk()
-            ->assertSee($title)
-            ->assertSee('Coming soon — task '.$task);
+            ->assertSee($title);
+
+        if ($task !== null) {
+            $response->assertSee('Coming soon — task '.$task);
+        }
     }
 
     #[DataProvider('pages')]
