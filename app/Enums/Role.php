@@ -52,6 +52,7 @@ enum Role: string
             ],
             self::Manager => [
                 'Flight lists' => 'manager.home',
+                'Dashboard' => 'manager.dashboard',
                 'Flights and aircraft' => 'manager.flights',
                 'Staff accounts' => 'manager.accounts',
                 'Rules and allowances' => 'manager.rules',
