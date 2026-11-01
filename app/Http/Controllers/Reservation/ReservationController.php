@@ -4,15 +4,18 @@ namespace App\Http\Controllers\Reservation;
 
 use App\Enums\FlightStatus;
 use App\Enums\PassengerType;
+use App\Exceptions\InvalidStatusChange;
 use App\Exceptions\SeatTaken;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Reservation\StoreReservationRequest;
 use App\Models\Flight;
+use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Models\Seat;
 use App\Models\SeatAssignment;
 use App\Services\PnrGenerator;
 use App\Services\ReservationService;
+use App\Services\StatusService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -171,5 +174,19 @@ class ReservationController extends Controller
             'flights' => $flights,
             'selectedFlight' => $selectedFlight,
         ]);
+    }
+
+    public function cancel(Request $request, Passenger $passenger, StatusService $statuses): RedirectResponse
+    {
+        try {
+            $statuses->cancel($passenger, $request->user());
+        } catch (InvalidStatusChange $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with(
+            'success',
+            $passenger->first_name.' '.$passenger->last_name.' cancelled.',
+        );
     }
 }
