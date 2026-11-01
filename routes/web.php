@@ -4,6 +4,7 @@ use App\Http\Controllers\Checkin\CheckinController;
 use App\Http\Controllers\Gate\GateController;
 use App\Http\Controllers\Manager\AccountController;
 use App\Http\Controllers\Manager\AuditController;
+use App\Http\Controllers\Manager\DashboardController;
 use App\Http\Controllers\Manager\FlightController;
 use App\Http\Controllers\Manager\FlightListController;
 use App\Http\Controllers\Manager\RuleController;
@@ -48,6 +49,7 @@ Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(f
 // Manager
 Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')->group(function () {
     Route::get('/', [FlightListController::class, 'index'])->name('home');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/flights', [FlightController::class, 'index'])->name('flights');
     Route::get('/accounts', [AccountController::class, 'index'])->name('accounts');
     Route::get('/rules', [RuleController::class, 'index'])->name('rules');
