@@ -32,7 +32,10 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('reservation.')->group(function () {
     Route::get('/', fn () => redirect()->route('reservation.create'))->name('home');
     Route::get('/create', [ReservationController::class, 'create'])->name('create');
+    Route::get('/flights/{flight}/seats', [ReservationController::class, 'seats'])->name('seats');
+    Route::post('/', [ReservationController::class, 'store'])->name('store');
     Route::get('/search', [ReservationController::class, 'search'])->name('search');
+    Route::get('/confirmation/{reservation}', [ReservationController::class, 'confirmation'])->name('confirmation');
 });
 
 // Check-in staff
