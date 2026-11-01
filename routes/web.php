@@ -51,6 +51,7 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::get('/flights', [FlightController::class, 'index'])->name('flights');
     Route::get('/accounts', [AccountController::class, 'index'])->name('accounts');
     Route::get('/rules', [RuleController::class, 'index'])->name('rules');
+    Route::put('/rules', [RuleController::class, 'update'])->name('rules.update');
     Route::get('/audit', [AuditController::class, 'index'])->name('audit');
 });
 
