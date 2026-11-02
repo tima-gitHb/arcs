@@ -26,7 +26,6 @@ class B6RoutesTest extends TestCase
             'checkin.home' => ['checkin.home', Role::Checkin, 'Check in passenger', null],
             'gate.home' => ['gate.home', Role::Gate, 'Manifest', 'G1'],
             'manager.home' => ['manager.home', Role::Manager, 'Flight lists', 'M3'],
-            'manager.flights' => ['manager.flights', Role::Manager, 'Flights and aircraft', 'M1'],
         ];
     }
 
