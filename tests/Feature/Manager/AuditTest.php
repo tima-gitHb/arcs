@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\CorrectionService;
 use App\Services\StatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
 /**
@@ -63,7 +64,7 @@ class AuditTest extends TestCase
     /**
      * @return list<int> ids of the audit entries the page received
      */
-    private function entryIds(\Illuminate\Testing\TestResponse $response): array
+    private function entryIds(TestResponse $response): array
     {
         return $response->viewData('entries')->pluck('id')->all();
     }
@@ -94,7 +95,7 @@ class AuditTest extends TestCase
         $this->assertCount(2, $entries);
 
         // Newest first: boarding (gate), then check-in (check-in).
-        $this->assertSame(['CheckedIn', 'Boarded'], $entries->pluck('new_value')->all());
+        $this->assertSame(['Boarded', 'CheckedIn'], $entries->pluck('new_value')->all());
         $this->assertSame([$gateAgent->id, $this->checkinAgent->id], $entries->pluck('user_id')->all());
     }
 
