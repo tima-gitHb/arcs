@@ -16,12 +16,15 @@ class StoreFlightRequest extends FormRequest
     }
 
     /**
-     * "me205" is accepted as "ME205": uppercase before the rules run.
+     * "me205", "bey" and "b4" are accepted as "ME205", "BEY" and "B4": uppercase before the rules run.
+     * Only strings are touched, so an empty gate stays null.
      */
     protected function prepareForValidation(): void
     {
-        if (is_string($this->flight_no)) {
-            $this->merge(['flight_no' => strtoupper(trim($this->flight_no))]);
+        foreach (['flight_no', 'origin', 'destination', 'gate'] as $field) {
+            if (is_string($this->input($field))) {
+                $this->merge([$field => strtoupper(trim($this->input($field)))]);
+            }
         }
     }
 

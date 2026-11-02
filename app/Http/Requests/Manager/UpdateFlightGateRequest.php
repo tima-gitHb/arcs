@@ -15,6 +15,16 @@ class UpdateFlightGateRequest extends FormRequest
     }
 
     /**
+     * "b4" is accepted as "B4": uppercase before the rules run. An empty gate stays null.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (is_string($this->gate)) {
+            $this->merge(['gate' => strtoupper(trim($this->gate))]);
+        }
+    }
+
+    /**
      * An empty gate is allowed: it clears the gate.
      *
      * @return array<string, array<int, mixed>>

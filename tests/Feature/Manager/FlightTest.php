@@ -172,6 +172,24 @@ class FlightTest extends TestCase
         $this->assertSame('2026-11-11 13:15', $flight->checkin_closes_at->format('Y-m-d H:i'));
     }
 
+    public function test_lowercase_airport_codes_and_gate_are_accepted_and_saved_uppercase(): void
+    {
+        $this->post(route('manager.flights.store'), $this->validFlight([
+            'origin' => 'bey',
+            'destination' => 'cdg',
+            'gate' => 'b4',
+        ]))->assertSessionHasNoErrors();
+
+        $flight = Flight::sole();
+        $this->assertSame('BEY', $flight->origin);
+        $this->assertSame('CDG', $flight->destination);
+        $this->assertSame('B4', $flight->gate);
+
+        // Changing the gate of an existing flight works the same way.
+        $this->patch(route('manager.flights.gate', $flight), ['gate' => 'c12'])->assertSessionHasNoErrors();
+        $this->assertSame('C12', $flight->fresh()->gate);
+    }
+
     public function test_gate_is_optional_when_creating_a_flight(): void
     {
         $this->post(route('manager.flights.store'), $this->validFlight(['gate' => '']))
