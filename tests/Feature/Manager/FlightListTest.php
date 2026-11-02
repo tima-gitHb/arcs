@@ -133,16 +133,15 @@ class FlightListTest extends TestCase
         $maya = $this->addPassenger($this->flight, 'Maya', 'Abboud', '2C');
         app(StatusService::class)->cancel($maya, $this->reservationAgent); // the seat is released
 
-        $response = $this->openList($this->flight, 'passengers')
+        $this->openList($this->flight, 'passengers')
             ->assertSee('Checked in by', false) // this tab's own heading
             // Cancelled passengers are part of the full record of the flight.
             // Ordered by last name: Abboud, Karam, Zeidan.
             ->assertSeeInOrder(['Maya Abboud', 'Lina Karam', 'Adam Zeidan'])
             ->assertSeeInOrder(['Adam Zeidan', $adam->reservation->pnr, '2A', PassengerStatus::Booked->label()])
             ->assertSeeInOrder(['Lina Karam', $lina->reservation->pnr, '2B', PassengerStatus::CheckedIn->label()])
-            ->assertSeeInOrder(['Maya Abboud', $maya->reservation->pnr, PassengerStatus::Cancelled->label()]);
-
-        $response->assertDontSee('2C');   // the cancelled passenger's seat was released
+            // The cancelled passenger's seat was released: a dash sits where the seat would be.
+            ->assertSeeInOrder(['Maya Abboud', $maya->reservation->pnr, '—', PassengerStatus::Cancelled->label()]);
     }
 
     public function test_SR45_passenger_list_shows_who_checked_in_and_boarded(): void
@@ -171,16 +170,18 @@ class FlightListTest extends TestCase
         $this->bag($adam, 'ME1003', BagType::Stroller, BagHandling::GateDelivery, 9.0);
         $this->bag($adam, 'ME1004', BagType::SportsEquipment, BagHandling::Hold, 21.5, offloaded: true);
 
-        $response = $this->openList($this->flight, 'baggage')
+        $this->openList($this->flight, 'baggage')
             ->assertSee('Tag', false) // this tab's own heading
             // tag, passenger, type, weight, handling, offloaded — wheelchair and stroller weights too.
             ->assertSeeInOrder(['ME1001', 'Lina Karam', BagType::Standard->label(), '23.5', BagHandling::Hold->label(), 'No'])
             ->assertSeeInOrder(['ME1002', 'Lina Karam', BagType::Wheelchair->label(), '14.0', BagHandling::GateDelivery->label(), 'No'])
             ->assertSeeInOrder(['ME1003', 'Adam Zeidan', BagType::Stroller->label(), '9.0', BagHandling::GateDelivery->label(), 'No'])
-            ->assertSeeInOrder(['ME1004', 'Adam Zeidan', BagType::SportsEquipment->label(), '21.5', BagHandling::Hold->label(), 'Yes']);
-
-        // Only the one offloaded bag says Yes.
-        $this->assertSame(1, substr_count($response->getContent(), 'Yes'));
+            ->assertSeeInOrder(['ME1004', 'Adam Zeidan', BagType::SportsEquipment->label(), '21.5', BagHandling::Hold->label(), 'Yes'])
+            // Each row carries its tag and whether it was offloaded, like data-figure on the dashboard.
+            ->assertSee('data-bag="ME1001" data-offloaded="no"', false)
+            ->assertSee('data-bag="ME1002" data-offloaded="no"', false)
+            ->assertSee('data-bag="ME1003" data-offloaded="no"', false)
+            ->assertSee('data-bag="ME1004" data-offloaded="yes"', false);
     }
 
     public function test_baggage_totals_line_shows_count_and_total_weight(): void
