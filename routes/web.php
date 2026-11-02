@@ -45,6 +45,8 @@ Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('re
 // Check-in staff
 Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')->group(function () {
     Route::get('/', [CheckinController::class, 'home'])->name('home');
+    Route::get('/passengers/{passenger}', [CheckinController::class, 'show'])->name('passengers.show');
+    Route::post('/passengers/{passenger}/confirm', [CheckinController::class, 'confirm'])->name('passengers.confirm');
 });
 
 // Gate staff

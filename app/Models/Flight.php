@@ -63,4 +63,13 @@ class Flight extends Model
     {
         return $this->hasManyThrough(Passenger::class, Reservation::class);
     }
+
+    /**
+     * Is now() inside the check-in window (both ends included)? SR-30.
+     * Time only: StatusService::checkIn() also requires the CheckinOpen status (SR-25).
+     */
+    public function isCheckinWindowOpen(): bool
+    {
+        return now()->between($this->checkin_opens_at, $this->checkin_closes_at);
+    }
 }
