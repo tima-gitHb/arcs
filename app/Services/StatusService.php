@@ -51,9 +51,7 @@ class StatusService
 
             $flight = $passenger->reservation->flight;
 
-            if ($flight->status !== FlightStatus::CheckinOpen
-                || now()->lt($flight->checkin_opens_at)
-                || now()->gt($flight->checkin_closes_at)) {
+            if ($flight->status !== FlightStatus::CheckinOpen || ! $flight->isCheckinWindowOpen()) {
                 throw new InvalidStatusChange('Check-in closed');
             }
 
