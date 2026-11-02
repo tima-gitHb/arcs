@@ -158,6 +158,20 @@ class StatusService
     }
 
     /**
+     * The statuses setFlightStatus() would accept for this flight right now (read only, SR-25).
+     * Used to offer only legal buttons; the real check stays in setFlightStatus().
+     *
+     * @return list<FlightStatus>
+     */
+    public function allowedFlightMoves(Flight $flight): array
+    {
+        return array_map(
+            fn (string $status) => FlightStatus::from($status),
+            self::FLIGHT_MOVES[$flight->status->value] ?? [],
+        );
+    }
+
+    /**
      * The passenger needs a Passport or ID card valid until at least
      * <passport_min_months> months after the departure date (SR-23, SR-31).
      */

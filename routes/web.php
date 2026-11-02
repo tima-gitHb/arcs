@@ -4,6 +4,7 @@ use App\Http\Controllers\Checkin\CheckinController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
 use App\Http\Controllers\Gate\GateController;
 use App\Http\Controllers\Manager\AccountController;
+use App\Http\Controllers\Manager\AircraftController;
 use App\Http\Controllers\Manager\AuditController;
 use App\Http\Controllers\Manager\DashboardController;
 use App\Http\Controllers\Manager\FlightController;
@@ -63,6 +64,10 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::get('/', [FlightListController::class, 'index'])->name('home');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/flights', [FlightController::class, 'index'])->name('flights');
+    Route::post('/flights', [FlightController::class, 'store'])->name('flights.store');
+    Route::patch('/flights/{flight}/status', [FlightController::class, 'updateStatus'])->name('flights.status');
+    Route::patch('/flights/{flight}/gate', [FlightController::class, 'updateGate'])->name('flights.gate');
+    Route::post('/aircraft', [AircraftController::class, 'store'])->name('aircraft.store');
     Route::get('/accounts', [AccountController::class, 'index'])->name('accounts');
     Route::post('/accounts', [AccountController::class, 'store'])->name('accounts.store');
     Route::patch('/accounts/{user}/active', [AccountController::class, 'setActive'])->name('accounts.active');
