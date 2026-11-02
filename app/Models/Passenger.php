@@ -98,6 +98,15 @@ class Passenger extends Model
         return $this->hasOne(GateOverride::class);
     }
 
+    /**
+     * Travel documents can be added, corrected or verified only while the passenger is
+     * Booked or CheckedIn (C2). Views use this to hide the forms; CorrectionService enforces it.
+     */
+    public function documentsEditable(): bool
+    {
+        return in_array($this->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true);
+    }
+
     /*
      * "Who did it" (SR-45): the audit_log row of a status change, with ->user and ->changed_at,
      * or null if it never happened. Eager-load for lists: Passenger::with('checkedInBy.user').

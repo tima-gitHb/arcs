@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Checkin\CheckinController;
+use App\Http\Controllers\Checkin\TravelDocumentController;
 use App\Http\Controllers\Gate\GateController;
 use App\Http\Controllers\Manager\AccountController;
 use App\Http\Controllers\Manager\AuditController;
@@ -47,6 +48,9 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
     Route::get('/', [CheckinController::class, 'home'])->name('home');
     Route::get('/passengers/{passenger}', [CheckinController::class, 'show'])->name('passengers.show');
     Route::post('/passengers/{passenger}/confirm', [CheckinController::class, 'confirm'])->name('passengers.confirm');
+    Route::post('/passengers/{passenger}/documents', [TravelDocumentController::class, 'store'])->name('documents.store');
+    Route::put('/documents/{document}', [TravelDocumentController::class, 'update'])->name('documents.update');
+    Route::post('/documents/{document}/verify', [TravelDocumentController::class, 'verify'])->name('documents.verify');
 });
 
 // Gate staff

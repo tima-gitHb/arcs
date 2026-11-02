@@ -61,6 +61,8 @@ gate_overrides, settings.
   - Who did it (SR-45): `$passenger->checkedInBy`, `boardedBy`, `cancelledBy`, `markedNoShowBy` give the
     `audit_log` row (`->user`, `->changed_at`) or null. In lists, eager-load: `Passenger::with('checkedInBy.user')`.
   - Today's flights (SR-41): `<x-todays-flights :role="auth()->user()->role" />`.
+  - Document numbers (SR-34): any page that shows a travel document number must use
+    `$document->maskedNumberFor(auth()->user())` — never print `$document->number` directly.
 - Names: models singular (`Passenger`), tables plural snake_case (`seat_assignments`),
   routes `role.resource.action` (e.g. `checkin.seats.assign`).
 
