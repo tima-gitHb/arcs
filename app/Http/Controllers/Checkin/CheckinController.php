@@ -49,11 +49,21 @@ class CheckinController extends Controller
      * The check-in screen of one passenger. Opening it changes nothing: documents (C2),
      * seat (C3) and bags (C4) are added here before the agent confirms.
      */
-    public function show(Passenger $passenger): View
+    public function show(Request $request, Passenger $passenger): View
     {
-        $passenger->load(['reservation.flight', 'travelDocuments', 'accompanyingAdult', 'checkedInBy.user']);
+        $passenger->load([
+            'reservation.flight',
+            'travelDocuments' => fn ($query) => $query->orderBy('id'),
+            'travelDocuments.verifier',
+            'accompanyingAdult',
+            'checkedInBy.user',
+        ]);
 
-        return view('checkin.show', ['passenger' => $passenger]);
+        return view('checkin.show', [
+            'passenger' => $passenger,
+            // ?edit=<document id> opens the edit form for that document.
+            'editing' => $passenger->travelDocuments->firstWhere('id', $request->integer('edit')),
+        ]);
     }
 
     /**

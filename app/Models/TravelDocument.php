@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\DocumentType;
+use App\Enums\Role;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -44,5 +45,19 @@ class TravelDocument extends Model
     public function verifier(): BelongsTo
     {
         return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    /**
+     * The document number as this user may see it (SR-34): in full for check-in staff and
+     * the Manager, otherwise only the last 4 characters (••••1234).
+     * Use this wherever a document number is displayed.
+     */
+    public function maskedNumberFor(User $user): string
+    {
+        if (in_array($user->role, [Role::Checkin, Role::Manager], true)) {
+            return $this->number;
+        }
+
+        return '••••'.substr($this->number, -4);
     }
 }
