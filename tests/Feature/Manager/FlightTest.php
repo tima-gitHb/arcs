@@ -307,7 +307,8 @@ class FlightTest extends TestCase
                 }
             }
 
-            $listed = collect($service->allowedFlightMoves($this->flightWithStatus($start)))
+            // fresh(): a flight made by the factory has no status in memory until it is read back.
+            $listed = collect($service->allowedFlightMoves($this->flightWithStatus($start)->fresh()))
                 ->map(fn (FlightStatus $status) => $status->value)
                 ->all();
 
