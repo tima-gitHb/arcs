@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\DocumentType;
 use App\Enums\FlightStatus;
 use App\Enums\PassengerStatus;
+use App\Enums\PassengerType;
 use App\Exceptions\InvalidStatusChange;
 use App\Models\AuditEntry;
 use App\Models\Bag;
@@ -36,6 +37,7 @@ class StatusService
 
     /**
      * Booked -> CheckedIn (SR-6, SR-23, SR-25, SR-30, SR-31).
+     * A passenger other than an infant must have a seat first (C5).
      */
     public function checkIn(Passenger $passenger, User $by): void
     {
@@ -56,6 +58,10 @@ class StatusService
             }
 
             $this->ensureValidDocument($passenger, $flight);
+
+            if ($passenger->type !== PassengerType::Infant && $passenger->seatAssignment === null) {
+                throw new InvalidStatusChange('Seat required');
+            }
 
             $this->changePassengerStatus($passenger, PassengerStatus::CheckedIn, $by, [
                 'checked_in_at' => now(),

@@ -42,7 +42,7 @@ class B7StatusServiceTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
     }
 
-    private function passenger(Flight $flight, ?string $passportExpiry = '2030-01-01'): Passenger
+    private function passenger(Flight $flight, ?string $passportExpiry = '2030-01-01', bool $seated = true): Passenger
     {
         $passenger = Passenger::factory()
             ->for(Reservation::factory()->for($flight))
@@ -50,6 +50,11 @@ class B7StatusServiceTest extends TestCase
 
         if ($passportExpiry) {
             TravelDocument::factory()->for($passenger)->create(['expiry_date' => $passportExpiry]);
+        }
+
+        // Check-in needs a seat (C5).
+        if ($seated) {
+            $this->seatPassenger($passenger);
         }
 
         return $passenger;
@@ -161,7 +166,7 @@ class B7StatusServiceTest extends TestCase
     {
         $flight = $this->flightWithStatus(FlightStatus::Scheduled);
         $seat = Seat::factory()->create(['aircraft_id' => $flight->aircraft_id]);
-        $passenger = $this->passenger($flight);
+        $passenger = $this->passenger($flight, seated: false);
         SeatAssignment::create(['flight_id' => $flight->id, 'seat_id' => $seat->id, 'passenger_id' => $passenger->id]);
 
         $this->status->cancel($passenger, $this->agent);
@@ -171,7 +176,7 @@ class B7StatusServiceTest extends TestCase
         $this->assertDatabaseHas('audit_log', ['passenger_id' => $passenger->id, 'new_value' => 'Cancelled']);
 
         // The seat is free for someone else.
-        $other = $this->passenger($flight);
+        $other = $this->passenger($flight, seated: false);
         SeatAssignment::create(['flight_id' => $flight->id, 'seat_id' => $seat->id, 'passenger_id' => $other->id]);
         $this->assertDatabaseHas('seat_assignments', ['seat_id' => $seat->id, 'passenger_id' => $other->id]);
 

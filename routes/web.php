@@ -1,6 +1,9 @@
 <?php
 
+use App\Http\Controllers\Checkin\BagController;
+use App\Http\Controllers\Checkin\BoardingPassController;
 use App\Http\Controllers\Checkin\CheckinController;
+use App\Http\Controllers\Checkin\SeatController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
 use App\Http\Controllers\Gate\GateController;
 use App\Http\Controllers\Manager\AccountController;
@@ -51,6 +54,11 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
     Route::post('/passengers/{passenger}/documents', [TravelDocumentController::class, 'store'])->name('documents.store');
     Route::put('/documents/{document}', [TravelDocumentController::class, 'update'])->name('documents.update');
     Route::post('/documents/{document}/verify', [TravelDocumentController::class, 'verify'])->name('documents.verify');
+    Route::post('/passengers/{passenger}/seat', [SeatController::class, 'assign'])->name('seats.assign');
+    Route::post('/passengers/{passenger}/bags', [BagController::class, 'store'])->name('bags.store');
+    Route::delete('/bags/{bag}', [BagController::class, 'destroy'])->name('bags.destroy');
+    Route::get('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'show'])->name('boarding-pass.show');
+    Route::post('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'reprint'])->name('boarding-pass.reprint');
 });
 
 // Gate staff

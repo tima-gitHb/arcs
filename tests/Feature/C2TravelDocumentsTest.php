@@ -41,6 +41,7 @@ class C2TravelDocumentsTest extends TestCase
         $passenger = Passenger::factory()
             ->for(Reservation::factory()->for($this->flight))
             ->create(['first_name' => 'Rami', 'last_name' => 'Haddad']);
+        $this->seatPassenger($passenger); // check-in needs a seat (C5)
 
         if ($passportExpiry) {
             TravelDocument::factory()->for($passenger)->create([

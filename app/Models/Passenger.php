@@ -99,12 +99,20 @@ class Passenger extends Model
     }
 
     /**
-     * Travel documents can be added, corrected or verified only while the passenger is
-     * Booked or CheckedIn (C2). Views use this to hide the forms; CorrectionService enforces it.
+     * Check-in details (documents, seat, adding bags) can change only while the passenger
+     * is Booked or CheckedIn (C2–C4). Views use this to hide the forms; the services enforce it.
+     */
+    public function checkinDetailsEditable(): bool
+    {
+        return in_array($this->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true);
+    }
+
+    /**
+     * Travel documents (C2): same rule as the other check-in details.
      */
     public function documentsEditable(): bool
     {
-        return in_array($this->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true);
+        return $this->checkinDetailsEditable();
     }
 
     /*

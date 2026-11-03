@@ -46,6 +46,7 @@ class DashboardTest extends TestCase
             TravelDocument::factory()->for($passenger)->create();
 
             if ($i < $checkedIn) {
+                $this->seatPassenger($passenger); // check-in needs a seat (C5)
                 $service->checkIn($passenger, $agent);
             }
 

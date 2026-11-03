@@ -129,11 +129,12 @@
             @endif
         </div>
 
-        <div class="rounded-lg border border-dashed border-gray-300 p-4 text-sm text-gray-600">
-            Baggage, seat and boarding pass come in the next check-in tasks.
-        </div>
+        @include('checkin.partials.seat-card')
+
+        @include('checkin.partials.bags-card')
 
         @if ($passenger->status === \App\Enums\PassengerStatus::Booked)
+            {{-- Completes check-in: StatusService::checkIn(), then the boarding pass (C5). --}}
             <form method="POST" action="{{ route('checkin.passengers.confirm', $passenger) }}">
                 @csrf
                 <button type="submit" class="rounded bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy/90">
@@ -141,6 +142,8 @@
                 </button>
             </form>
         @endif
+
+        @include('checkin.partials.boarding-pass-card')
 
         <a href="{{ route('checkin.home', ['q' => $passenger->reservation->pnr]) }}" class="inline-block text-sm font-medium text-navy hover:underline">
             ← Back to search
