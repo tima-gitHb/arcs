@@ -5,6 +5,7 @@ use App\Http\Controllers\Checkin\BoardingPassController;
 use App\Http\Controllers\Checkin\CheckinController;
 use App\Http\Controllers\Checkin\SeatController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
+use App\Http\Controllers\Gate\BoardingController;
 use App\Http\Controllers\Gate\GateController;
 use App\Http\Controllers\Gate\ManifestController;
 use App\Http\Controllers\Manager\AccountController;
@@ -68,6 +69,8 @@ Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(f
     Route::get('/', [GateController::class, 'home'])->name('home');
     Route::get('/flights/{flight}', [ManifestController::class, 'show'])->name('flights.show');
     Route::get('/flights/{flight}/counts', [ManifestController::class, 'counts'])->name('flights.counts');
+    Route::post('/flights/{flight}/start-boarding', [BoardingController::class, 'start'])->name('flights.start-boarding');
+    Route::post('/flights/{flight}/board', [BoardingController::class, 'board'])->name('flights.board');
 });
 
 // Manager

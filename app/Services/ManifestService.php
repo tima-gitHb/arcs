@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Enums\BagHandling;
 use App\Enums\PassengerStatus;
+use App\Exceptions\PnrNotOnFlight;
 use App\Models\Flight;
 use App\Models\Passenger;
+use App\Models\Reservation;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -64,6 +66,32 @@ class ManifestService
             ])
             ->orderBy('last_name')
             ->orderBy('first_name')
+            ->get();
+    }
+
+    /**
+     * The passengers (not cancelled) of the PNR printed on a boarding pass, on this flight only (G2).
+     *
+     * @return Collection<int, Passenger>
+     *
+     * @throws PnrNotOnFlight unknown PNR, or booked on another flight
+     */
+    public function passengersForPnr(Flight $flight, string $pnr): Collection
+    {
+        $pnr = strtoupper(trim($pnr));
+        $reservation = Reservation::query()->with('flight')->where('pnr', $pnr)->first();
+
+        if ($reservation === null) {
+            throw new PnrNotOnFlight("No reservation with PNR {$pnr}.");
+        }
+        if ($reservation->flight_id !== $flight->id) {
+            throw new PnrNotOnFlight("PNR {$pnr} is booked on {$reservation->flight->flight_no}, not on this flight.");
+        }
+
+        return $reservation->passengers()
+            ->with(['reservation', 'seatAssignment.seat'])
+            ->where('status', '!=', PassengerStatus::Cancelled)
+            ->orderBy('id')
             ->get();
     }
 }
