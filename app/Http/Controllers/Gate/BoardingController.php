@@ -11,10 +11,11 @@ use App\Services\ManifestService;
 use App\Services\StatusService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Str;
 
 /**
- * Boarding at the gate (G2: SR-10). StatusService decides every status change;
- * this only finds the passenger and words the result.
+ * Boarding at the gate (G2: SR-10) and closing it (G3: SR-12, SR-9).
+ * StatusService decides every status change; this only finds the passenger and words the result.
  */
 class BoardingController extends Controller
 {
@@ -52,7 +53,10 @@ class BoardingController extends Controller
         try {
             $statuses->board($passenger, $request->user());
         } catch (InvalidStatusChange $exception) {
-            return $back->with('error', $exception->getMessage());
+            // After closing, "Boarding has not started" would be misleading.
+            return $back->with('error', $this->boardingClosed($flight)
+                ? 'Boarding is closed for this flight.'
+                : $exception->getMessage());
         }
 
         $seat = $passenger->seatAssignment?->seat->seat_no;
@@ -76,5 +80,33 @@ class BoardingController extends Controller
         }
 
         return $back->with('success', "Boarding started for {$flight->flight_no}.");
+    }
+
+    /**
+     * "Yes, close boarding" (G3: SR-12, SR-9). StatusService::closeBoarding() sets every
+     * checked-in passenger who did not board to NoShow and returns their bags.
+     */
+    public function close(Request $request, Flight $flight, ManifestService $manifest, StatusService $statuses): RedirectResponse
+    {
+        $back = redirect()->route('gate.flights.show', $flight);
+
+        try {
+            $bags = $statuses->closeBoarding($flight, $request->user());
+        } catch (InvalidStatusChange $exception) {
+            return $back->with('error', $this->boardingClosed($flight)
+                ? 'Boarding is already closed for this flight.'
+                : $exception->getMessage());
+        }
+
+        $noShows = $manifest->counts($flight)['missing'];
+
+        return $back->with('success', 'Boarding closed: '
+            .$noShows.' '.Str::plural('no-show', $noShows).', '
+            .$bags->count().' '.Str::plural('bag', $bags->count()).' to offload.');
+    }
+
+    private function boardingClosed(Flight $flight): bool
+    {
+        return in_array($flight->fresh()->status, [FlightStatus::Closed, FlightStatus::Departed], true);
     }
 }

@@ -35,6 +35,8 @@
 
         @include('gate.partials.boarding-panel')
 
+        @include('gate.partials.close-boarding')
+
         {{-- Passenger list (SR-45): who checked in / boarded each passenger, from the audit log helpers. --}}
         <div class="overflow-x-auto rounded-lg bg-white shadow-sm">
             <table class="w-full text-sm">

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\BagHandling;
 use App\Enums\PassengerStatus;
 use App\Exceptions\PnrNotOnFlight;
+use App\Models\Bag;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
@@ -66,6 +67,26 @@ class ManifestService
             ])
             ->orderBy('last_name')
             ->orderBy('first_name')
+            ->get();
+    }
+
+    /**
+     * Bags to take off the aircraft after boarding is closed (G3, SR-9): every bag of the
+     * flight's NoShow passengers that is not offloaded yet. Same rule as the bags
+     * StatusService::closeBoarding() returns, so the list survives a page reload.
+     *
+     * @return Collection<int, Bag>
+     */
+    public function bagsToOffload(Flight $flight): Collection
+    {
+        return Bag::query()
+            ->whereNull('offloaded_at')
+            ->whereHas('passenger', fn ($passenger) => $passenger
+                ->where('status', PassengerStatus::NoShow)
+                ->whereHas('reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id)))
+            ->with('passenger.seatAssignment.seat')
+            ->orderBy('passenger_id')
+            ->orderBy('id')
             ->get();
     }
 

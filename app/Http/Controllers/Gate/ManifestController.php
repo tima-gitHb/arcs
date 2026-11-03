@@ -34,8 +34,12 @@ class ManifestController extends Controller
             'passengers' => $manifest->passengers($flight),
             'choosing' => $choosing,
             'choosingPnr' => strtoupper((string) $request->query('pnr')),
-            // ?start=confirm shows the on-page confirmation first (G2).
+            // ?start=confirm / ?close=confirm show the on-page confirmation first (G2, G3).
             'confirmingStart' => $request->query('start') === 'confirm' && $flight->status === FlightStatus::CheckinOpen,
+            'confirmingClose' => $request->query('close') === 'confirm' && $flight->status === FlightStatus::Boarding,
+            'offload' => in_array($flight->status, [FlightStatus::Closed, FlightStatus::Departed], true)
+                ? $manifest->bagsToOffload($flight)
+                : collect(),
         ]);
     }
 

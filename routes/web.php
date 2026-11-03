@@ -71,6 +71,7 @@ Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(f
     Route::get('/flights/{flight}/counts', [ManifestController::class, 'counts'])->name('flights.counts');
     Route::post('/flights/{flight}/start-boarding', [BoardingController::class, 'start'])->name('flights.start-boarding');
     Route::post('/flights/{flight}/board', [BoardingController::class, 'board'])->name('flights.board');
+    Route::post('/flights/{flight}/close', [BoardingController::class, 'close'])->name('flights.close');
 });
 
 // Manager
