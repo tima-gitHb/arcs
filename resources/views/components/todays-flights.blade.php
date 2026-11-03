@@ -12,6 +12,9 @@
                     <th class="px-4 py-2 font-medium">Departure</th>
                     <th class="px-4 py-2 font-medium">Gate</th>
                     <th class="px-4 py-2 font-medium">Status</th>
+                    @if ($hasActions())
+                        <th class="px-4 py-2"></th>
+                    @endif
                 </tr>
             </thead>
             <tbody>
@@ -22,6 +25,13 @@
                         <td class="px-4 py-2">{{ $flight->departure_at->format('H:i') }}</td>
                         <td class="px-4 py-2">{{ $flight->gate ?? '—' }}</td>
                         <td class="px-4 py-2">{{ $flight->status->label() }}</td>
+                        @if ($hasActions())
+                            <td class="px-4 py-2 text-right">
+                                @if ($action = $actionFor($flight))
+                                    <a href="{{ $action['url'] }}" class="font-medium text-navy hover:underline">{{ $action['label'] }}</a>
+                                @endif
+                            </td>
+                        @endif
                     </tr>
                 @endforeach
             </tbody>

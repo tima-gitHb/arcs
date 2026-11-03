@@ -24,7 +24,7 @@ class B6RoutesTest extends TestCase
             'reservation.create' => ['reservation.create', Role::Reservation, 'New reservation', null],
             'reservation.search' => ['reservation.search', Role::Reservation, 'Find reservation', null],
             'checkin.home' => ['checkin.home', Role::Checkin, 'Check in passenger', null],
-            'gate.home' => ['gate.home', Role::Gate, 'Manifest', 'G1'],
+            'gate.home' => ['gate.home', Role::Gate, 'Manifest', null],
         ];
     }
 

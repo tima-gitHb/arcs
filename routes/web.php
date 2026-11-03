@@ -6,6 +6,7 @@ use App\Http\Controllers\Checkin\CheckinController;
 use App\Http\Controllers\Checkin\SeatController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
 use App\Http\Controllers\Gate\GateController;
+use App\Http\Controllers\Gate\ManifestController;
 use App\Http\Controllers\Manager\AccountController;
 use App\Http\Controllers\Manager\AircraftController;
 use App\Http\Controllers\Manager\AuditController;
@@ -65,6 +66,8 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
 // Gate staff
 Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(function () {
     Route::get('/', [GateController::class, 'home'])->name('home');
+    Route::get('/flights/{flight}', [ManifestController::class, 'show'])->name('flights.show');
+    Route::get('/flights/{flight}/counts', [ManifestController::class, 'counts'])->name('flights.counts');
 });
 
 // Manager

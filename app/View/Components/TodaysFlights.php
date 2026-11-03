@@ -29,6 +29,24 @@ class TodaysFlights extends Component
             ->get();
     }
 
+    /**
+     * The action a role gets on each row, or null. Modules add theirs here.
+     *
+     * @return array{label: string, url: string}|null
+     */
+    public function actionFor(Flight $flight): ?array
+    {
+        return match ($this->role) {
+            Role::Gate => ['label' => 'Manifest', 'url' => route('gate.flights.show', $flight)],
+            default => null,
+        };
+    }
+
+    public function hasActions(): bool
+    {
+        return $this->role === Role::Gate;
+    }
+
     public function render(): View
     {
         return view('components.todays-flights');
