@@ -34,6 +34,7 @@ class B11BaseExtrasTest extends TestCase
     {
         $passenger = Passenger::factory()->for(Reservation::factory()->for($flight))->create();
         TravelDocument::factory()->for($passenger)->create();
+        $this->seatPassenger($passenger); // check-in needs a seat (C5)
 
         return $passenger;
     }

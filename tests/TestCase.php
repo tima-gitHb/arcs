@@ -2,9 +2,13 @@
 
 namespace Tests;
 
+use App\Enums\CabinClass;
 use App\Enums\FlightStatus;
 use App\Enums\Role;
 use App\Models\Flight;
+use App\Models\Passenger;
+use App\Models\Seat;
+use App\Models\SeatAssignment;
 use App\Models\User;
 use App\Services\StatusService;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
@@ -23,6 +27,37 @@ abstract class TestCase extends BaseTestCase
         $this->actingAs($user);
 
         return $user;
+    }
+
+    /**
+     * Give the passenger a seat on their flight's aircraft, as check-in needs one
+     * before StatusService::checkIn() (C5). The seat is created if needed.
+     */
+    protected function seatPassenger(Passenger $passenger, ?string $seatNo = null): Seat
+    {
+        $flight = $passenger->reservation->flight;
+
+        if ($seatNo === null) {
+            $row = 1;
+            while (Seat::where('aircraft_id', $flight->aircraft_id)->where('seat_no', $row.'F')->exists()) {
+                $row++;
+            }
+            $seatNo = $row.'F';
+        }
+
+        $seat = Seat::firstOrCreate(
+            ['aircraft_id' => $flight->aircraft_id, 'seat_no' => $seatNo],
+            ['cabin_class' => CabinClass::Economy],
+        );
+
+        SeatAssignment::updateOrCreate(
+            ['passenger_id' => $passenger->id],
+            ['flight_id' => $flight->id, 'seat_id' => $seat->id],
+        );
+
+        $passenger->unsetRelation('seatAssignment');
+
+        return $seat;
     }
 
     /**

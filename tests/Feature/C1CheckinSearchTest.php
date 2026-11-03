@@ -36,6 +36,7 @@ class C1CheckinSearchTest extends TestCase
         $reservation = Reservation::factory()->for($flight)->create($pnr ? ['pnr' => $pnr] : []);
         $passenger = Passenger::factory()->for($reservation)->create(['first_name' => 'Rami', 'last_name' => $lastName]);
         TravelDocument::factory()->for($passenger)->create();
+        $this->seatPassenger($passenger); // check-in needs a seat (C5)
 
         return $passenger;
     }
@@ -127,7 +128,9 @@ class C1CheckinSearchTest extends TestCase
 
         $this->assertSame(PassengerStatus::CheckedIn, $passenger->fresh()->status);
         $this->assertTrue($passenger->fresh()->checkedInBy->user->is($this->agent));
-        $this->assertSame(1, AuditEntry::count());
+        $this->assertSame(1, AuditEntry::where('field', 'status')->count());
+        // Confirming also issues the boarding pass (C5).
+        $this->assertSame(1, AuditEntry::where('field', 'boarding_pass_issued')->count());
 
         // Once checked in, the screen shows who did it and no longer offers the button.
         $this->get(route('checkin.passengers.show', $passenger))

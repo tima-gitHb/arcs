@@ -13,10 +13,10 @@ use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Models\Seat;
-use App\Models\SeatAssignment;
 use App\Services\CorrectionService;
 use App\Services\PnrGenerator;
 use App\Services\ReservationService;
+use App\Services\SeatService;
 use App\Services\StatusService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -84,41 +84,14 @@ class ReservationController extends Controller
             ->with('success', 'Reservation '.$reservation->pnr.' created.');
     }
 
-    public function seats(Flight $flight): JsonResponse
+    public function seats(Flight $flight, SeatService $seatService): JsonResponse
     {
         if (in_array($flight->status, [FlightStatus::Departed, FlightStatus::Cancelled], true)) {
             abort(404);
         }
 
-        $taken = array_flip(
-            SeatAssignment::query()->where('flight_id', $flight->id)->pluck('seat_id')->all(),
-        );
-
-        $seats = Seat::query()
-            ->where('aircraft_id', $flight->aircraft_id)
-            ->get()
-            ->sortBy(function (Seat $seat): int {
-                if (! preg_match('/^(\d+)([A-F])$/', $seat->seat_no, $matches)) {
-                    return 9999;
-                }
-
-                return ((int) $matches[1]) * 10 + ord($matches[2]);
-            })
-            ->values()
-            ->map(function (Seat $seat) use ($taken): array {
-                preg_match('/^(\d+)([A-F])$/', $seat->seat_no, $matches);
-
-                return [
-                    'id' => $seat->id,
-                    'seat_no' => $seat->seat_no,
-                    'row' => isset($matches[1]) ? (int) $matches[1] : 0,
-                    'letter' => $matches[2] ?? '',
-                    'cabin' => $seat->cabin_class->value,
-                    'taken' => isset($taken[$seat->id]),
-                ];
-            });
-
-        return response()->json(['seats' => $seats]);
+        // Shared with the check-in seat map (C3).
+        return response()->json(['seats' => $seatService->seatMap($flight)]);
     }
 
     public function confirmation(Reservation $reservation): View

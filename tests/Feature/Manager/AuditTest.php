@@ -55,6 +55,7 @@ class AuditTest extends TestCase
             ->create($passenger);
 
         TravelDocument::factory()->for($model)->create();
+        $this->seatPassenger($model); // check-in needs a seat (C5)
 
         app(StatusService::class)->checkIn($model, $by ?? $this->checkinAgent);
 

@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers\Checkin;
 
+use App\Enums\PassengerType;
 use App\Exceptions\InvalidStatusChange;
 use App\Http\Controllers\Controller;
 use App\Models\Passenger;
-use App\Services\StatusService;
+use App\Services\BoardingPassService;
+use App\Services\SeatService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -49,7 +51,7 @@ class CheckinController extends Controller
      * The check-in screen of one passenger. Opening it changes nothing: documents (C2),
      * seat (C3) and bags (C4) are added here before the agent confirms.
      */
-    public function show(Request $request, Passenger $passenger): View
+    public function show(Request $request, Passenger $passenger, SeatService $seats): View
     {
         $passenger->load([
             'reservation.flight',
@@ -57,25 +59,33 @@ class CheckinController extends Controller
             'travelDocuments.verifier',
             'accompanyingAdult',
             'checkedInBy.user',
+            'seatAssignment.seat',
+            'bags' => fn ($query) => $query->orderBy('id'),
+            'activeBoardingPass',
         ]);
 
         return view('checkin.show', [
             'passenger' => $passenger,
             // ?edit=<document id> opens the edit form for that document.
             'editing' => $passenger->travelDocuments->firstWhere('id', $request->integer('edit')),
+            // Same data as the reservation seat map (R1); infants have no seat.
+            'seatMap' => $passenger->type === PassengerType::Infant
+                ? collect()
+                : $seats->seatMap($passenger->reservation->flight),
         ]);
     }
 
     /**
-     * "Confirm check-in": StatusService checks every rule (SR-6, SR-23, SR-25, SR-30).
+     * "Confirm check-in" (= complete check-in): StatusService checks every rule
+     * (SR-6, SR-23, SR-25, SR-30, seat required) and the boarding pass is issued (C5).
      * Either way the agent stays on the check-in screen.
      */
-    public function confirm(Request $request, Passenger $passenger, StatusService $statuses): RedirectResponse
+    public function confirm(Request $request, Passenger $passenger, BoardingPassService $passes): RedirectResponse
     {
         $screen = redirect()->route('checkin.passengers.show', $passenger);
 
         try {
-            $statuses->checkIn($passenger, $request->user());
+            $passes->completeCheckIn($passenger, $request->user());
         } catch (InvalidStatusChange $exception) {
             return $screen->with('error', $exception->getMessage());
         }

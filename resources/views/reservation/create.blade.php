@@ -93,20 +93,9 @@
         </div>
         </div>
 
-        <aside id="seat-map-panel" class="rounded-[2rem] bg-[#14213d] px-4 py-5 text-white md:sticky md:top-4">
-            <div class="mx-auto mb-3 h-8 w-20 rounded-t-full bg-[#2c406e]"></div>
-            <p class="text-center text-xs uppercase tracking-[0.2em] text-white/70">Cabin</p>
-            <h2 class="mt-1 text-center text-lg font-semibold">Seat map</h2>
-            <p id="seat-map-hint" class="mt-1 text-center text-xs text-white/70">Choose a flight, then a passenger, then a free seat.</p>
+        <x-seat-map class="md:sticky md:top-4" hint="Choose a flight, then a passenger, then a free seat.">
             <x-input-error :messages="$errors->get('seat')" class="mt-3" />
-            <div id="seat-map" class="mt-4 max-h-[70vh] overflow-y-auto pr-1"></div>
-            <div class="mt-4 grid grid-cols-2 gap-2 text-xs text-white/80">
-                <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-white"></span> Economy</span>
-                <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-amber-200"></span> Business</span>
-                <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-emerald-400"></span> Selected</span>
-                <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-slate-600"></span> Taken</span>
-            </div>
-        </aside>
+        </x-seat-map>
         </div>
     </form>
 
@@ -125,7 +114,8 @@
         ])
     </template>
 
-    <script>
+    {{-- type="module": runs after the Vite bundle, which provides window.ArcsSeatMap. --}}
+    <script type="module">
         const list = document.getElementById('passengers');
         const template = document.getElementById('passenger-template');
         const addButton = document.getElementById('add-passenger');
@@ -209,14 +199,6 @@
         let activeIndex = '0';
         let mapRequest = 0;
 
-        const seatStyles = {
-            business: 'bg-amber-200 text-amber-950 hover:bg-amber-100',
-            economy: 'bg-white text-navy hover:bg-sky-100',
-            taken: 'cursor-not-allowed bg-slate-600 text-slate-400',
-            selected: 'bg-emerald-400 text-emerald-950',
-            mine: 'bg-emerald-400 text-emerald-950 ring-2 ring-white',
-        };
-
         function chosenSeats() {
             const chosen = new Map();
 
@@ -261,80 +243,26 @@
 
             hint.textContent = `Choosing for passenger ${Number(activeIndex) + 1}. Taken seats stay blocked.`;
 
-            const byRow = new Map();
-            seatData.forEach((seat) => {
-                if (!byRow.has(seat.row)) {
-                    byRow.set(seat.row, []);
+            // Grid drawn by the shared seat map (resources/js/seat-map.js); the rules per seat stay here.
+            window.ArcsSeatMap.draw(map, seatData, (seat) => {
+                const owner = chosen.get(String(seat.id));
+                const mine = owner === activeIndex;
+                let style = seat.cabin === 'Business' ? 'business' : 'economy';
+                let disabled = false;
+
+                if (seat.taken || (owner && !mine)) {
+                    style = 'taken';
+                    disabled = true;
                 }
 
-                byRow.get(seat.row).push(seat);
-            });
-
-            const header = document.createElement('div');
-            header.className = 'mb-2 grid grid-cols-[1.5rem_repeat(3,1fr)_1rem_repeat(3,1fr)] gap-1 text-center text-[10px] uppercase text-white/50';
-            ['', 'A', 'B', 'C', '', 'D', 'E', 'F'].forEach((letter) => {
-                const cell = document.createElement('span');
-                cell.textContent = letter;
-                header.appendChild(cell);
-            });
-            map.appendChild(header);
-
-            [...byRow.keys()].sort((left, right) => left - right).forEach((rowNo) => {
-                const line = document.createElement('div');
-                line.className = 'mb-1 grid grid-cols-[1.5rem_repeat(3,1fr)_1rem_repeat(3,1fr)] items-center gap-1';
-
-                const number = document.createElement('span');
-                number.className = 'text-center text-[10px] text-white/50';
-                number.textContent = String(rowNo);
-                line.appendChild(number);
-
-                ['A', 'B', 'C', 'D', 'E', 'F'].forEach((letter, position) => {
-                    if (position === 3) {
-                        line.appendChild(document.createElement('span'));
-                    }
-
-                    const seat = byRow.get(rowNo).find((item) => item.letter === letter);
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.textContent = letter;
-
-                    if (!seat) {
-                        button.disabled = true;
-                        button.className = 'h-7 rounded bg-white/5';
-                        line.appendChild(button);
-
-                        return;
-                    }
-
-                    const owner = chosen.get(String(seat.id));
-                    const mine = owner === activeIndex;
-                    let style = seat.cabin === 'Business' ? seatStyles.business : seatStyles.economy;
-
-                    if (seat.taken || (owner && !mine)) {
-                        style = seatStyles.taken;
-                        button.disabled = true;
-                    }
-
-                    if (mine) {
-                        style = seatStyles.mine;
-                        button.disabled = false;
-                    } else if (owner) {
-                        style = seatStyles.selected;
-                    }
-
-                    button.className = `h-7 rounded text-[11px] font-semibold ${style}`;
-                    button.title = seat.taken ? `${seat.seat_no} taken` : seat.seat_no;
-                    button.addEventListener('click', () => pickSeat(seat));
-                    line.appendChild(button);
-                });
-
-                map.appendChild(line);
-
-                if (rowNo === 12) {
-                    const wing = document.createElement('div');
-                    wing.className = 'my-2 h-2 rounded-full bg-white/20';
-                    map.appendChild(wing);
+                if (mine) {
+                    style = 'mine';
+                    disabled = false;
+                } else if (owner) {
+                    style = 'selected';
                 }
+
+                return { style, disabled, onPick: pickSeat };
             });
         }
 
