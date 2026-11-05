@@ -88,6 +88,35 @@ class BagService
     }
 
     /**
+     * Confirm a no-show passenger's bag is off the aircraft: records who and when (G4, SR-28).
+     */
+    public function confirmOffload(Bag $bag, User $by): void
+    {
+        DB::transaction(function () use ($bag, $by) {
+            $passenger = Passenger::query()->lockForUpdate()->findOrFail($bag->passenger_id);
+            $bag = Bag::query()->lockForUpdate()->findOrFail($bag->id);
+
+            if ($passenger->status !== PassengerStatus::NoShow) {
+                throw new BagNotAllowed('Only the bags of a no-show passenger can be offloaded.');
+            }
+            if ($bag->offloaded_at !== null) {
+                throw new BagNotAllowed("Bag {$bag->tag_no} is already offloaded.");
+            }
+
+            $bag->update(['offloaded_at' => now(), 'offloaded_by' => $by->id]);
+
+            AuditEntry::create([
+                'passenger_id' => $passenger->id,
+                'field' => 'bag_offloaded',
+                'old_value' => null,
+                'new_value' => $bag->tag_no,
+                'user_id' => $by->id,
+                'changed_at' => now(),
+            ]);
+        });
+    }
+
+    /**
      * Set over_allowance on each of the passenger's bags, in the order they were added (SR-27):
      * a counted bag is over if it is beyond the allowed pieces or heavier than the maximum.
      * Wheelchairs and strollers are never counted and never over (SR-43).

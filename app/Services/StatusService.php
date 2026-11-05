@@ -16,6 +16,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * The ONLY code allowed to change a passenger's or a flight's status (see CLAUDE.md).
@@ -159,8 +160,29 @@ class StatusService
                 );
             }
 
+            if ($new === FlightStatus::Departed) {
+                $this->ensureBagsOffloaded($flight);
+            }
+
             $flight->forceFill(['status' => $new])->save();
         });
+    }
+
+    /**
+     * A flight cannot leave with the bags of a no-show passenger on board (SR-28).
+     */
+    private function ensureBagsOffloaded(Flight $flight): void
+    {
+        $left = Bag::query()
+            ->whereNull('offloaded_at')
+            ->whereHas('passenger', fn ($passenger) => $passenger
+                ->where('status', PassengerStatus::NoShow)
+                ->whereHas('reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id)))
+            ->count();
+
+        if ($left > 0) {
+            throw new InvalidStatusChange($left.' '.Str::plural('bag', $left).' still to offload');
+        }
     }
 
     /**

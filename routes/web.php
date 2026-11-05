@@ -9,6 +9,7 @@ use App\Http\Controllers\Checkin\TravelDocumentController;
 use App\Http\Controllers\Gate\BoardingController;
 use App\Http\Controllers\Gate\GateController;
 use App\Http\Controllers\Gate\ManifestController;
+use App\Http\Controllers\Gate\OffloadController;
 use App\Http\Controllers\Manager\AccountController;
 use App\Http\Controllers\Manager\AircraftController;
 use App\Http\Controllers\Manager\AuditController;
@@ -76,6 +77,7 @@ Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(f
     Route::post('/flights/{flight}/start-boarding', [BoardingController::class, 'start'])->name('flights.start-boarding');
     Route::post('/flights/{flight}/board', [BoardingController::class, 'board'])->name('flights.board');
     Route::post('/flights/{flight}/close', [BoardingController::class, 'close'])->name('flights.close');
+    Route::post('/bags/{bag}/offload', [OffloadController::class, 'confirm'])->name('bags.offload');
 });
 
 // Manager

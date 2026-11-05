@@ -25,6 +25,7 @@ Requirements: `docs/ARCS_BRD_v0.5.docx` (BRD). Every feature traces to an SR-ID 
 - **Only `App\Services\StatusService` may change a passenger's status.** It checks the rule,
   saves the change and writes an `audit_log` row (SR-26). Never set `$passenger->status` anywhere else.
 - **Flight status** (enum `FlightStatus`): `Scheduled`, `CheckinOpen`, `Boarding`, `Closed`, `Departed`, `Delayed`, `Cancelled` — SR-25.
+  - A flight cannot go to `Departed` until every no-show bag is offloaded (enforced in `setFlightStatus()`) — SR-28.
 - **No double seat:** `seat_assignments` has UNIQUE (`flight_id`, `seat_id`). Assign seats inside a
   DB transaction and catch the unique-constraint error → show "Seat taken" (SR-7).
 - An **Infant** has no seat and must have `accompanying_adult_id` (SR-24).
