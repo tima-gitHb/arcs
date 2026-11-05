@@ -67,7 +67,14 @@
                     @forelse ($entries as $entry)
                         <tr class="border-b border-gray-100 last:border-0">
                             <td class="px-4 py-2 whitespace-nowrap">{{ $entry->changed_at->format('d M Y H:i') }}</td>
-                            <td class="px-4 py-2">{{ $entry->passenger->first_name }} {{ $entry->passenger->last_name }}</td>
+                            <td class="px-4 py-2">
+                                {{-- A row about a flight has no passenger. --}}
+                                @if ($entry->passenger)
+                                    {{ $entry->passenger->first_name }} {{ $entry->passenger->last_name }}
+                                @else
+                                    Flight {{ $entry->flight?->flight_no ?? '—' }}
+                                @endif
+                            </td>
                             <td class="px-4 py-2">{{ $entry->field }}</td>
                             {{-- A new value has no old one (e.g. a document added): show a dash. --}}
                             <td class="px-4 py-2">{{ $entry->old_value ?? '—' }} → {{ $entry->new_value }}</td>

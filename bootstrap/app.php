@@ -30,5 +30,6 @@ return Application::configure(basePath: dirname(__DIR__))
         });
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        //
+        // Card data must never reach the session, even after a validation error.
+        $exceptions->dontFlash(['card_number', 'card_cvc', 'card_expiry']);
     })->create();

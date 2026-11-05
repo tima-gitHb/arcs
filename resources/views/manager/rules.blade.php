@@ -31,7 +31,7 @@
             <section class="space-y-4">
                 <h2 class="text-lg font-semibold text-navy">Baggage allowance per cabin class</h2>
 
-                @foreach (['economy' => 'Economy', 'business' => 'Business'] as $key => $label)
+                @foreach (['economy' => 'Economy', 'premium' => 'Premium', 'business' => 'Business'] as $key => $label)
                     <div class="rounded-md border border-gray-200 p-4">
                         <h3 class="font-medium text-gray-800">{{ $label }}</h3>
 

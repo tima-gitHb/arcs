@@ -14,6 +14,7 @@ class AuditEntry extends Model
      */
     protected $fillable = [
         'passenger_id',
+        'flight_id',
         'field',
         'old_value',
         'new_value',
@@ -29,6 +30,26 @@ class AuditEntry extends Model
         return [
             'changed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * An entry about a flight, with no passenger.
+     */
+    public static function forFlight(Flight $flight, string $field, ?string $old, string $new, User $by): self
+    {
+        return self::create([
+            'flight_id' => $flight->id,
+            'field' => $field,
+            'old_value' => $old,
+            'new_value' => $new,
+            'user_id' => $by->id,
+            'changed_at' => now(),
+        ]);
+    }
+
+    public function flight(): BelongsTo
+    {
+        return $this->belongsTo(Flight::class);
     }
 
     public function passenger(): BelongsTo

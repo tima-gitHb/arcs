@@ -7,15 +7,21 @@ use App\Enums\BagType;
 use App\Enums\FlightStatus;
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
+use App\Enums\PaymentKind;
+use App\Enums\PaymentStatus;
 use App\Enums\Role;
 use App\Enums\SpecialServiceCode;
+use App\Models\Aircraft;
 use App\Models\AuditEntry;
 use App\Models\Bag;
 use App\Models\BaggageAllowance;
 use App\Models\BoardingPass;
 use App\Models\EntryRule;
+use App\Models\Fare;
+use App\Models\Fee;
 use App\Models\Flight;
 use App\Models\Passenger;
+use App\Models\Payment;
 use App\Models\Reservation;
 use App\Models\Seat;
 use App\Models\Setting;
@@ -65,7 +71,12 @@ class B8SeedersTest extends TestCase
         $this->assertSame(180, Seat::count());
         $this->assertSame(30, Seat::where('cabin_class', 'Business')->count());
         $this->assertSame('6', Setting::find('passport_min_months')->value);
-        $this->assertSame(1, BaggageAllowance::where('cabin_class', 'Economy')->value('pieces'));
+        $this->assertSame(18, Seat::where('cabin_class', 'Premium')->count());
+        $this->assertSame(132, Seat::where('cabin_class', 'Economy')->count());
+        $this->assertSame(3, Aircraft::where('registration', 'OD-MRA')->value('premium_rows'));
+        $this->assertSame('32', Setting::find('hard_max_kg_per_bag')->value);
+        $this->assertSame(2, BaggageAllowance::where('cabin_class', 'Economy')->value('pieces'));
+        $this->assertSame(2, BaggageAllowance::where('cabin_class', 'Premium')->value('pieces'));
         $this->assertSame(2, BaggageAllowance::where('cabin_class', 'Business')->value('pieces'));
     }
 
@@ -201,6 +212,19 @@ class B8SeedersTest extends TestCase
             BoardingPass::count(),
             AuditEntry::where('field', 'boarding_pass_issued')->count(),
         );
+    }
+
+    public function test_fares_fees_and_one_paid_reservation_are_seeded(): void
+    {
+        $this->assertSame(9, Fare::count());
+        $this->assertSame(4, Fee::count());
+
+        $payment = Payment::sole();
+        $this->assertSame(PaymentStatus::Succeeded, $payment->status);
+        $this->assertSame(PaymentKind::Fare, $payment->kind);
+        $this->assertSame('ME201', $payment->reservation->flight->flight_no);
+        $this->assertSame('4242', $payment->card_last4);
+        $this->assertGreaterThan(0, $payment->amount_cents);
     }
 
     public function test_in_tests_the_entry_rule_seeder_loads_the_small_fixture(): void

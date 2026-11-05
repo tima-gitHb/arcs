@@ -18,6 +18,8 @@ class Reservation extends Model
         'pnr',
         'flight_id',
         'created_by',
+        'contact_email',
+        'contact_phone',
     ];
 
     public function flight(): BelongsTo

@@ -265,6 +265,7 @@ class FlightSeeder extends Seeder
             'first_name' => self::FIRST_NAMES[$this->nameIndex % count(self::FIRST_NAMES)],
             'last_name' => $adult?->last_name ?? self::LAST_NAMES[$this->nameIndex % count(self::LAST_NAMES)],
             'type' => $type,
+            'cabin_class' => CabinClass::Economy,
             'date_of_birth' => $type === PassengerType::Infant
                 ? $this->base->copy()->subMonths(8)
                 : $this->base->copy()->subYears(25 + $this->nameIndex % 40),

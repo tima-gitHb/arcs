@@ -20,7 +20,9 @@ class DatabaseSeeder extends Seeder
             AircraftSeeder::class,
             SettingSeeder::class,
             EntryRuleSeeder::class,
+            FareSeeder::class,
             FlightSeeder::class,
+            PaymentSeeder::class,
         ]);
     }
 }

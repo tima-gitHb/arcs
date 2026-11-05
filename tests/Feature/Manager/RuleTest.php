@@ -20,6 +20,7 @@ class RuleTest extends TestCase
 
         // passport_min_months = 6, Economy 1 x 23 kg, Business 2 x 32 kg
         $this->seed(SettingSeeder::class);
+        BaggageAllowance::where('cabin_class', CabinClass::Economy)->update(['pieces' => 1]);
     }
 
     /**
@@ -34,6 +35,7 @@ class RuleTest extends TestCase
             'passport_min_months' => 6,
             'allowances' => [
                 'economy' => ['pieces' => 1, 'max_kg_per_bag' => 23],
+                'premium' => ['pieces' => 2, 'max_kg_per_bag' => 23],
                 'business' => ['pieces' => 2, 'max_kg_per_bag' => 32],
             ],
         ], $overrides);

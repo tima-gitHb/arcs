@@ -17,6 +17,7 @@
     <div id="seat-map" {{ $attributes->except('class')->merge(['class' => 'mt-4 max-h-[70vh] overflow-y-auto pr-1']) }}></div>
     <div class="mt-4 grid grid-cols-2 gap-2 text-xs text-white/80">
         <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-white"></span> Economy</span>
+        <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-violet-200"></span> Premium</span>
         <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-amber-200"></span> Business</span>
         <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-emerald-400"></span> Selected</span>
         <span class="flex items-center gap-2"><span class="inline-block h-4 w-4 rounded bg-slate-600"></span> Taken</span>
