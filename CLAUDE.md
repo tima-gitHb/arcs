@@ -42,13 +42,21 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
 - **Times are Beirut time:** `APP_TIMEZONE=Asia/Beirut` (default in `config/app.php`).
 - **A password reset never unlocks an account.** Locked or deactivated accounts get no reset email;
   only the Manager unlocks (SR-35, SR-37). New passwords: at least 8 characters, letters and numbers (SR-38).
+- **Entry check** (SR-49, pending client approval): `App\Services\EntryRequirementChecker` is advisory. It reads the
+  read-only `entry_rules` table (Passport Index snapshot, rules as of 12 January 2025) and **never blocks check-in**:
+  `StatusService` knows nothing about it. On a missing or refused result, `BoardingPassService` requires a written
+  reason and writes it with the result to `audit_log` (field `entry_override`). Nobody edits the rules in the app.
+  Schengen: for a destination in `config/schengen.php`, a valid visa or residence permit from any member counts, not
+  only one from the destination. The 90/180-day stay limit is not checked. Transit rules are not covered.
+- Staff never type or read country codes: the database stores ISO-2 codes, `App\Services\CountryList` gives the names.
 - Out of scope (never build): payments, refunds, excess-baggage charges, online/passenger check-in,
-  automatic visa checks, external systems (GDS, APIS), connecting flights, payroll.
+  blocking automatic visa checks and live/external visa or APIS checks, external systems (GDS, APIS),
+  connecting flights, payroll.
 
-## Database (15 tables)
+## Database (16 tables)
 users, aircraft, seats, flights, reservations, passengers, seat_assignments, bags,
 boarding_passes, special_services, travel_documents, audit_log, baggage_allowances,
-gate_overrides, settings.
+gate_overrides, settings, entry_rules.
 - **Never edit an existing migration** once it is on `dev` or `main`. Schema change = new migration,
   agreed with the team first.
 - Foreign keys always declared (`constrained()`), with `cascadeOnDelete()` only for seats → aircraft.

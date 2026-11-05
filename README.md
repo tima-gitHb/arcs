@@ -186,3 +186,10 @@ php artisan migrate:fresh --seed
 ```
 
 This deletes all data in `arcs` and recreates the sample data.
+
+---
+
+## Data sources
+
+Entry rules: [Passport Index dataset](https://github.com/ilyankou/passport-index-dataset) by ilyankou, MIT licence
+([database/data/passport-index-LICENSE.txt](database/data/passport-index-LICENSE.txt)), snapshot of 12 January 2025.

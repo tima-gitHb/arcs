@@ -11,7 +11,7 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed the application's database with invented sample data (development only).
-     * Order matters: flights need the users, the aircraft and its seats, and the settings.
+     * Order matters: flights need the users, the aircraft and its seats, the settings and the entry rules.
      */
     public function run(): void
     {
@@ -19,6 +19,7 @@ class DatabaseSeeder extends Seeder
             UserSeeder::class,
             AircraftSeeder::class,
             SettingSeeder::class,
+            EntryRuleSeeder::class,
             FlightSeeder::class,
         ]);
     }

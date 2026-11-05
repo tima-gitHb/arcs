@@ -21,6 +21,7 @@ class LateCheckInRequest extends FormRequest
             'manager_email' => ['required', 'email'],
             'password' => ['required', 'string'],
             'seat_id' => ['nullable', 'integer', 'exists:seats,id'],
+            'entry_reason' => ['nullable', 'string', 'max:255'], // kept in audit_log (SR-49)
         ];
     }
 }

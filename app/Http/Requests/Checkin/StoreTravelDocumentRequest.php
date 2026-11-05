@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Checkin;
 
 use App\Enums\DocumentType;
+use App\Services\CountryList;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -30,7 +31,7 @@ class StoreTravelDocumentRequest extends FormRequest
         return [
             'type' => ['required', Rule::enum(DocumentType::class)],
             'number' => ['required', 'string', 'max:30', 'regex:/^[A-Z0-9]+$/'],
-            'issuing_country' => ['required', 'string', 'size:2', 'alpha'],
+            'issuing_country' => ['required', 'string', Rule::in(app(CountryList::class)->codes())],
             'expiry_date' => ['required', 'date_format:Y-m-d'],
         ];
     }
@@ -42,7 +43,7 @@ class StoreTravelDocumentRequest extends FormRequest
     {
         return [
             'number.regex' => 'The number may only contain letters and digits.',
-            'issuing_country.size' => 'Use the 2-letter country code, e.g. LB.',
+            'issuing_country.in' => 'Choose a country from the list.',
             'expiry_date.date_format' => 'The expiry must be a date.',
         ];
     }

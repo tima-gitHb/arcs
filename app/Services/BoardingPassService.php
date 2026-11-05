@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\PassengerStatus;
 use App\Exceptions\BoardingPassNotAllowed;
+use App\Exceptions\EntryReasonRequired;
 use App\Models\AuditEntry;
 use App\Models\BoardingPass;
 use App\Models\Flight;
@@ -25,16 +26,20 @@ class BoardingPassService
      */
     public const BOARDING_MINUTES_BEFORE_DEPARTURE = 40;
 
-    public function __construct(private StatusService $statuses) {}
+    public function __construct(
+        private StatusService $statuses,
+        private EntryRequirementChecker $entryCheck,
+    ) {}
 
     /**
      * "Confirm check-in": StatusService::checkIn() checks every rule, then the first pass
      * is issued. One transaction: no check-in without a pass, no pass without a check-in.
      */
-    public function completeCheckIn(Passenger $passenger, User $by): BoardingPass
+    public function completeCheckIn(Passenger $passenger, User $by, ?string $entryReason = null): BoardingPass
     {
-        return DB::transaction(function () use ($passenger, $by) {
+        return DB::transaction(function () use ($passenger, $by, $entryReason) {
             $this->statuses->checkIn($passenger, $by);
+            $this->acknowledgeEntryCheck($passenger, $by, $entryReason);
 
             return $this->issue($passenger, $by);
         });
@@ -43,13 +48,42 @@ class BoardingPassService
     /**
      * Same for a late check-in at the gate, approved by a Manager (SR-29).
      */
-    public function completeLateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason): BoardingPass
+    public function completeLateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?string $entryReason = null): BoardingPass
     {
-        return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason) {
+        return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $entryReason) {
             $this->statuses->lateCheckIn($passenger, $gateUser, $manager, $reason);
+            $this->acknowledgeEntryCheck($passenger, $gateUser, $entryReason);
 
             return $this->issue($passenger, $gateUser);
         });
+    }
+
+    /**
+     * The entry check is advisory (SR-49): it never refuses a check-in, but on a missing or
+     * refused result the agent must write a reason, kept in audit_log (field entry_override).
+     * Runs after the status rules, so their refusals keep their order and messages; the
+     * exception rolls the check-in back.
+     */
+    private function acknowledgeEntryCheck(Passenger $passenger, User $by, ?string $reason): void
+    {
+        $result = $this->entryCheck->check($passenger->fresh());
+
+        if (! $result->needsAcknowledgement()) {
+            return;
+        }
+
+        if (trim((string) $reason) === '') {
+            throw new EntryReasonRequired;
+        }
+
+        AuditEntry::create([
+            'passenger_id' => $passenger->id,
+            'field' => 'entry_override',
+            'old_value' => $result->message,
+            'new_value' => trim($reason),
+            'user_id' => $by->id,
+            'changed_at' => now(),
+        ]);
     }
 
     /**

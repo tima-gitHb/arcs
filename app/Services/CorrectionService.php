@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
  */
 class CorrectionService
 {
+    public function __construct(private CountryList $countries) {}
+
     /**
      * Passenger columns this service is allowed to change.
      * Status stays with StatusService.
@@ -116,8 +118,8 @@ class CorrectionService
                 AuditEntry::create([
                     'passenger_id' => $document->passenger_id,
                     'field' => $auditField,
-                    'old_value' => $old,
-                    'new_value' => $new,
+                    'old_value' => $column === 'issuing_country' ? $this->countries->name($old) : $old,
+                    'new_value' => $column === 'issuing_country' ? $this->countries->name($new) : $new,
                     'user_id' => $by->id,
                     'changed_at' => now(),
                 ]);
