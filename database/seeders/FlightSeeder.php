@@ -150,7 +150,7 @@ class FlightSeeder extends Seeder
 
     /**
      * ME 305 Beirut → Dubai: boarding now, departs in 40 minutes.
-     * 8 CheckedIn with seats and bags, of which 5 already Boarded.
+     * 8 CheckedIn with seats and bags, of which 5 already Boarded, and 1 late passenger still Booked.
      */
     private function seedDubai(): void
     {
@@ -176,6 +176,9 @@ class FlightSeeder extends Seeder
         foreach (array_slice($passengers, 0, 5) as $passenger) {
             $this->status->board($passenger, $this->gateAgent);
         }
+
+        // Still Booked, with no seat: the demo passenger for a late check-in at the gate (SR-29).
+        $this->passenger($flight);
     }
 
     /**

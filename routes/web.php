@@ -7,7 +7,9 @@ use App\Http\Controllers\Checkin\SeatController;
 use App\Http\Controllers\Checkin\SpecialServiceController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
 use App\Http\Controllers\Gate\BoardingController;
+use App\Http\Controllers\Gate\BoardingPassController as GateBoardingPassController;
 use App\Http\Controllers\Gate\GateController;
+use App\Http\Controllers\Gate\LateCheckInController;
 use App\Http\Controllers\Gate\ManifestController;
 use App\Http\Controllers\Gate\OffloadController;
 use App\Http\Controllers\Manager\AccountController;
@@ -78,6 +80,11 @@ Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(f
     Route::post('/flights/{flight}/board', [BoardingController::class, 'board'])->name('flights.board');
     Route::post('/flights/{flight}/close', [BoardingController::class, 'close'])->name('flights.close');
     Route::post('/bags/{bag}/offload', [OffloadController::class, 'confirm'])->name('bags.offload');
+    Route::get('/flights/{flight}/passengers/{passenger}/boarding-pass', [GateBoardingPassController::class, 'show'])->name('flights.boarding-pass');
+    Route::get('/passengers/{passenger}/late-checkin', [LateCheckInController::class, 'create'])->name('passengers.late-checkin');
+    // Throttled: this form checks a Manager's password, so guessing must stay slow (SR-29).
+    Route::post('/passengers/{passenger}/late-checkin', [LateCheckInController::class, 'store'])
+        ->middleware('throttle:5,1')->name('passengers.late-checkin.store');
 });
 
 // Manager
