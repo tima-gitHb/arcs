@@ -58,6 +58,7 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
     Route::put('/documents/{document}', [TravelDocumentController::class, 'update'])->name('documents.update');
     Route::post('/documents/{document}/verify', [TravelDocumentController::class, 'verify'])->name('documents.verify');
     Route::post('/passengers/{passenger}/seat', [SeatController::class, 'assign'])->name('seats.assign');
+    Route::post('/passengers/{passenger}/seat/change', [SeatController::class, 'change'])->name('seats.change');
     Route::post('/passengers/{passenger}/bags', [BagController::class, 'store'])->name('bags.store');
     Route::delete('/bags/{bag}', [BagController::class, 'destroy'])->name('bags.destroy');
     Route::get('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'show'])->name('boarding-pass.show');

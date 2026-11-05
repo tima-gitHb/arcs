@@ -72,4 +72,12 @@ class Flight extends Model
     {
         return now()->between($this->checkin_opens_at, $this->checkin_closes_at);
     }
+
+    /**
+     * Has boarding been closed (SR-12)? After this, seats can no longer change (SR-20).
+     */
+    public function isBoardingClosed(): bool
+    {
+        return in_array($this->status, [FlightStatus::Closed, FlightStatus::Departed], true);
+    }
 }

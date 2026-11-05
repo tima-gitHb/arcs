@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\FlightStatus;
+use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
 use App\Exceptions\SeatNotAllowed;
 use App\Exceptions\SeatTaken;
@@ -17,11 +19,11 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Seats on a flight: the seat map data shared by reservation (R1) and check-in (C3),
- * and choosing a seat at check-in (SR-7).
+ * choosing a seat at check-in (SR-7) and changing it afterwards (SR-20).
  */
 class SeatService
 {
-    public function __construct(private BagService $bags) {}
+    public function __construct(private BagService $bags, private BoardingPassService $passes) {}
 
     /**
      * Every seat of the flight's aircraft, in row order (2A before 10A), with "taken"
@@ -61,56 +63,110 @@ class SeatService
     }
 
     /**
-     * Give the passenger this seat, replacing any seat they already had, in one transaction.
+     * Give a Booked passenger this seat, replacing any seat they already had, in one transaction.
      * Two agents picking the same seat: the UNIQUE (flight_id, seat_id) key lets only one
      * insert succeed; the other gets SeatTaken and keeps their old seat (SR-7).
+     * A checked-in passenger goes through change() instead, with its extra rules.
      */
     public function assign(Passenger $passenger, Seat $seat, User $by): void
     {
         DB::transaction(function () use ($passenger, $seat, $by) {
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($passenger->id);
-            $flight = $passenger->reservation->flight;
 
             if ($passenger->type === PassengerType::Infant) {
                 throw new SeatNotAllowed('An infant has no seat.');
             }
+            if ($passenger->status === PassengerStatus::CheckedIn) {
+                throw new SeatNotAllowed('Use Change seat for a checked-in passenger.');
+            }
             if (! $passenger->checkinDetailsEditable()) {
                 throw new SeatNotAllowed('The seat can only be changed for a booked or checked-in passenger.');
             }
-            if ($seat->aircraft_id !== $flight->aircraft_id) {
-                throw new SeatNotAllowed('That seat is not on this flight.');
-            }
 
-            $current = $passenger->seatAssignment()->with('seat')->first();
-
-            if ($current?->seat_id === $seat->id) {
-                return;
-            }
-
-            $current?->delete();
-
-            try {
-                SeatAssignment::create([
-                    'flight_id' => $flight->id,
-                    'seat_id' => $seat->id,
-                    'passenger_id' => $passenger->id,
-                ]);
-            } catch (UniqueConstraintViolationException) {
-                // Thrown inside the transaction, so the delete above is rolled back too.
-                throw new SeatTaken;
-            }
-
-            AuditEntry::create([
-                'passenger_id' => $passenger->id,
-                'field' => 'seat',
-                'old_value' => $current?->seat->seat_no,
-                'new_value' => $seat->seat_no,
-                'user_id' => $by->id,
-                'changed_at' => now(),
-            ]);
-
-            // A new cabin can mean a new baggage allowance (C4).
-            $this->bags->recalculate($passenger->fresh());
+            $this->replaceSeat($passenger, $seat, $by);
         });
+    }
+
+    /**
+     * Move a checked-in passenger to another seat in the same cabin (C6, SR-20).
+     * Same swap as assign(); the old pass is voided and a new one issued in the same
+     * transaction, so a refused move leaves the old seat and the old pass untouched.
+     */
+    public function change(Passenger $passenger, Seat $seat, User $by): void
+    {
+        DB::transaction(function () use ($passenger, $seat, $by) {
+            $passenger = Passenger::query()->lockForUpdate()->findOrFail($passenger->id);
+
+            if ($passenger->type === PassengerType::Infant) {
+                throw new SeatNotAllowed('An infant has no seat.');
+            }
+            $flight = $passenger->reservation->flight;
+
+            if ($flight->status === FlightStatus::Cancelled) {
+                throw new SeatNotAllowed('This flight is cancelled.');
+            }
+            if ($flight->isBoardingClosed()) {
+                throw new SeatNotAllowed('Boarding is closed for this flight.');
+            }
+            if ($passenger->status !== PassengerStatus::CheckedIn) {
+                throw new SeatNotAllowed('The seat can only be changed for a checked-in passenger.');
+            }
+
+            $current = $passenger->seatAssignment?->seat;
+
+            if ($current?->is($seat)) {
+                throw new SeatNotAllowed("That is already the passenger's seat.");
+            }
+            if ($current && $current->cabin_class !== $seat->cabin_class) {
+                throw new SeatNotAllowed('Different cabin class');
+            }
+
+            $this->replaceSeat($passenger, $seat, $by);
+            $this->passes->issue($passenger, $by);
+        });
+    }
+
+    /**
+     * The swap shared by assign() and change(). Call it inside a transaction: on SeatTaken
+     * the rollback puts the old seat back. Choosing the current seat changes nothing.
+     */
+    private function replaceSeat(Passenger $passenger, Seat $seat, User $by): void
+    {
+        $flight = $passenger->reservation->flight;
+
+        if ($seat->aircraft_id !== $flight->aircraft_id) {
+            throw new SeatNotAllowed('That seat is not on this flight.');
+        }
+
+        $current = $passenger->seatAssignment()->with('seat')->first();
+
+        if ($current?->seat_id === $seat->id) {
+            return;
+        }
+
+        $current?->delete();
+
+        try {
+            SeatAssignment::create([
+                'flight_id' => $flight->id,
+                'seat_id' => $seat->id,
+                'passenger_id' => $passenger->id,
+            ]);
+        } catch (UniqueConstraintViolationException) {
+            // Thrown inside the transaction, so the delete above is rolled back too.
+            throw new SeatTaken;
+        }
+
+        AuditEntry::create([
+            'passenger_id' => $passenger->id,
+            'field' => 'seat',
+            'old_value' => $current?->seat->seat_no,
+            'new_value' => $seat->seat_no,
+            'user_id' => $by->id,
+            'changed_at' => now(),
+        ]);
+
+        // A new cabin can mean a new baggage allowance (C4).
+        $this->bags->recalculate($passenger->fresh());
     }
 }

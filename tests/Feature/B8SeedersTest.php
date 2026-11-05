@@ -12,6 +12,7 @@ use App\Enums\SpecialServiceCode;
 use App\Models\AuditEntry;
 use App\Models\Bag;
 use App\Models\BaggageAllowance;
+use App\Models\BoardingPass;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
@@ -182,6 +183,23 @@ class B8SeedersTest extends TestCase
         // One audit row per status change: every passenger that is no longer Booked has at least one.
         $changed = Passenger::where('status', '!=', PassengerStatus::Booked)->count();
         $this->assertSame($changed, AuditEntry::distinct()->count('passenger_id'));
+    }
+
+    public function test_every_checked_in_or_boarded_passenger_has_exactly_one_active_pass(): void
+    {
+        $passengers = Passenger::whereIn('status', [PassengerStatus::CheckedIn, PassengerStatus::Boarded])->get();
+
+        $this->assertGreaterThan(0, $passengers->count());
+
+        foreach ($passengers as $passenger) {
+            $this->assertSame(1, $passenger->boardingPasses()->whereNull('voided_at')->count(), "Passenger {$passenger->id}");
+        }
+
+        // Issued through BoardingPassService, so each pass has its audit row.
+        $this->assertSame(
+            BoardingPass::count(),
+            AuditEntry::where('field', 'boarding_pass_issued')->count(),
+        );
     }
 
     public function test_every_pnr_is_unique(): void

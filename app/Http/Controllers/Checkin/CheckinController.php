@@ -68,6 +68,8 @@ class CheckinController extends Controller
             'passenger' => $passenger,
             // ?edit=<document id> opens the edit form for that document.
             'editing' => $passenger->travelDocuments->firstWhere('id', $request->integer('edit')),
+            // ?change_seat=1 opens the seat map for a checked-in passenger (C6).
+            'changingSeat' => $request->boolean('change_seat'),
             // Same data as the reservation seat map (R1); infants have no seat.
             'seatMap' => $passenger->type === PassengerType::Infant
                 ? collect()
