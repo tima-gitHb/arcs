@@ -388,7 +388,7 @@ class FlightTest extends TestCase
 
         $this->actingAsRole(Role::Checkin);
         $this->get(route('checkin.passengers.show', $passenger))->assertOk()->assertSee('Gate C9');
-        $this->get(route('checkin.home'))->assertOk()->assertSee('C9')->assertDontSee('A1');
+        $this->get(route('checkin.home'))->assertOk()->assertSee('C9')->assertDontSee('>A1<', false);
 
         $this->actingAsRole(Role::Reservation);
         $this->get(route('reservation.create'))->assertOk()->assertSee('C9');

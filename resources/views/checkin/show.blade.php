@@ -133,6 +133,8 @@
 
         @include('checkin.partials.bags-card')
 
+        @include('checkin.partials.services-card')
+
         @if ($passenger->status === \App\Enums\PassengerStatus::Booked)
             {{-- Completes check-in: StatusService::checkIn(), then the boarding pass (C5). --}}
             <form method="POST" action="{{ route('checkin.passengers.confirm', $passenger) }}">
