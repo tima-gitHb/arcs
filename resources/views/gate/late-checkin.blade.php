@@ -65,6 +65,13 @@
             <x-input-error :messages="$errors->get('reason')" class="mt-2" />
         </div>
 
+        @if ($entryResult->needsAcknowledgement() || $errors->has('entry_reason'))
+            <div class="rounded-lg bg-white p-6 shadow-sm">
+                <h2 class="text-lg font-semibold text-navy">Entry requirements</h2>
+                @include('checkin.partials.entry-reason')
+            </div>
+        @endif
+
         <div class="rounded-lg bg-white p-6 shadow-sm">
             <h2 class="text-lg font-semibold text-navy">Manager approval</h2>
             <p class="mt-1 text-sm text-gray-600">A Manager types their email and password here. They are only checked, not logged in.</p>

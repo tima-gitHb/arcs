@@ -220,6 +220,33 @@ class C2TravelDocumentsTest extends TestCase
         $this->assertSame(0, $passenger->travelDocuments()->count());
     }
 
+    public function test_submitting_the_add_form_without_a_type_or_country_gives_a_validation_error(): void
+    {
+        $passenger = $this->passenger();
+
+        $this->addDocument($passenger, ['type' => '', 'issuing_country' => ''])
+            ->assertSessionHasErrorsIn('addDocument', ['type', 'issuing_country']);
+
+        $this->assertSame(0, $passenger->travelDocuments()->count());
+    }
+
+    public function test_the_add_form_preselects_nothing_and_the_edit_form_keeps_the_current_values(): void
+    {
+        $passenger = $this->passenger(passportExpiry: '2030-01-01');
+        $document = $passenger->travelDocuments()->first();
+
+        $html = $this->get(route('checkin.passengers.show', [$passenger, 'edit' => $document->id]))->assertOk()->getContent();
+
+        preg_match('/<form[^>]*action="'.preg_quote(route('checkin.documents.store', $passenger), '/').'"[\s\S]*?<\/form>/', $html, $add);
+        $this->assertStringContainsString('<option value="">Choose a type…</option>', $add[0]);
+        $this->assertStringNotContainsString(' selected', $add[0]);
+
+        preg_match('/<form[^>]*action="'.preg_quote(route('checkin.documents.update', $document), '/').'"[\s\S]*?<\/form>/', $html, $edit);
+        $this->assertStringNotContainsString('Choose a type…', $edit[0]);
+        $this->assertStringContainsString('value="Passport" selected', $edit[0]);
+        $this->assertStringContainsString('value="'.$document->issuing_country.'" selected', $edit[0]);
+    }
+
     public function test_screen_lists_documents_and_offers_add_edit_and_verify(): void
     {
         $passenger = $this->passenger(passportExpiry: '2030-01-01');
@@ -231,7 +258,7 @@ class C2TravelDocumentsTest extends TestCase
         $this->get(route('checkin.passengers.show', $passenger))
             ->assertOk()
             ->assertSeeInOrder(['Passport', 'LR1234567'])
-            ->assertSeeInOrder(['Visa', 'V998877', 'FR', '31 Jan 2027'])
+            ->assertSeeInOrder(['Visa', 'V998877', 'France', '31 Jan 2027'])
             ->assertSee('Add document')
             ->assertSee(route('checkin.documents.verify', $visa), false)
             ->assertSee(route('checkin.passengers.show', [$passenger, 'edit' => $visa->id]), false);

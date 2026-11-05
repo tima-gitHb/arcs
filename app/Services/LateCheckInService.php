@@ -29,15 +29,16 @@ class LateCheckInService
         #[\SensitiveParameter] string $managerPassword,
         string $reason,
         ?Seat $seat,
+        ?string $entryReason = null,
     ): void {
         $manager = $this->approvingManager($managerEmail, $managerPassword);
 
-        DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $seat) {
+        DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $seat, $entryReason) {
             if ($seat && $passenger->seatAssignment()->doesntExist()) {
                 $this->seats->assign($passenger, $seat, $gateUser);
             }
 
-            $this->passes->completeLateCheckIn($passenger, $gateUser, $manager, $reason);
+            $this->passes->completeLateCheckIn($passenger, $gateUser, $manager, $reason, $entryReason);
         });
     }
 

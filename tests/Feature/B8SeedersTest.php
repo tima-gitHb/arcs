@@ -13,6 +13,7 @@ use App\Models\AuditEntry;
 use App\Models\Bag;
 use App\Models\BaggageAllowance;
 use App\Models\BoardingPass;
+use App\Models\EntryRule;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
@@ -200,6 +201,12 @@ class B8SeedersTest extends TestCase
             BoardingPass::count(),
             AuditEntry::where('field', 'boarding_pass_issued')->count(),
         );
+    }
+
+    public function test_in_tests_the_entry_rule_seeder_loads_the_small_fixture(): void
+    {
+        $this->assertSame(7, EntryRule::count());
+        $this->assertSame('visa required', EntryRule::where(['passport_country' => 'LB', 'destination_country' => 'FR'])->value('requirement'));
     }
 
     public function test_every_pnr_is_unique(): void

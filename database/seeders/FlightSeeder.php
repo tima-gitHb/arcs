@@ -30,6 +30,8 @@ use Illuminate\Support\Carbon;
  * Four sample flights on OD-MRA, with times relative to now().
  * Every status is reached through StatusService, so audit_log fills naturally.
  * Check-ins go through BoardingPassService::completeCheckIn(), so passengers get their pass.
+ * Everyone who is checked in holds a visa for the destination (SR-49); some Booked ME 201
+ * passengers do not, to show the entry check asking for a reason.
  *
  * StatusService only allows check-in inside the check-in window. For flights whose
  * window is already over (ME 305, ME 110), we briefly move the clock back with at().
@@ -114,8 +116,8 @@ class FlightSeeder extends Seeder
 
         // An adult travelling with an infant on the same booking (infant: no seat, SR-24).
         // Both checked in; the stroller is delivered at the aircraft door and is free (SR-43).
-        $adult = $this->passenger($flight);
-        $infant = $this->passenger($flight, type: PassengerType::Infant, adult: $adult);
+        $adult = $this->passenger($flight, visaCountry: 'FR');
+        $infant = $this->passenger($flight, type: PassengerType::Infant, adult: $adult, visaCountry: 'FR');
         $this->seat($flight, $adult);
         $this->passes->completeCheckIn($adult, $this->checkinAgent);
         $this->passes->completeCheckIn($infant, $this->checkinAgent);
@@ -128,7 +130,7 @@ class FlightSeeder extends Seeder
         // 2 more checked in, each with a seat and a bag.
         $checkedIn = [];
         for ($i = 0; $i < 2; $i++) {
-            $passenger = $this->passenger($flight);
+            $passenger = $this->passenger($flight, visaCountry: 'FR');
             $this->seat($flight, $passenger);
             $this->passes->completeCheckIn($passenger, $this->checkinAgent);
             $this->bag($passenger);
@@ -161,7 +163,7 @@ class FlightSeeder extends Seeder
 
             $passengers = [];
             for ($i = 0; $i < 8; $i++) {
-                $passenger = $this->passenger($flight, visaCountry: $i % 2 === 0 ? 'AE' : null);
+                $passenger = $this->passenger($flight, visaCountry: 'AE');
                 $this->seat($flight, $passenger);
                 $this->passes->completeCheckIn($passenger, $this->checkinAgent);
                 $this->bag($passenger);
@@ -194,7 +196,7 @@ class FlightSeeder extends Seeder
 
             $passengers = [];
             for ($i = 0; $i < 8; $i++) {
-                $passenger = $this->passenger($flight, visaCountry: $i < 3 ? 'GB' : null);
+                $passenger = $this->passenger($flight, visaCountry: 'GB');
                 $this->seat($flight, $passenger);
                 $this->passes->completeCheckIn($passenger, $this->checkinAgent);
                 $this->bag($passenger);

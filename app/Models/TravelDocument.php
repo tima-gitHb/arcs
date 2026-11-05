@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\DocumentType;
 use App\Enums\Role;
+use App\Services\CountryList;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -45,6 +46,14 @@ class TravelDocument extends Model
     public function verifier(): BelongsTo
     {
         return $this->belongsTo(User::class, 'verified_by');
+    }
+
+    /**
+     * Staff read country names, never codes (SR-49).
+     */
+    public function issuingCountryName(): string
+    {
+        return app(CountryList::class)->name($this->issuing_country);
     }
 
     /**

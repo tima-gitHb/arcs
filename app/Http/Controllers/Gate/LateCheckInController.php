@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Gate;
 
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
+use App\Exceptions\EntryReasonRequired;
 use App\Exceptions\InvalidStatusChange;
 use App\Exceptions\ManagerApprovalRefused;
 use App\Exceptions\SeatNotAllowed;
@@ -12,6 +13,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Gate\LateCheckInRequest;
 use App\Models\Passenger;
 use App\Models\Seat;
+use App\Services\EntryRequirementChecker;
 use App\Services\LateCheckInService;
 use App\Services\SeatService;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +24,7 @@ use Illuminate\View\View;
  */
 class LateCheckInController extends Controller
 {
-    public function create(Passenger $passenger, SeatService $seats): View|RedirectResponse
+    public function create(Passenger $passenger, SeatService $seats, EntryRequirementChecker $entryCheck): View|RedirectResponse
     {
         $passenger->load(['reservation.flight', 'seatAssignment.seat']);
         $flight = $passenger->reservation->flight;
@@ -38,6 +40,7 @@ class LateCheckInController extends Controller
             'passenger' => $passenger,
             'flight' => $flight,
             'seatMap' => $needsSeat ? $seats->seatMap($flight) : null,
+            'entryResult' => $entryCheck->check($passenger),
         ]);
     }
 
@@ -51,11 +54,16 @@ class LateCheckInController extends Controller
                 $request->validated('password'),
                 $request->validated('reason'),
                 Seat::query()->find($request->validated('seat_id')),
+                $request->validated('entry_reason'),
             );
         } catch (ManagerApprovalRefused|InvalidStatusChange|SeatTaken|SeatNotAllowed $exception) {
             return redirect()->route('gate.passengers.late-checkin', $passenger)
                 ->withInput($request->except('password'))
                 ->with('error', $exception->getMessage());
+        } catch (EntryReasonRequired $exception) {
+            return redirect()->route('gate.passengers.late-checkin', $passenger)
+                ->withInput($request->except('password'))
+                ->withErrors(['entry_reason' => $exception->getMessage()]);
         }
 
         return redirect()->route('gate.flights.show', $passenger->reservation->flight_id)

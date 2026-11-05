@@ -66,7 +66,7 @@
                                 <td class="py-2">{{ $document->type->label() }}</td>
                                 {{-- SR-34: full number only for check-in staff and the Manager. --}}
                                 <td class="py-2 font-mono">{{ $document->maskedNumberFor(auth()->user()) }}</td>
-                                <td class="py-2">{{ $document->issuing_country }}</td>
+                                <td class="py-2">{{ $document->issuingCountryName() }}</td>
                                 <td class="py-2">{{ $document->expiry_date->format('d M Y') }}</td>
                                 <td class="py-2">
                                     @if ($document->verified_at)
@@ -129,6 +129,8 @@
             @endif
         </div>
 
+        @include('checkin.partials.entry-card')
+
         @include('checkin.partials.seat-card')
 
         @include('checkin.partials.bags-card')
@@ -139,6 +141,7 @@
             {{-- Completes check-in: StatusService::checkIn(), then the boarding pass (C5). --}}
             <form method="POST" action="{{ route('checkin.passengers.confirm', $passenger) }}">
                 @csrf
+                @include('checkin.partials.entry-reason')
                 <button type="submit" class="rounded bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy/90">
                     Confirm check-in
                 </button>

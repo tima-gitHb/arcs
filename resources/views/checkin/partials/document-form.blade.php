@@ -17,6 +17,9 @@
     <div>
         <x-input-label :for="$bag.'-type'" value="Type" />
         <select id="{{ $bag }}-type" name="type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-navy focus:ring-navy" required>
+            @unless ($document)
+                <option value="">Choose a type…</option>
+            @endunless
             @foreach (\App\Enums\DocumentType::cases() as $type)
                 <option value="{{ $type->value }}" @selected($value('type', $document?->type->value) === $type->value)>
                     {{ $type->label() }}
@@ -34,9 +37,9 @@
     </div>
 
     <div>
-        <x-input-label :for="$bag.'-issuing_country'" value="Issuing country (2 letters)" />
-        <x-text-input :id="$bag.'-issuing_country'" name="issuing_country" type="text" class="mt-1 block w-24 uppercase"
-            :value="$value('issuing_country', $document?->issuing_country)" maxlength="2" required placeholder="LB" />
+        <x-input-label :for="$bag.'-issuing_country'" value="Issuing country" />
+        <x-country-select :id="$bag.'-issuing_country'" name="issuing_country"
+            :selected="$value('issuing_country', $document?->issuing_country)" />
         <x-input-error :messages="$errorsHere->get('issuing_country')" class="mt-2" />
     </div>
 

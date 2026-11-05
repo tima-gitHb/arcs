@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Checkin;
 
 use App\Enums\PassengerType;
+use App\Exceptions\EntryReasonRequired;
 use App\Exceptions\InvalidStatusChange;
 use App\Http\Controllers\Controller;
 use App\Models\Passenger;
 use App\Services\BoardingPassService;
+use App\Services\EntryRequirementChecker;
 use App\Services\SeatService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -51,7 +53,7 @@ class CheckinController extends Controller
      * The check-in screen of one passenger. Opening it changes nothing: documents (C2),
      * seat (C3) and bags (C4) are added here before the agent confirms.
      */
-    public function show(Request $request, Passenger $passenger, SeatService $seats): View
+    public function show(Request $request, Passenger $passenger, SeatService $seats, EntryRequirementChecker $entryCheck): View
     {
         $passenger->load([
             'reservation.flight',
@@ -69,6 +71,9 @@ class CheckinController extends Controller
             'passenger' => $passenger,
             // ?edit=<document id> opens the edit form for that document.
             'editing' => $passenger->travelDocuments->firstWhere('id', $request->integer('edit')),
+            // Advisory entry check (SR-49): read only. ?check_entry=1 shows the full result.
+            'entryResult' => $entryCheck->check($passenger),
+            'showEntryCheck' => $request->boolean('check_entry'),
             // ?change_seat=1 opens the seat map for a checked-in passenger (C6).
             'changingSeat' => $request->boolean('change_seat'),
             // Same data as the reservation seat map (R1); infants have no seat.
@@ -85,12 +90,16 @@ class CheckinController extends Controller
      */
     public function confirm(Request $request, Passenger $passenger, BoardingPassService $passes): RedirectResponse
     {
+        // Kept in audit_log, whose columns hold 255 characters.
+        $request->validate(['entry_reason' => ['nullable', 'string', 'max:255']]);
         $screen = redirect()->route('checkin.passengers.show', $passenger);
 
         try {
-            $passes->completeCheckIn($passenger, $request->user());
+            $passes->completeCheckIn($passenger, $request->user(), $request->input('entry_reason'));
         } catch (InvalidStatusChange $exception) {
             return $screen->with('error', $exception->getMessage());
+        } catch (EntryReasonRequired $exception) {
+            return $screen->withErrors(['entry_reason' => $exception->getMessage()]);
         }
 
         return $screen->with('success', $passenger->first_name.' '.$passenger->last_name.' checked in.');
