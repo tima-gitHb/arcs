@@ -4,6 +4,7 @@ use App\Http\Controllers\Checkin\BagController;
 use App\Http\Controllers\Checkin\BoardingPassController;
 use App\Http\Controllers\Checkin\CheckinController;
 use App\Http\Controllers\Checkin\SeatController;
+use App\Http\Controllers\Checkin\SpecialServiceController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
 use App\Http\Controllers\Gate\BoardingController;
 use App\Http\Controllers\Gate\GateController;
@@ -61,6 +62,8 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
     Route::post('/passengers/{passenger}/seat/change', [SeatController::class, 'change'])->name('seats.change');
     Route::post('/passengers/{passenger}/bags', [BagController::class, 'store'])->name('bags.store');
     Route::delete('/bags/{bag}', [BagController::class, 'destroy'])->name('bags.destroy');
+    Route::post('/passengers/{passenger}/services', [SpecialServiceController::class, 'store'])->name('services.store');
+    Route::delete('/services/{service}', [SpecialServiceController::class, 'destroy'])->name('services.destroy');
     Route::get('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'show'])->name('boarding-pass.show');
     Route::post('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'reprint'])->name('boarding-pass.reprint');
 });

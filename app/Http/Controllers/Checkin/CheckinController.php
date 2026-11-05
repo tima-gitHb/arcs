@@ -61,6 +61,7 @@ class CheckinController extends Controller
             'checkedInBy.user',
             'seatAssignment.seat',
             'bags' => fn ($query) => $query->orderBy('id'),
+            'specialServices' => fn ($query) => $query->orderBy('id'),
             'activeBoardingPass',
         ]);
 
