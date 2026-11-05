@@ -26,6 +26,8 @@ class StoreAircraftRequest extends FormRequest
             'rows' => ['required', 'integer', 'between:1,99'],
             'seats_per_row' => ['required', 'integer', 'between:1,10'],
             'business_rows' => ['required', 'integer', 'min:0', 'lte:rows'],
+            // No field on the form yet (card M8); AircraftService checks business + premium <= rows.
+            'premium_rows' => ['nullable', 'integer', 'min:0'],
         ];
     }
 }

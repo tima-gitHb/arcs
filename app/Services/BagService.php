@@ -4,12 +4,10 @@ namespace App\Services;
 
 use App\Enums\BagHandling;
 use App\Enums\BagType;
-use App\Enums\CabinClass;
 use App\Enums\PassengerStatus;
 use App\Exceptions\BagNotAllowed;
 use App\Models\AuditEntry;
 use App\Models\Bag;
-use App\Models\BaggageAllowance;
 use App\Models\Passenger;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +19,8 @@ use RuntimeException;
  */
 class BagService
 {
+    public function __construct(private AllowanceService $allowances) {}
+
     private const TAG_DIGITS = 6;
 
     private const MAX_TAG_ATTEMPTS = 10;
@@ -124,7 +124,7 @@ class BagService
      */
     public function recalculate(Passenger $passenger): void
     {
-        $allowance = BaggageAllowance::query()->where('cabin_class', $this->cabinClassOf($passenger))->first();
+        $allowance = $this->allowances->for($passenger);
         $counted = 0;
 
         $bags = $passenger->bags()->whereNull('offloaded_at')->orderBy('id')->get();
@@ -132,26 +132,15 @@ class BagService
         foreach ($bags as $bag) {
             $over = false;
 
-            if ($allowance && $bag->type->countsTowardAllowance()) {
+            if ($allowance->isSet && $bag->type->countsTowardAllowance()) {
                 $counted++;
-                $over = $counted > $allowance->pieces || (float) $bag->weight_kg > (float) $allowance->max_kg_per_bag;
+                $over = $counted > $allowance->pieces || (float) $bag->weight_kg > $allowance->kgPerBag;
             }
 
             if ($bag->over_allowance !== $over) {
                 $bag->update(['over_allowance' => $over]);
             }
         }
-    }
-
-    /**
-     * The cabin of the passenger's seat; an infant (no seat) travels in the adult's cabin.
-     * Economy when no seat is assigned yet.
-     */
-    public function cabinClassOf(Passenger $passenger): CabinClass
-    {
-        $seated = $passenger->accompanyingAdult ?? $passenger;
-
-        return $seated->seatAssignment?->seat?->cabin_class ?? CabinClass::Economy;
     }
 
     /**

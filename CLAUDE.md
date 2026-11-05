@@ -5,7 +5,7 @@ Team: Tima Karanouh (lead), Yasmina Souki, Serge Kahwaji. Client (role-play): Ka
 Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID in the BRD.
 
 ## What ARCS is
-- A **staff-only** web app (no passenger side, no payments, no connecting flights).
+- A **staff-only** web app (no passenger side, no connecting flights). Payments: card only, test mode, fake gateway.
 - Covers reservation → check-in → baggage → seat → boarding, and **enforces the order**.
 - Four roles, one per account: `reservation`, `checkin`, `gate`, `manager`.
 
@@ -39,7 +39,13 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
 - **Special services** (enum `SpecialServiceCode`, IATA codes): codes where `requiresDetails()` is true
   (UMNR, PETC, AVIH, DPNA, MEDA) must have `details` (SR-44).
   **UMNR only for a Child with no Adult on the same PNR.** (Both validated in task C7.)
-- **Times are Beirut time:** `APP_TIMEZONE=Asia/Beirut` (default in `config/app.php`).
+- **Times are Beirut time** (summer time included): `APP_TIMEZONE=Asia/Beirut`, and the MySQL connection uses the
+  same clock (`config/database.php`). "Today", departures, check-in windows, boarding passes and the audit log follow it.
+- **Money is always integer cents** (`amount_cents`), currency USD. Show amounts with `App\Support\Money::format()`.
+- **Never store a card.** The full card number and the CVC are never stored, logged, flashed or returned;
+  only the brand, last 4 digits and gateway reference are kept.
+- **AllowanceService is the only place to read an allowance. FareService is the only place to compute a price.
+  PaymentService is the only way to take a payment.**
 - **A password reset never unlocks an account.** Locked or deactivated accounts get no reset email;
   only the Manager unlocks (SR-35, SR-37). New passwords: at least 8 characters, letters and numbers (SR-38).
 - **Entry check** (SR-49, pending client approval): `App\Services\EntryRequirementChecker` is advisory. It reads the
@@ -49,14 +55,14 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
   Schengen: for a destination in `config/schengen.php`, a valid visa or residence permit from any member counts, not
   only one from the destination. The 90/180-day stay limit is not checked. Transit rules are not covered.
 - Staff never type or read country codes: the database stores ISO-2 codes, `App\Services\CountryList` gives the names.
-- Out of scope (never build): payments, refunds, excess-baggage charges, online/passenger check-in,
+- Out of scope (never build): refunds, online/passenger check-in,
   blocking automatic visa checks and live/external visa or APIS checks, external systems (GDS, APIS),
   connecting flights, payroll.
 
-## Database (16 tables)
+## Database (19 tables)
 users, aircraft, seats, flights, reservations, passengers, seat_assignments, bags,
 boarding_passes, special_services, travel_documents, audit_log, baggage_allowances,
-gate_overrides, settings, entry_rules.
+gate_overrides, settings, entry_rules, fares, fees, payments.
 - **Never edit an existing migration** once it is on `dev` or `main`. Schema change = new migration,
   agreed with the team first.
 - Foreign keys always declared (`constrained()`), with `cascadeOnDelete()` only for seats → aircraft.
@@ -75,6 +81,15 @@ gate_overrides, settings, entry_rules.
   - Today's flights (SR-41): `<x-todays-flights :role="auth()->user()->role" />`.
   - Document numbers (SR-34): any page that shows a travel document number must use
     `$document->maskedNumberFor(auth()->user())` — never print `$document->number` directly.
+  - Allowance: `AllowanceService::for($passenger)` gives pieces, kg per bag, total kg and the hard max. The class is
+    the seat's, else the booked `passengers.cabin_class`; an infant uses the adult's. Extras: `extra_bags`, `extra_kg`.
+  - Prices: `FareService::quote($passengers, $extras)` gives lines and a total in cents, from the `fares` and `fees`
+    tables. Enum `FeeCode`. Show amounts with `Money::format()`.
+  - Payments: `PaymentService::charge(...)` through `App\Contracts\PaymentGateway` (bound to `FakeCardGateway`: 4242 4242
+    4242 4242 accepted, anything else declined). Card data travels in `CardDetails`. Enums `PaymentKind`, `PaymentStatus`.
+  - Reservation contact: `reservations.contact_email`, `contact_phone`; rules in `ReservationContactRules::rules()`.
+  - Cabins: enum `CabinClass` is Business, Premium, Economy. `AircraftService` places `premium_rows` after the Business rows.
+  - Flight audit rows: `AuditEntry::forFlight(...)` (`audit_log.flight_id`; `passenger_id` can be null).
 - Names: models singular (`Passenger`), tables plural snake_case (`seat_assignments`),
   routes `role.resource.action` (e.g. `checkin.seats.assign`).
 

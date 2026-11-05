@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\CabinClass;
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -25,6 +26,9 @@ class Passenger extends Model
         'first_name',
         'last_name',
         'type',
+        'cabin_class',
+        'extra_bags',
+        'extra_kg',
         'date_of_birth',
         'accompanying_adult_id',
     ];
@@ -37,11 +41,24 @@ class Passenger extends Model
         return [
             'status' => PassengerStatus::class,
             'type' => PassengerType::class,
+            'cabin_class' => CabinClass::class,
+            'extra_bags' => 'integer',
+            'extra_kg' => 'integer',
             'date_of_birth' => 'date',
             'checked_in_at' => 'datetime',
             'boarded_at' => 'datetime',
         ];
     }
+
+    /**
+     * Unset extras count as zero until the row is read back from the database.
+     *
+     * @var array<string, int>
+     */
+    protected $attributes = [
+        'extra_bags' => 0,
+        'extra_kg' => 0,
+    ];
 
     public function reservation(): BelongsTo
     {

@@ -247,7 +247,7 @@
             window.ArcsSeatMap.draw(map, seatData, (seat) => {
                 const owner = chosen.get(String(seat.id));
                 const mine = owner === activeIndex;
-                let style = seat.cabin === 'Business' ? 'business' : 'economy';
+                let style = window.ArcsSeatMap.cabinStyle({ ...seat, taken: false });
                 let disabled = false;
 
                 if (seat.taken || (owner && !mine)) {

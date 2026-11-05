@@ -10,6 +10,7 @@
  */
 export const seatStyles = {
     business: 'bg-amber-200 text-amber-950 hover:bg-amber-100',
+    premium: 'bg-violet-200 text-violet-950 hover:bg-violet-100',
     economy: 'bg-white text-navy hover:bg-sky-100',
     taken: 'cursor-not-allowed bg-slate-600 text-slate-400',
     selected: 'bg-emerald-400 text-emerald-950',
@@ -28,7 +29,7 @@ export function cabinStyle(seat) {
         return 'taken';
     }
 
-    return seat.cabin === 'Business' ? 'business' : 'economy';
+    return { Business: 'business', Premium: 'premium' }[seat.cabin] ?? 'economy';
 }
 
 export function drawSeatMap(map, seats, cellFor) {

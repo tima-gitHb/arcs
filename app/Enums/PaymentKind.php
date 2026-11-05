@@ -1,0 +1,21 @@
+<?php
+
+namespace App\Enums;
+
+enum PaymentKind: string
+{
+    case Fare = 'Fare';
+    case ExtraBag = 'ExtraBag';
+    case ExcessBaggage = 'ExcessBaggage';
+    case Fee = 'Fee';
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Fare => 'Fare',
+            self::ExtraBag => 'Extra bag',
+            self::ExcessBaggage => 'Excess baggage',
+            self::Fee => 'Fee',
+        };
+    }
+}

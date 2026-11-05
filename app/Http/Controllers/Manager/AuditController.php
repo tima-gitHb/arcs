@@ -25,10 +25,12 @@ class AuditController extends Controller
         ]);
 
         $entries = AuditEntry::query()
-            // Eager loading: 3 extra queries for the whole page instead of 3 per row.
-            ->with(['passenger.reservation.flight', 'user'])
-            ->when($filters['flight_id'] ?? null, fn ($query, $flightId) => $query
-                ->whereHas('passenger.reservation', fn ($reservation) => $reservation->where('flight_id', $flightId)))
+            // Eager loading: a few extra queries for the whole page instead of several per row.
+            ->with(['passenger.reservation.flight', 'flight', 'user'])
+            // A row is about a flight through its passenger, or directly (flight_id).
+            ->when($filters['flight_id'] ?? null, fn ($query, $flightId) => $query->where(fn ($entry) => $entry
+                ->where('flight_id', $flightId)
+                ->orWhereHas('passenger.reservation', fn ($reservation) => $reservation->where('flight_id', $flightId))))
             ->when($filters['passenger'] ?? null, fn ($query, $text) => $query
                 ->whereHas('passenger', fn ($passenger) => $passenger
                     ->where('first_name', 'like', "%{$text}%")

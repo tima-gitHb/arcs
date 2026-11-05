@@ -18,6 +18,7 @@ class Aircraft extends Model
     protected $fillable = [
         'registration',
         'model',
+        'premium_rows',
     ];
 
     public function seats(): HasMany
