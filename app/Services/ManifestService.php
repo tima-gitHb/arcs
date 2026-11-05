@@ -72,19 +72,17 @@ class ManifestService
 
     /**
      * Bags to take off the aircraft after boarding is closed (G3, SR-9): every bag of the
-     * flight's NoShow passengers that is not offloaded yet. Same rule as the bags
-     * StatusService::closeBoarding() returns, so the list survives a page reload.
+     * flight's NoShow passengers. Offloaded ones stay on the list, shown as done (G4, SR-28).
      *
      * @return Collection<int, Bag>
      */
     public function bagsToOffload(Flight $flight): Collection
     {
         return Bag::query()
-            ->whereNull('offloaded_at')
             ->whereHas('passenger', fn ($passenger) => $passenger
                 ->where('status', PassengerStatus::NoShow)
                 ->whereHas('reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id)))
-            ->with('passenger.seatAssignment.seat')
+            ->with(['passenger.seatAssignment.seat', 'offloadedBy'])
             ->orderBy('passenger_id')
             ->orderBy('id')
             ->get();

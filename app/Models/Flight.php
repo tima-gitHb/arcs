@@ -80,4 +80,17 @@ class Flight extends Model
     {
         return in_array($this->status, [FlightStatus::Closed, FlightStatus::Departed], true);
     }
+
+    /**
+     * Can a passenger still be checked in late at the gate (SR-29)? Normal check-in is over
+     * (flight Boarding, or the window has passed) and boarding is not closed.
+     */
+    public function isLateCheckInOpen(): bool
+    {
+        if ($this->isBoardingClosed() || $this->status === FlightStatus::Cancelled) {
+            return false;
+        }
+
+        return $this->status === FlightStatus::Boarding || now()->gt($this->checkin_closes_at);
+    }
 }

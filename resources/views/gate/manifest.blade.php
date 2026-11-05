@@ -33,6 +33,13 @@
             </dl>
         </div>
 
+        @if (session('boardingPassUrl'))
+            <a href="{{ session('boardingPassUrl') }}" target="_blank"
+               class="inline-block rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
+                Print boarding pass
+            </a>
+        @endif
+
         @include('gate.partials.boarding-panel')
 
         @include('gate.partials.close-boarding')
@@ -69,6 +76,9 @@
                                     'bg-amber-100 text-amber-800' => in_array($passenger->status, [\App\Enums\PassengerStatus::CheckedIn, \App\Enums\PassengerStatus::NoShow], true),
                                     'bg-gray-100 text-gray-700' => $passenger->status === \App\Enums\PassengerStatus::Booked,
                                 ])>{{ $passenger->status->label() }}</span>
+                                @if ($passenger->status === \App\Enums\PassengerStatus::Booked && $flight->isLateCheckInOpen())
+                                    <a href="{{ route('gate.passengers.late-checkin', $passenger) }}" class="mt-1 block text-xs font-medium text-navy hover:underline">Late check-in</a>
+                                @endif
                             </td>
                             <td class="px-4 py-2 text-xs text-gray-700">
                                 @if ($passenger->checkedInBy)

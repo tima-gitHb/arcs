@@ -41,6 +41,18 @@ class BoardingPassService
     }
 
     /**
+     * Same for a late check-in at the gate, approved by a Manager (SR-29).
+     */
+    public function completeLateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason): BoardingPass
+    {
+        return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason) {
+            $this->statuses->lateCheckIn($passenger, $gateUser, $manager, $reason);
+
+            return $this->issue($passenger, $gateUser);
+        });
+    }
+
+    /**
      * Issue a pass; any active pass is voided first, so a passenger has one active pass (SR-32).
      * Used for the first pass and for reprints.
      */
@@ -73,6 +85,26 @@ class BoardingPassService
 
             return $pass;
         });
+    }
+
+    /**
+     * Everything the printable pass page needs (checkin/boarding-pass.blade.php).
+     * Shared by the check-in and gate routes, so both show the same pass.
+     *
+     * @return array<string, mixed>
+     */
+    public function printData(Passenger $passenger, BoardingPass $pass): array
+    {
+        $passenger->load(['reservation.flight', 'seatAssignment.seat', 'accompanyingAdult']);
+        $flight = $passenger->reservation->flight;
+
+        return [
+            'passenger' => $passenger,
+            'pass' => $pass,
+            'flight' => $flight,
+            'boardingTime' => $this->boardingTime($flight),
+            'barcodeSvg' => $this->barcodeSvg($pass),
+        ];
     }
 
     public function boardingTime(Flight $flight): Carbon

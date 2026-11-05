@@ -97,7 +97,7 @@ class B8SeedersTest extends TestCase
     public function test_passenger_counts_per_status_match_the_list(): void
     {
         $this->assertSame(['Booked' => 8, 'Cancelled' => 1, 'CheckedIn' => 4], $this->statusCounts('ME201'));
-        $this->assertSame(['Boarded' => 5, 'CheckedIn' => 3], $this->statusCounts('ME305'));
+        $this->assertSame(['Boarded' => 5, 'Booked' => 1, 'CheckedIn' => 3], $this->statusCounts('ME305'));
         $this->assertSame(['Boarded' => 6, 'NoShow' => 2], $this->statusCounts('ME110'));
         $this->assertSame([], $this->statusCounts('ME422'));
     }

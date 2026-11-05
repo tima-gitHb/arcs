@@ -20,16 +20,7 @@ class BoardingPassController extends Controller
         $pass = $passenger->activeBoardingPass;
         abort_if($pass === null, 404);
 
-        $passenger->load(['reservation.flight', 'seatAssignment.seat', 'accompanyingAdult']);
-        $flight = $passenger->reservation->flight;
-
-        return view('checkin.boarding-pass', [
-            'passenger' => $passenger,
-            'pass' => $pass,
-            'flight' => $flight,
-            'boardingTime' => $passes->boardingTime($flight),
-            'barcodeSvg' => $passes->barcodeSvg($pass),
-        ]);
+        return view('checkin.boarding-pass', $passes->printData($passenger, $pass));
     }
 
     /**

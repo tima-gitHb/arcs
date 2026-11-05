@@ -6,16 +6,19 @@ use App\Enums\DocumentType;
 use App\Enums\FlightStatus;
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
+use App\Enums\Role;
 use App\Exceptions\InvalidStatusChange;
 use App\Models\AuditEntry;
 use App\Models\Bag;
 use App\Models\Flight;
+use App\Models\GateOverride;
 use App\Models\Passenger;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * The ONLY code allowed to change a passenger's or a flight's status (see CLAUDE.md).
@@ -43,13 +46,7 @@ class StatusService
     {
         DB::transaction(function () use ($passenger, $by) {
             $this->lock($passenger);
-
-            if ($passenger->status === PassengerStatus::Cancelled) {
-                throw new InvalidStatusChange('Reservation cancelled');
-            }
-            if ($passenger->status !== PassengerStatus::Booked) {
-                throw new InvalidStatusChange('Already checked in');
-            }
+            $this->ensureBooked($passenger);
 
             $flight = $passenger->reservation->flight;
 
@@ -57,16 +54,76 @@ class StatusService
                 throw new InvalidStatusChange('Check-in closed');
             }
 
-            $this->ensureValidDocument($passenger, $flight);
+            $this->finishCheckIn($passenger, $flight, $by);
+        });
+    }
 
-            if ($passenger->type !== PassengerType::Infant && $passenger->seatAssignment === null) {
-                throw new InvalidStatusChange('Seat required');
+    /**
+     * Booked -> CheckedIn at the gate after check-in has closed, approved by a Manager (SR-29).
+     * Skips only the check-in window / flight status rule: cancellation, documents and the
+     * seat rule still apply. Boarding must not be closed. The gate agent is the actor in
+     * audit_log; the gate_overrides row records the Manager, the reason and the time.
+     */
+    public function lateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason): void
+    {
+        DB::transaction(function () use ($passenger, $gateUser, $manager, $reason) {
+            $this->lock($passenger);
+            $this->ensureBooked($passenger);
+
+            if ($manager->role !== Role::Manager) {
+                throw new InvalidStatusChange('A late check-in must be approved by a Manager.');
+            }
+            if (trim($reason) === '') {
+                throw new InvalidStatusChange('A reason is required.');
             }
 
-            $this->changePassengerStatus($passenger, PassengerStatus::CheckedIn, $by, [
-                'checked_in_at' => now(),
+            $flight = $passenger->reservation->flight;
+
+            if ($flight->status === FlightStatus::Cancelled) {
+                throw new InvalidStatusChange('This flight is cancelled.');
+            }
+            if ($flight->isBoardingClosed()) {
+                throw new InvalidStatusChange('Boarding is closed for this flight.');
+            }
+            if (! $flight->isLateCheckInOpen()) {
+                throw new InvalidStatusChange("Late check-in isn't needed: check-in is still open for this flight.");
+            }
+
+            $this->finishCheckIn($passenger, $flight, $gateUser);
+
+            GateOverride::create([
+                'passenger_id' => $passenger->id,
+                'approved_by' => $manager->id,
+                'reason' => trim($reason),
+                'approved_at' => now(),
             ]);
         });
+    }
+
+    private function ensureBooked(Passenger $passenger): void
+    {
+        if ($passenger->status === PassengerStatus::Cancelled) {
+            throw new InvalidStatusChange('Reservation cancelled');
+        }
+        if ($passenger->status !== PassengerStatus::Booked) {
+            throw new InvalidStatusChange('Already checked in');
+        }
+    }
+
+    /**
+     * The rules shared by checkIn() and lateCheckIn(): documents and seat, then the status change.
+     */
+    private function finishCheckIn(Passenger $passenger, Flight $flight, User $by): void
+    {
+        $this->ensureValidDocument($passenger, $flight);
+
+        if ($passenger->type !== PassengerType::Infant && $passenger->seatAssignment === null) {
+            throw new InvalidStatusChange('Seat required');
+        }
+
+        $this->changePassengerStatus($passenger, PassengerStatus::CheckedIn, $by, [
+            'checked_in_at' => now(),
+        ]);
     }
 
     /**
@@ -159,8 +216,29 @@ class StatusService
                 );
             }
 
+            if ($new === FlightStatus::Departed) {
+                $this->ensureBagsOffloaded($flight);
+            }
+
             $flight->forceFill(['status' => $new])->save();
         });
+    }
+
+    /**
+     * A flight cannot leave with the bags of a no-show passenger on board (SR-28).
+     */
+    private function ensureBagsOffloaded(Flight $flight): void
+    {
+        $left = Bag::query()
+            ->whereNull('offloaded_at')
+            ->whereHas('passenger', fn ($passenger) => $passenger
+                ->where('status', PassengerStatus::NoShow)
+                ->whereHas('reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id)))
+            ->count();
+
+        if ($left > 0) {
+            throw new InvalidStatusChange($left.' '.Str::plural('bag', $left).' still to offload');
+        }
     }
 
     /**

@@ -1,5 +1,5 @@
 {{--
-    Close boarding (G3: SR-12, SR-9). Expects $flight, $counts, $confirmingClose, $offload.
+    Close boarding (G3: SR-12, SR-9) and confirming offloads (G4: SR-28). Expects $flight, $counts, $confirmingClose, $offload.
     Two steps on the page, no JavaScript: the button opens ?close=confirm, which shows the real form.
 --}}
 @if ($flight->status === \App\Enums\FlightStatus::Boarding)
@@ -32,7 +32,14 @@
 
 @if (in_array($flight->status, [\App\Enums\FlightStatus::Closed, \App\Enums\FlightStatus::Departed], true))
     <section id="offload" class="rounded-lg bg-white p-6 shadow-sm">
-        <h2 class="text-lg font-semibold text-navy">Bags to offload</h2>
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+            <h2 class="text-lg font-semibold text-navy">Bags to offload</h2>
+            @if ($offload->isNotEmpty())
+                <p class="text-sm font-medium text-gray-700">
+                    {{ $offload->whereNotNull('offloaded_at')->count() }} of {{ $offload->count() }} bags offloaded
+                </p>
+            @endif
+        </div>
 
         @if ($offload->isEmpty())
             <p class="mt-2 text-sm text-gray-600">No bags to offload.</p>
@@ -45,6 +52,7 @@
                         <th class="py-1 font-medium">Type</th>
                         <th class="py-1 font-medium">Passenger</th>
                         <th class="py-1 font-medium">Seat</th>
+                        <th class="py-1"></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -55,6 +63,20 @@
                             <td class="py-2">{{ $bag->type->label() }}</td>
                             <td class="py-2">{{ $bag->passenger->first_name }} {{ $bag->passenger->last_name }}</td>
                             <td class="py-2 font-mono">{{ $bag->passenger->seatAssignment?->seat->seat_no ?? '—' }}</td>
+                            <td class="py-2 text-right">
+                                @if ($bag->offloaded_at)
+                                    <span class="text-xs font-medium text-green-800">
+                                        Offloaded by {{ $bag->offloadedBy?->name }} at {{ $bag->offloaded_at->format('H:i') }}
+                                    </span>
+                                @else
+                                    <form method="POST" action="{{ route('gate.bags.offload', $bag) }}">
+                                        @csrf
+                                        <button type="submit" class="rounded border border-navy px-2 py-1 text-xs font-medium text-navy hover:bg-navy hover:text-white">
+                                            Confirm offloaded
+                                        </button>
+                                    </form>
+                                @endif
+                            </td>
                         </tr>
                     @endforeach
                 </tbody>
