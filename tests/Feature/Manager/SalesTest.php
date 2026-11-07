@@ -16,6 +16,7 @@ use App\Services\AircraftService;
 use App\Services\Payments\CardDetails;
 use App\Services\PaymentService;
 use App\Services\StatusService;
+use Database\Seeders\DatabaseSeeder;
 use DOMDocument;
 use DOMXPath;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -329,6 +330,36 @@ class SalesTest extends TestCase
         $this->assertSame(2, $report['classes']['Economy']['sold']);
         $this->assertSame(0, $report['not_set']);
         $this->assertSame(2, $report['overall']['sold']);
+    }
+
+    public function test_boarded_and_no_show_passengers_are_seats_sold(): void
+    {
+        // The seeded London flight ME110 departed an hour ago: 6 Boarded and 2 NoShow, all Economy.
+        // Only Cancelled is left out, so all 8 are sold. OD-MRA has 132 Economy seats: 8 / 132 = 6 %.
+        $this->seed(DatabaseSeeder::class);
+        $london = Flight::where('flight_no', 'ME110')->firstOrFail();
+
+        $this->assertSame(6, $london->passengers()->where('passengers.status', 'Boarded')->count());
+        $this->assertSame(2, $london->passengers()->where('passengers.status', 'NoShow')->count());
+
+        $response = $this->get(route('manager.sales'))->assertOk();
+
+        $report = $this->report($response, $london);
+        $this->assertSame(['sold' => 8, 'capacity' => 132, 'percent' => 6], $report['classes']['Economy']);
+        $this->assertSame(8, $report['overall']['sold']);
+        $this->assertSame('8', $this->cell($response, $london, 'Economy', 'sold'));
+    }
+
+    public function test_the_class_not_set_line_is_shown_only_when_there_are_such_passengers(): void
+    {
+        $flight = $this->flight();
+        $this->book($flight, CabinClass::Economy, 2);
+
+        $this->assertSame(0, $this->countNodes($this->get(route('manager.sales')), '//tr[@data-class="NotSet"]'));
+
+        $this->book($flight, null, 1);
+
+        $this->assertSame(1, $this->countNodes($this->get(route('manager.sales')), '//tr[@data-class="NotSet"]'));
     }
 
     public function test_a_child_is_a_seat_sold(): void

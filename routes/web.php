@@ -20,6 +20,7 @@ use App\Http\Controllers\Manager\FareController;
 use App\Http\Controllers\Manager\FlightController;
 use App\Http\Controllers\Manager\FlightListController;
 use App\Http\Controllers\Manager\RuleController;
+use App\Http\Controllers\Manager\SalesController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Reservation\ReservationController;
 use Illuminate\Support\Facades\Route;
@@ -106,6 +107,7 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::put('/rules', [RuleController::class, 'update'])->name('rules.update');
     Route::get('/fares', [FareController::class, 'index'])->name('fares');
     Route::put('/fares', [FareController::class, 'update'])->name('fares.update');
+    Route::get('/sales', [SalesController::class, 'index'])->name('sales');
     Route::get('/audit', [AuditController::class, 'index'])->name('audit');
 });
 
