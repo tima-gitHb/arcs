@@ -149,11 +149,10 @@ class PremiumAllowanceTest extends TestCase
     public function test_the_form_request_itself_checks_business_plus_premium(): void
     {
         // The rule lives in StoreAircraftRequest (the service keeps the same check as a safety net).
-        $validator = Validator::make(
-            $this->validAircraft(['rows' => 10, 'business_rows' => 5, 'premium_rows' => 6]),
-            (new StoreAircraftRequest)->rules(),
-            (new StoreAircraftRequest)->messages(),
-        );
+        $data = $this->validAircraft(['rows' => 10, 'business_rows' => 5, 'premium_rows' => 6]);
+        $request = StoreAircraftRequest::create('/manager/aircraft', 'POST', $data); // rules() reads rows and business_rows from it
+
+        $validator = Validator::make($data, $request->rules(), $request->messages());
 
         $this->assertTrue($validator->fails());
         $this->assertSame([self::TOO_MANY_ROWS], $validator->errors()->get('premium_rows'));
