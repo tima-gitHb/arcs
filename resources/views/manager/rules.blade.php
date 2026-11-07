@@ -49,10 +49,11 @@
                             <div>
                                 <x-input-label for="{{ $key }}_max_kg" value="Maximum weight per bag" />
                                 <div class="mt-1 flex items-center gap-2">
-                                    <x-text-input id="{{ $key }}_max_kg" name="allowances[{{ $key }}][max_kg_per_bag]" type="number" min="0" max="999.9" step="0.1" class="w-28"
+                                    <x-text-input id="{{ $key }}_max_kg" name="allowances[{{ $key }}][max_kg_per_bag]" type="number" min="0" max="{{ $hardMaxKg }}" step="0.1" class="w-28"
                                         :value="old('allowances.'.$key.'.max_kg_per_bag', $allowances[$key]->max_kg_per_bag ?? '')" required />
                                     <span class="text-sm text-gray-600">kg per bag</span>
                                 </div>
+                                <p class="mt-1 text-xs text-gray-500">max {{ $hardMaxKg }} kg per bag</p>
                                 <x-input-error :messages="$errors->get('allowances.'.$key.'.max_kg_per_bag')" class="mt-2" />
                             </div>
                         </div>

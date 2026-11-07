@@ -15,7 +15,7 @@
             {{-- New aircraft: saving it also generates its seats (SR-14). --}}
             <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
                 <h2 class="text-lg font-semibold text-navy">New aircraft</h2>
-                <p class="mt-1 text-sm text-gray-600">Seats are generated from the layout: rows 1 to the number of Business rows are Business, the rest Economy.</p>
+                <p class="mt-1 text-sm text-gray-600">Seats are generated from the layout: the first rows are Business, the next rows are Premium, the rest Economy.</p>
 
                 <form method="POST" action="{{ route('manager.aircraft.store') }}" class="mt-4 grid gap-4 sm:grid-cols-2">
                     @csrf
@@ -48,6 +48,12 @@
                         <x-input-label for="business_rows" value="Business rows (from row 1)" />
                         <x-text-input id="business_rows" name="business_rows" type="number" min="0" max="99" class="mt-1 block w-full" :value="old('business_rows', 0)" required />
                         <x-input-error :messages="$errors->get('business_rows')" class="mt-2" />
+                    </div>
+
+                    <div>
+                        <x-input-label for="premium_rows" value="Premium rows (after Business)" />
+                        <x-text-input id="premium_rows" name="premium_rows" type="number" min="0" max="99" class="mt-1 block w-full" :value="old('premium_rows', 0)" required />
+                        <x-input-error :messages="$errors->get('premium_rows')" class="mt-2" />
                     </div>
 
                     <div class="sm:pt-6">

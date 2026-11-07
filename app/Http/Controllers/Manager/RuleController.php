@@ -16,6 +16,7 @@ class RuleController extends Controller
     public function index(): View
     {
         return view('manager.rules', [
+            'hardMaxKg' => UpdateRulesRequest::hardMaxKg(),
             'passportMinMonths' => Setting::find('passport_min_months')?->value,
             // Keyed by lower-case cabin name ('economy', 'business') so the view can look them up.
             'allowances' => BaggageAllowance::all()
