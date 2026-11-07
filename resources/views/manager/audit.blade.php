@@ -67,9 +67,17 @@
                     @forelse ($entries as $entry)
                         <tr class="border-b border-gray-100 last:border-0">
                             <td class="px-4 py-2 whitespace-nowrap">{{ $entry->changed_at->format('d M Y H:i') }}</td>
-                            <td class="px-4 py-2">
+                            @php
+                                // A price change (fare or fee) belongs to no passenger and no flight. It is told
+                                // by its field ("fare Business Adult", "fee ExtraBag"), not by what is missing.
+                                $isPrice = str_starts_with($entry->field, 'fare ') || str_starts_with($entry->field, 'fee ');
+                            @endphp
+                            {{-- data-audit-subject says what the row is about: fares, passenger or flight. --}}
+                            <td class="px-4 py-2" data-audit-subject="{{ $isPrice ? 'fares' : ($entry->passenger ? 'passenger' : 'flight') }}">
                                 {{-- A row about a flight has no passenger. --}}
-                                @if ($entry->passenger)
+                                @if ($isPrice)
+                                    Fares and fees
+                                @elseif ($entry->passenger)
                                     {{ $entry->passenger->first_name }} {{ $entry->passenger->last_name }}
                                 @else
                                     Flight {{ $entry->flight?->flight_no ?? '—' }}

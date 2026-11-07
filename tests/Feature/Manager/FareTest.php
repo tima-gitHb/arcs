@@ -387,11 +387,26 @@ class FareTest extends TestCase
 
         $this->get(route('manager.audit'))
             ->assertOk()
-            ->assertSee('Fares and fees')
+            ->assertSee('data-audit-subject="fares"', false)
             ->assertSee('fare Business Adult')
             ->assertSee('$750.00 → $760.00', false)
             ->assertSee($this->manager->name)
             ->assertDontSee('Flight —');
+    }
+
+    public function test_a_row_is_labelled_by_its_field_not_by_what_is_missing(): void
+    {
+        // Neither passenger nor flight, but not a price: it must not be called "Fares and fees".
+        AuditEntry::create([
+            'field' => 'status', 'old_value' => 'Booked', 'new_value' => 'CheckedIn',
+            'user_id' => $this->manager->id, 'changed_at' => now(),
+        ]);
+
+        $this->get(route('manager.audit'))
+            ->assertOk()
+            ->assertDontSee('data-audit-subject="fares"', false)
+            ->assertSee('data-audit-subject="flight"', false)
+            ->assertSee('Flight —');
     }
 
     public function test_the_audit_page_still_labels_a_flight_row_with_its_flight(): void
@@ -401,8 +416,9 @@ class FareTest extends TestCase
 
         $this->get(route('manager.audit'))
             ->assertOk()
+            ->assertSee('data-audit-subject="flight"', false)
             ->assertSee('Flight ME777')
-            ->assertDontSee('Fares and fees');
+            ->assertDontSee('data-audit-subject="fares"', false);
     }
 
     // ── FareService reads the new prices ────────────────────────────────────

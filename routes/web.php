@@ -16,6 +16,7 @@ use App\Http\Controllers\Manager\AccountController;
 use App\Http\Controllers\Manager\AircraftController;
 use App\Http\Controllers\Manager\AuditController;
 use App\Http\Controllers\Manager\DashboardController;
+use App\Http\Controllers\Manager\FareController;
 use App\Http\Controllers\Manager\FlightController;
 use App\Http\Controllers\Manager\FlightListController;
 use App\Http\Controllers\Manager\RuleController;
@@ -103,6 +104,8 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::post('/accounts/{user}/reset-link', [AccountController::class, 'sendResetLink'])->name('accounts.reset-link');
     Route::get('/rules', [RuleController::class, 'index'])->name('rules');
     Route::put('/rules', [RuleController::class, 'update'])->name('rules.update');
+    Route::get('/fares', [FareController::class, 'index'])->name('fares');
+    Route::put('/fares', [FareController::class, 'update'])->name('fares.update');
     Route::get('/audit', [AuditController::class, 'index'])->name('audit');
 });
 
