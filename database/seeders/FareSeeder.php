@@ -10,27 +10,45 @@ use App\Models\Fee;
 use Illuminate\Database\Seeder;
 
 /**
- * Sample prices in cents, USD. Card M7 lets the Manager change them.
+ * Published fares and baggage fees in cents, USD. Card M7 lets the Manager change them.
+ * Idempotent: safe to re-run without duplicating rows.
  */
 class FareSeeder extends Seeder
 {
     public function run(): void
     {
+        // One-way BEY fares (dummy, but in a realistic MEA range).
         $fares = [
-            [CabinClass::Economy, [25000, 18750, 2500]],
-            [CabinClass::Premium, [42000, 31500, 4200]],
-            [CabinClass::Business, [75000, 56250, 7500]],
+            [CabinClass::Economy, PassengerType::Adult, 25000],
+            [CabinClass::Economy, PassengerType::Child, 18750],
+            [CabinClass::Economy, PassengerType::Infant, 2500],
+            [CabinClass::Premium, PassengerType::Adult, 42000],
+            [CabinClass::Premium, PassengerType::Child, 31500],
+            [CabinClass::Premium, PassengerType::Infant, 4200],
+            [CabinClass::Business, PassengerType::Adult, 75000],
+            [CabinClass::Business, PassengerType::Child, 56250],
+            [CabinClass::Business, PassengerType::Infant, 7500],
         ];
 
-        foreach ($fares as [$cabin, [$adult, $child, $infant]]) {
-            Fare::create(['cabin_class' => $cabin, 'passenger_type' => PassengerType::Adult, 'amount_cents' => $adult]);
-            Fare::create(['cabin_class' => $cabin, 'passenger_type' => PassengerType::Child, 'amount_cents' => $child]);
-            Fare::create(['cabin_class' => $cabin, 'passenger_type' => PassengerType::Infant, 'amount_cents' => $infant]);
+        foreach ($fares as [$cabin, $type, $cents]) {
+            Fare::query()->updateOrCreate(
+                ['cabin_class' => $cabin, 'passenger_type' => $type],
+                ['amount_cents' => $cents, 'currency' => 'USD'],
+            );
         }
 
-        Fee::create(['code' => FeeCode::ExtraBag, 'amount_cents' => 5000]);
-        Fee::create(['code' => FeeCode::ExcessKg, 'amount_cents' => 1000]);
-        Fee::create(['code' => FeeCode::SportsEquipment, 'amount_cents' => 7500]);
-        Fee::create(['code' => FeeCode::Pet, 'amount_cents' => 6000]);
+        $fees = [
+            [FeeCode::ExtraBag, 5000],
+            [FeeCode::ExcessKg, 1000],
+            [FeeCode::SportsEquipment, 7500],
+            [FeeCode::Pet, 6000],
+        ];
+
+        foreach ($fees as [$code, $cents]) {
+            Fee::query()->updateOrCreate(
+                ['code' => $code],
+                ['amount_cents' => $cents, 'currency' => 'USD'],
+            );
+        }
     }
 }

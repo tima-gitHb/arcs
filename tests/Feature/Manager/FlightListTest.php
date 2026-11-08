@@ -12,7 +12,6 @@ use App\Models\Bag;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\SpecialService;
-use App\Models\TravelDocument;
 use App\Models\User;
 use App\Services\AircraftService;
 use App\Services\ReservationService;
@@ -91,18 +90,27 @@ class FlightListTest extends TestCase
      */
     private function addPassenger(Flight $flight, string $first, string $last, ?string $seatNo = null, bool $checkedIn = false): Passenger
     {
+        $seat = $seatNo
+            ? $flight->aircraft->seats()->where('seat_no', $seatNo)->first()
+            : null;
+
         $reservation = app(ReservationService::class)->create($flight, $this->reservationAgent, [[
             'first_name' => $first,
             'last_name' => $last,
             'type' => 'Adult',
+            'cabin_class' => $seat?->cabin_class->value ?? 'Economy',
             'date_of_birth' => '1990-01-01',
-            'seat_id' => $seatNo ? $flight->aircraft->seats()->where('seat_no', $seatNo)->value('id') : null,
+            'seat_id' => $seat?->id,
+            'passport' => [
+                'number' => 'LR'.str_pad((string) abs(crc32($first.$last.($seatNo ?? ''))), 7, '0', STR_PAD_LEFT),
+                'issuing_country' => 'LB',
+                'expiry_date' => '2030-01-01',
+            ],
         ]]);
 
         $passenger = $reservation->passengers->first();
 
         if ($checkedIn) {
-            TravelDocument::factory()->for($passenger)->create();
             app(StatusService::class)->checkIn($passenger, $this->checkinAgent);
         }
 

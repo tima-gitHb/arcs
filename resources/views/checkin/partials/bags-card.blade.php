@@ -2,10 +2,32 @@
 @php
     $bagErrors = $errors->getBag('addBag');
     $canRemove = $passenger->status === \App\Enums\PassengerStatus::Booked;
+    $allowance = app(\App\Services\AllowanceService::class)->for($passenger);
 @endphp
 
 <div class="rounded-lg bg-white p-6 shadow-sm">
     <h2 class="text-lg font-semibold text-navy">Bags</h2>
+
+    @if ($allowance->isSet)
+        <p class="mt-2 text-sm text-navy">
+            Allowance: {{ $allowance->cabinClass->label() }}
+            {{ $allowance->pieces }} × {{ rtrim(rtrim(number_format($allowance->kgPerBag, 1, '.', ''), '0'), '.') }} kg
+            ({{ rtrim(rtrim(number_format($allowance->totalKg, 1, '.', ''), '0'), '.') }} kg total)
+            @if ($passenger->extra_bags > 0 || $passenger->extra_kg > 0)
+                <span class="text-gray-600">
+                    — includes
+                    @if ($passenger->extra_bags > 0)
+                        {{ $passenger->extra_bags }} extra bag{{ $passenger->extra_bags === 1 ? '' : 's' }}
+                    @endif
+                    @if ($passenger->extra_bags > 0 && $passenger->extra_kg > 0) and @endif
+                    @if ($passenger->extra_kg > 0)
+                        {{ $passenger->extra_kg }} extra kg
+                    @endif
+                    paid at booking
+                </span>
+            @endif
+        </p>
+    @endif
 
     @if ($passenger->bags->isEmpty())
         <p class="mt-2 text-sm text-gray-600">No bags.</p>

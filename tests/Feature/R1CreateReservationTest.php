@@ -16,6 +16,12 @@ class R1CreateReservationTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seedBookingPrices();
+    }
+
     public function test_SR1_one_hundred_reservations_produce_different_pnrs_shown_after_creation(): void
     {
         $agent = $this->actingAsRole('reservation');
@@ -29,6 +35,7 @@ class R1CreateReservationTest extends TestCase
                 'passengers' => [
                     $this->passenger('Rami', 'Haddad'.$i, 'Adult', '1990-01-15', seatId: $seatIds[$i]),
                 ],
+                ...$this->paidBookingFields(),
             ]);
 
             $response->assertRedirect();
@@ -62,6 +69,7 @@ class R1CreateReservationTest extends TestCase
                 $this->passenger('Maya', 'Haddad', 'Adult', '1988-09-03', seatId: $seatIds[1]),
                 $this->passenger('Nour', 'Haddad', 'Child', '2016-06-21', seatId: $seatIds[2]),
             ],
+            ...$this->paidBookingFields(),
         ]);
 
         $response->assertRedirect();
@@ -86,7 +94,7 @@ class R1CreateReservationTest extends TestCase
             ->assertSee('Rami')
             ->assertSee('Maya')
             ->assertSee('Nour')
-            ->assertSee('Booked');
+            ->assertSee('e-ticket');
     }
 
     public function test_SR24_infant_is_linked_to_adult_without_a_seat_and_infant_alone_is_refused(): void
@@ -101,6 +109,7 @@ class R1CreateReservationTest extends TestCase
                 $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12', seatId: $seatIds[0]),
                 $this->passenger('Lea', 'Haddad', 'Infant', '2025-06-01', adultIndex: 0),
             ],
+            ...$this->paidBookingFields(),
         ])->assertRedirect();
 
         $reservation = Reservation::query()->with('passengers')->first();
@@ -120,6 +129,7 @@ class R1CreateReservationTest extends TestCase
             'passengers' => [
                 $this->passenger('Lea', 'Haddad', 'Infant', '2025-06-01'),
             ],
+            ...$this->paidBookingFields(),
         ])->assertSessionHasErrors('passengers.0.accompanying_adult');
 
         $this->assertSame(1, Reservation::count());
@@ -163,6 +173,7 @@ class R1CreateReservationTest extends TestCase
                 'passengers' => [
                     $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12', seatId: $seatIds[0]),
                 ],
+                ...$this->paidBookingFields(),
             ])->assertRedirect();
 
             $this->assertTrue(
@@ -175,6 +186,7 @@ class R1CreateReservationTest extends TestCase
             'passengers' => [
                 $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12'),
             ],
+            ...$this->paidBookingFields(),
         ])->assertSessionHasErrors('flight_id');
 
         $this->assertSame(3, Reservation::count());
@@ -189,7 +201,13 @@ class R1CreateReservationTest extends TestCase
             'first_name' => $first,
             'last_name' => $last,
             'type' => $type,
+            'cabin_class' => $type === 'Infant' ? null : 'Economy',
             'date_of_birth' => $dob,
+            'passport' => [
+                'number' => 'LR'.str_pad((string) abs(crc32($first.$last.$type.$dob)), 7, '0', STR_PAD_LEFT),
+                'issuing_country' => 'LB',
+                'expiry_date' => '2030-01-01',
+            ],
         ];
 
         if ($adultIndex !== null) {

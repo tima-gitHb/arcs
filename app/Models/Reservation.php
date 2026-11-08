@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\PaymentKind;
+use App\Enums\PaymentStatus;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,5 +37,22 @@ class Reservation extends Model
     public function passengers(): HasMany
     {
         return $this->hasMany(Passenger::class);
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * The successful fare payment for this booking, if any.
+     */
+    public function farePayment(): ?Payment
+    {
+        return $this->payments
+            ->where('kind', PaymentKind::Fare)
+            ->where('status', PaymentStatus::Succeeded)
+            ->sortByDesc('id')
+            ->first();
     }
 }
