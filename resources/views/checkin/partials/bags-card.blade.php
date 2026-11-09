@@ -1,13 +1,11 @@
-{{-- Bags card on the check-in screen (C4 / C9: SR-9, SR-43, SR-58). Expects $passenger. --}}
+{{-- Bags card on the check-in screen (C4 / C9 / C10: SR-9, SR-43, SR-58, SR-59). Expects $passenger. --}}
 @php
     $bagErrors = $errors->getBag('addBag');
     $canRemove = $passenger->status === \App\Enums\PassengerStatus::Booked;
     $allowance = app(\App\Services\AllowanceService::class)->for($passenger);
-    $countedBags = $passenger->bags
-        ->filter(fn ($bag) => $bag->offloaded_at === null && $bag->type->countsTowardAllowance());
-    $piecesUsed = $countedBags->count();
-    $kgUsed = (float) $countedBags->sum(fn ($bag) => (float) $bag->weight_kg);
-    $usedKgLabel = rtrim(rtrim(number_format($kgUsed, 1, '.', ''), '0'), '.');
+    $excess = app(\App\Services\BagService::class)->excess($passenger);
+    $usedKgLabel = rtrim(rtrim(number_format($excess->kgUsed, 1, '.', ''), '0'), '.');
+    $excessKgLabel = rtrim(rtrim(number_format($excess->excessKg, 1, '.', ''), '0'), '.');
 @endphp
 
 <div class="rounded-lg bg-white p-6 shadow-sm">
@@ -33,8 +31,26 @@
             @endif
         </p>
         <p class="mt-1 text-sm text-gray-700">
-            Used: {{ $piecesUsed }} {{ $piecesUsed === 1 ? 'piece' : 'pieces' }} / {{ $usedKgLabel }} kg
+            Used: {{ $excess->piecesUsed }} {{ $excess->piecesUsed === 1 ? 'piece' : 'pieces' }} / {{ $usedKgLabel }} kg
         </p>
+        @if ($excess->hasExcess())
+            <p class="mt-1 text-sm font-medium text-amber-800">
+                Excess baggage:
+                @if ($excess->extraBags > 0)
+                    {{ $excess->extraBags }} extra bag{{ $excess->extraBags === 1 ? '' : 's' }}
+                @endif
+                @if ($excess->extraBags > 0 && $excess->excessKg > 0) · @endif
+                @if ($excess->excessKg > 0)
+                    {{ $excessKgLabel }} kg excess
+                @endif
+                —
+                @if ($excess->priceIsSet())
+                    {{ \App\Support\Money::format($excess->quote->totalCents) }}
+                @else
+                    Price not set
+                @endif
+            </p>
+        @endif
     @endif
 
     @if ($passenger->bags->isEmpty())
@@ -57,9 +73,7 @@
                         <td class="py-2">{{ $bag->weight_kg }} kg</td>
                         <td class="py-2">
                             {{ $bag->type->label() }}
-                            @if ($bag->over_allowance)
-                                <span class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Over allowance</span>
-                            @elseif (! $bag->type->countsTowardAllowance())
+                            @if (! $bag->type->countsTowardAllowance())
                                 <span class="ml-1 text-xs text-gray-500">(free)</span>
                             @endif
                         </td>
@@ -101,6 +115,6 @@
             </div>
             <button type="submit" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">Add bag</button>
         </form>
-        <p class="mt-2 text-xs text-gray-500">Extra bags are flagged, never charged. Wheelchairs and strollers are free.</p>
+        <p class="mt-2 text-xs text-gray-500">Excess is pooled by weight and pieces. Wheelchairs and strollers are free. Payment of excess is a separate step.</p>
     @endif
 </div>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Gate;
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
 use App\Exceptions\EntryReasonRequired;
+use App\Exceptions\ExcessBaggageUnpaid;
 use App\Exceptions\InvalidStatusChange;
 use App\Exceptions\ManagerApprovalRefused;
 use App\Exceptions\SeatNotAllowed;
@@ -56,7 +57,7 @@ class LateCheckInController extends Controller
                 Seat::query()->find($request->validated('seat_id')),
                 $request->validated('entry_reason'),
             );
-        } catch (ManagerApprovalRefused|InvalidStatusChange|SeatTaken|SeatNotAllowed $exception) {
+        } catch (ManagerApprovalRefused|InvalidStatusChange|SeatTaken|SeatNotAllowed|ExcessBaggageUnpaid $exception) {
             return redirect()->route('gate.passengers.late-checkin', $passenger)
                 ->withInput($request->except('password'))
                 ->with('error', $exception->getMessage());

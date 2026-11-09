@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\PassengerStatus;
 use App\Exceptions\BoardingPassNotAllowed;
 use App\Exceptions\EntryReasonRequired;
+use App\Exceptions\ExcessBaggageUnpaid;
 use App\Models\AuditEntry;
 use App\Models\BoardingPass;
 use App\Models\Flight;
@@ -16,7 +17,7 @@ use Picqer\Barcode\Renderers\SvgRenderer;
 use Picqer\Barcode\Types\TypeCode128;
 
 /**
- * Completing check-in and boarding passes (C5: SR-8, SR-21, SR-32, SR-42).
+ * Completing check-in and boarding passes (C5 / C10: SR-8, SR-21, SR-32, SR-42, SR-59).
  * Status still changes only in StatusService.
  */
 class BoardingPassService
@@ -29,6 +30,7 @@ class BoardingPassService
     public function __construct(
         private StatusService $statuses,
         private EntryRequirementChecker $entryCheck,
+        private BagService $bags,
     ) {}
 
     /**
@@ -39,6 +41,7 @@ class BoardingPassService
     {
         return DB::transaction(function () use ($passenger, $by, $entryReason) {
             $this->statuses->checkIn($passenger, $by);
+            $this->assertExcessPaid($passenger);
             $this->acknowledgeEntryCheck($passenger, $by, $entryReason);
 
             return $this->issue($passenger, $by);
@@ -52,10 +55,30 @@ class BoardingPassService
     {
         return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $entryReason) {
             $this->statuses->lateCheckIn($passenger, $gateUser, $manager, $reason);
+            $this->assertExcessPaid($passenger);
             $this->acknowledgeEntryCheck($passenger, $gateUser, $entryReason);
 
             return $this->issue($passenger, $gateUser);
         });
+    }
+
+    /**
+     * Pooled excess must be fully paid before the pass is issued (SR-59 / SR-60).
+     * Due is quote − succeeded ExcessBaggage payments (C11). Missing fees still block.
+     * Runs after status rules.
+     */
+    private function assertExcessPaid(Passenger $passenger): void
+    {
+        $passenger = $passenger->fresh();
+        $excess = $this->bags->excess($passenger);
+
+        if (! $excess->hasExcess()) {
+            return;
+        }
+
+        if (! $excess->priceIsSet() || $this->bags->excessDueCents($passenger) > 0) {
+            throw new ExcessBaggageUnpaid;
+        }
     }
 
     /**

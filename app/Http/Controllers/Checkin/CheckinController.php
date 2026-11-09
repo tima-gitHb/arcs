@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Checkin;
 
 use App\Enums\PassengerType;
 use App\Exceptions\EntryReasonRequired;
+use App\Exceptions\ExcessBaggageUnpaid;
 use App\Exceptions\InvalidStatusChange;
 use App\Http\Controllers\Controller;
 use App\Models\Passenger;
@@ -96,7 +97,7 @@ class CheckinController extends Controller
 
         try {
             $passes->completeCheckIn($passenger, $request->user(), $request->input('entry_reason'));
-        } catch (InvalidStatusChange $exception) {
+        } catch (InvalidStatusChange|ExcessBaggageUnpaid $exception) {
             return $screen->with('error', $exception->getMessage());
         } catch (EntryReasonRequired $exception) {
             return $screen->withErrors(['entry_reason' => $exception->getMessage()]);

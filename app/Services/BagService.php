@@ -5,21 +5,28 @@ namespace App\Services;
 use App\Enums\BagHandling;
 use App\Enums\BagType;
 use App\Enums\PassengerStatus;
+use App\Enums\PaymentKind;
+use App\Enums\PaymentStatus;
 use App\Exceptions\BagNotAllowed;
+use App\Exceptions\FareNotFound;
 use App\Models\AuditEntry;
 use App\Models\Bag;
 use App\Models\Passenger;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Bags at check-in (C4: SR-9, SR-27, SR-43). Extra bags are flagged over_allowance,
- * never charged (charging is out of scope).
+ * Bags at check-in (C4 / C10: SR-9, SR-43, SR-59). Weight is pooled against the allowance;
+ * excess is priced by FareService. Charging the card is C11.
  */
 class BagService
 {
-    public function __construct(private AllowanceService $allowances) {}
+    public function __construct(
+        private AllowanceService $allowances,
+        private FareService $fares,
+    ) {}
 
     private const TAG_DIGITS = 6;
 
@@ -35,6 +42,11 @@ class BagService
 
             if (! $passenger->checkinDetailsEditable()) {
                 throw new BagNotAllowed('Bags can only be added for a booked or checked-in passenger.');
+            }
+
+            $allowance = $this->allowances->for($passenger);
+            if ($weightKg > $allowance->hardMaxKg) {
+                throw new BagNotAllowed('Bag over 32 kg must be repacked');
             }
 
             $bag = $passenger->bags()->create([
@@ -117,28 +129,89 @@ class BagService
     }
 
     /**
-     * Set over_allowance on each of the passenger's bags, in the order they were added (SR-27):
-     * a counted bag is over if it is beyond the allowed pieces or heavier than the maximum.
-     * Wheelchairs and strollers are never counted and never over (SR-43).
-     * Offloaded bags do not count. No allowance set for the cabin: nothing is flagged.
+     * Pooled excess vs AllowanceService (SR-59). Extra pieces beyond the allowance are
+     * charged as ExtraBag; allowed kg expands by kg-per-bag for each of those pieces so
+     * weight already covered by an extra bag is not charged again as ExcessKg:
+     * allowed kg = (allowed pieces + extra bags) × kg per bag (+ prepaid extra_kg).
+     * Wheelchairs and strollers are ignored. Missing fees → quote null ("Price not set").
+     */
+    public function excess(Passenger $passenger): BaggageExcess
+    {
+        $allowance = $this->allowances->for($passenger);
+        $counted = $passenger->bags()
+            ->whereNull('offloaded_at')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (Bag $bag) => $bag->type->countsTowardAllowance());
+
+        $piecesUsed = $counted->count();
+        $kgUsed = (float) $counted->sum(fn (Bag $bag) => (float) $bag->weight_kg);
+
+        $extraBags = 0;
+        $excessKg = 0.0;
+
+        if ($allowance->isSet) {
+            $extraBags = max(0, $piecesUsed - $allowance->pieces);
+            // Don't charge the same weight twice: each extra bag also expands allowed kg.
+            $allowedKg = $allowance->totalKg + ($extraBags * $allowance->kgPerBag);
+            $excessKg = max(0.0, round($kgUsed - $allowedKg, 1));
+        }
+
+        $quote = null;
+        if ($extraBags > 0 || $excessKg > 0) {
+            try {
+                $quote = $this->fares->quote([], [
+                    'extra_bags' => $extraBags,
+                    'extra_kg' => (int) ceil($excessKg),
+                ]);
+            } catch (FareNotFound) {
+                $quote = null;
+            }
+        } else {
+            $quote = new Quote([], 0, 'USD');
+        }
+
+        return new BaggageExcess($piecesUsed, $kgUsed, $extraBags, $excessKg, $quote);
+    }
+
+    /**
+     * Succeeded ExcessBaggage payments already taken for this passenger (C11 / SR-60).
+     */
+    public function excessPaidCents(Passenger $passenger): int
+    {
+        return (int) Payment::query()
+            ->where('passenger_id', $passenger->id)
+            ->where('kind', PaymentKind::ExcessBaggage)
+            ->where('status', PaymentStatus::Succeeded)
+            ->sum('amount_cents');
+    }
+
+    /**
+     * What is still owed for the current pooled excess after prior payments (C11).
+     * Zero when there is no excess, fees are missing, or payments cover the quote.
+     */
+    public function excessDueCents(Passenger $passenger): int
+    {
+        $excess = $this->excess($passenger);
+
+        if (! $excess->hasExcess() || ! $excess->priceIsSet()) {
+            return 0;
+        }
+
+        return max(0, $excess->quote->totalCents - $this->excessPaidCents($passenger));
+    }
+
+    /**
+     * Clear per-bag over_allowance: excess is pooled at passenger level (C10 / SR-59).
+     * Still called after add/remove/seat change so the column stays consistent.
      */
     public function recalculate(Passenger $passenger): void
     {
-        $allowance = $this->allowances->for($passenger);
-        $counted = 0;
-
         $bags = $passenger->bags()->whereNull('offloaded_at')->orderBy('id')->get();
 
         foreach ($bags as $bag) {
-            $over = false;
-
-            if ($allowance->isSet && $bag->type->countsTowardAllowance()) {
-                $counted++;
-                $over = $counted > $allowance->pieces || (float) $bag->weight_kg > $allowance->kgPerBag;
-            }
-
-            if ($bag->over_allowance !== $over) {
-                $bag->update(['over_allowance' => $over]);
+            if ($bag->over_allowance) {
+                $bag->update(['over_allowance' => false]);
             }
         }
     }
