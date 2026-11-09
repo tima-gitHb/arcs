@@ -1,8 +1,13 @@
-{{-- Bags card on the check-in screen (C4: SR-9, SR-27, SR-43). Expects $passenger. --}}
+{{-- Bags card on the check-in screen (C4 / C9: SR-9, SR-43, SR-58). Expects $passenger. --}}
 @php
     $bagErrors = $errors->getBag('addBag');
     $canRemove = $passenger->status === \App\Enums\PassengerStatus::Booked;
     $allowance = app(\App\Services\AllowanceService::class)->for($passenger);
+    $countedBags = $passenger->bags
+        ->filter(fn ($bag) => $bag->offloaded_at === null && $bag->type->countsTowardAllowance());
+    $piecesUsed = $countedBags->count();
+    $kgUsed = (float) $countedBags->sum(fn ($bag) => (float) $bag->weight_kg);
+    $usedKgLabel = rtrim(rtrim(number_format($kgUsed, 1, '.', ''), '0'), '.');
 @endphp
 
 <div class="rounded-lg bg-white p-6 shadow-sm">
@@ -26,6 +31,9 @@
                     paid at booking
                 </span>
             @endif
+        </p>
+        <p class="mt-1 text-sm text-gray-700">
+            Used: {{ $piecesUsed }} {{ $piecesUsed === 1 ? 'piece' : 'pieces' }} / {{ $usedKgLabel }} kg
         </p>
     @endif
 
