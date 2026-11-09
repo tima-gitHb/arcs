@@ -20,82 +20,165 @@
         <x-todays-flights :role="'reservation'" />
     </div>
 
-    <form method="POST" action="{{ route('reservation.store') }}" class="max-w-6xl rounded-lg bg-white p-6 shadow-sm" autocomplete="off">
+    <form method="POST" action="{{ route('reservation.store') }}" class="max-w-6xl" autocomplete="off" id="booking-form">
         @csrf
 
-        <p class="text-sm text-gray-600">
-            Choose a flight, then add each passenger. An infant must be linked to an adult on this reservation.
-        </p>
-
-        @if ($errors->any())
-            <div class="mt-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
-                Check the form and try again.
+        @if (! $pricesReady)
+            <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+                Fares are not published. Ask a manager to set prices (M7), then refresh.
             </div>
         @endif
 
-        <div class="mt-6">
-            <x-input-label for="flight_id" value="Flight" />
-            <select
-                id="flight_id"
-                name="flight_id"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                required
-                @disabled($flights->isEmpty())
-            >
-                <option value="">Choose a flight</option>
-                @foreach ($flightGroups as $status => $group)
-                    <optgroup label="{{ App\Enums\FlightStatus::from($status)->label() }}">
-                        @foreach ($group as $flight)
-                            <option value="{{ $flight->id }}" @selected((string) old('flight_id') === (string) $flight->id)>
-                                {{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }} · {{ $flight->departure_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
-                            </option>
-                        @endforeach
-                    </optgroup>
-                @endforeach
-            </select>
-            <p class="mt-2 text-sm text-gray-500">Scheduled, delayed, check-in open, boarding, and closed flights can be booked. Departed and cancelled flights are not listed.</p>
-            <x-input-error :messages="$errors->get('flight_id')" class="mt-2" />
-            @if ($flights->isEmpty())
-                <p class="mt-2 text-sm text-gray-500">No flights are open for reservation.</p>
-            @endif
+        @if ($errors->any())
+            <div class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+                @if ($errors->has('card_number') && ! $errors->has('flight_id') && ! $errors->has('passengers'))
+                    {{ $errors->first('card_number') }}
+                @else
+                    Fix the highlighted fields, then charge again.
+                @endif
+            </div>
+        @endif
+
+        <div class="rounded-lg bg-white p-6 shadow-sm">
+            <p class="text-sm text-gray-600">
+                Desk / phone booking: capture flight and passengers from the caller, assign seats, read the quote back, then take the card. PNR is created only after approval.
+            </p>
+
+            <div class="mt-6">
+                <x-input-label for="flight_id" value="Flight" />
+                <select
+                    id="flight_id"
+                    name="flight_id"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-navy focus:ring-navy"
+                    required
+                    @disabled($flights->isEmpty())
+                >
+                    <option value="">Select flight…</option>
+                    @foreach ($flightGroups as $status => $group)
+                        <optgroup label="{{ App\Enums\FlightStatus::from($status)->label() }}">
+                            @foreach ($group as $flight)
+                                <option value="{{ $flight->id }}" @selected((string) old('flight_id') === (string) $flight->id)>
+                                    {{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }} · {{ $flight->departure_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
+                                </option>
+                            @endforeach
+                        </optgroup>
+                    @endforeach
+                </select>
+                <p class="mt-2 text-sm text-gray-500">Bookable: Scheduled, Delayed, Check-in open, Boarding, Closed. Not listed: Departed, Cancelled.</p>
+                <x-input-error :messages="$errors->get('flight_id')" class="mt-2" />
+                @if ($flights->isEmpty())
+                    <p class="mt-2 text-sm text-gray-500">No bookable flights right now.</p>
+                @endif
+            </div>
         </div>
 
-        <div class="mt-6 grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_20rem]">
-        <div>
-        <div id="passengers" class="space-y-4">
-            @foreach ($passengers as $index => $passenger)
-                @include('reservation.partials.passenger-row', [
-                    'index' => $index,
-                    'passenger' => $passenger,
-                    'adultOptions' => $adultOptions,
-                    'canRemove' => count($passengers) > 1,
-                ])
-            @endforeach
-        </div>
+        <div class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <div class="space-y-6">
+                <div id="passengers" class="space-y-4">
+                    @foreach ($passengers as $index => $passenger)
+                        @include('reservation.partials.passenger-row', [
+                            'index' => $index,
+                            'passenger' => $passenger,
+                            'adultOptions' => $adultOptions,
+                            'canRemove' => count($passengers) > 1,
+                            'cabinOptions' => $cabinOptions,
+                        ])
+                    @endforeach
+                </div>
 
-        <x-input-error :messages="$errors->get('passengers')" class="mt-4" />
+                <x-input-error :messages="$errors->get('passengers')" class="mt-2" />
 
-        <div class="mt-6 flex flex-wrap items-center gap-3">
-            <button
-                type="button"
-                id="add-passenger"
-                class="rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy/5"
-            >
-                Add passenger
-            </button>
-            <button
-                type="submit"
-                class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-50"
-                @disabled($flights->isEmpty())
-            >
-                Create reservation
-            </button>
-        </div>
-        </div>
+                <button
+                    type="button"
+                    id="add-passenger"
+                    class="rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy/5"
+                >
+                    Add passenger
+                </button>
 
-        <x-seat-map class="md:sticky md:top-4" hint="Choose a flight, then a passenger, then a free seat.">
-            <x-input-error :messages="$errors->get('seat')" class="mt-3" />
-        </x-seat-map>
+                <div class="rounded-lg bg-white p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-navy">Caller contact</h2>
+                    <p class="mt-1 text-sm text-gray-600">Optional. Email sends the e-ticket / receipt after the PNR is saved.</p>
+                    <div class="mt-4 grid gap-4 sm:grid-cols-2">
+                        <div>
+                            <x-input-label for="contact_email" value="Email for e-ticket" />
+                            <x-text-input id="contact_email" name="contact_email" type="email" class="mt-1 block w-full"
+                                :value="old('contact_email')" maxlength="255" autocomplete="off" placeholder="caller@…" />
+                            <x-input-error :messages="$errors->get('contact_email')" class="mt-2" />
+                        </div>
+                        <div>
+                            <x-input-label for="contact_phone" value="Callback phone" />
+                            <x-text-input id="contact_phone" name="contact_phone" type="text" class="mt-1 block w-full"
+                                :value="old('contact_phone')" maxlength="20" autocomplete="off" placeholder="+961…" />
+                            <x-input-error :messages="$errors->get('contact_phone')" class="mt-2" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="rounded-lg bg-white p-6 shadow-sm">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                            <h2 class="text-lg font-semibold text-navy">Card (read from caller)</h2>
+                            <p class="mt-1 text-sm text-gray-600">Card only · test gateway · number and CVC are never stored</p>
+                        </div>
+                        <span id="card-brand" class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-600">Card</span>
+                    </div>
+
+                    <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                        <div class="sm:col-span-2">
+                            <x-input-label for="card_number" value="Card number" />
+                            <x-text-input id="card_number" name="card_number" type="text" class="mt-1 block w-full font-mono tracking-wider"
+                                inputmode="numeric" autocomplete="off" required maxlength="19" placeholder="4242 4242 4242 4242" />
+                            <p class="mt-1 text-xs text-gray-500">Test approve: 4242…4242 · decline: 4000…0002 · expiry e.g. 12/30 · any CVC</p>
+                            <x-input-error :messages="$errors->get('card_number')" class="mt-2" />
+                        </div>
+                        <div>
+                            <x-input-label for="card_expiry" value="Expiry" />
+                            <x-text-input id="card_expiry" name="card_expiry" type="text" class="mt-1 block w-full font-mono"
+                                placeholder="12/30" autocomplete="off" required maxlength="5" />
+                            <p class="mt-1 text-xs text-gray-500">MM/YY · this month or later</p>
+                            <x-input-error :messages="$errors->get('card_expiry')" class="mt-2" />
+                        </div>
+                        <div>
+                            <x-input-label for="card_cvc" value="CVC" />
+                            <x-text-input id="card_cvc" name="card_cvc" type="password" class="mt-1 block w-28 font-mono"
+                                autocomplete="off" required maxlength="4" placeholder="123" />
+                            <x-input-error :messages="$errors->get('card_cvc')" class="mt-2" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="space-y-4 lg:sticky lg:top-4">
+                <x-seat-map hint="Select flight → select passenger → assign a free seat in that cabin.">
+                    <x-input-error :messages="$errors->get('seat')" class="mt-3" />
+                </x-seat-map>
+
+                <div class="rounded-lg border border-navy/10 bg-white p-5 shadow-sm">
+                    <h2 class="text-lg font-semibold text-navy">Fare quote</h2>
+                    <p class="mt-1 text-xs text-gray-500">Read this total back to the caller before charging.</p>
+                    <p id="summary-flight" class="mt-2 text-sm font-medium text-gray-700">No flight selected</p>
+
+                    <ul id="price-lines" class="mt-4 space-y-2 border-t border-gray-100 pt-4 text-sm text-gray-800"></ul>
+
+                    <div class="mt-4 flex items-end justify-between border-t border-gray-100 pt-4">
+                        <div>
+                            <p class="text-xs uppercase tracking-wide text-gray-500">Amount to charge</p>
+                            <p class="text-2xl font-semibold text-navy"><span id="price-total">$0.00</span></p>
+                            <p class="text-xs text-gray-500">USD · fare + prepaid extras</p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        class="mt-5 w-full rounded bg-navy px-4 py-3 text-sm font-semibold text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-50"
+                        @disabled($flights->isEmpty() || ! $pricesReady)
+                    >
+                        Charge <span id="pay-button-amount">$0.00</span> and save PNR
+                    </button>
+                    <p class="mt-2 text-center text-xs text-gray-500">Declined card → no PNR created.</p>
+                </div>
+            </aside>
         </div>
     </form>
 
@@ -106,11 +189,20 @@
                 'first_name' => '',
                 'last_name' => '',
                 'type' => 'Adult',
+                'cabin_class' => 'Economy',
                 'date_of_birth' => '',
                 'accompanying_adult' => '',
+                'extra_bags' => 0,
+                'extra_kg' => 0,
+                'passport' => [
+                    'number' => '',
+                    'issuing_country' => null,
+                    'expiry_date' => '',
+                ],
             ],
             'adultOptions' => [],
             'canRemove' => true,
+            'cabinOptions' => $cabinOptions,
         ])
     </template>
 
@@ -119,8 +211,157 @@
         const list = document.getElementById('passengers');
         const template = document.getElementById('passenger-template');
         const addButton = document.getElementById('add-passenger');
+        const flightSelect = document.getElementById('flight_id');
+        const allowances = @json($allowances);
+        const fares = @json($fares);
+        const fees = @json($fees);
 
         const rows = () => [...list.querySelectorAll('.passenger-row')];
+
+        function formatMoney(cents) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format((cents || 0) / 100);
+        }
+
+        function formatKg(kg) {
+            return Number.isInteger(kg) ? String(kg) : String(kg);
+        }
+
+        function adultCabinFor(row) {
+            const adultIndex = row.querySelector('.accompanying-adult').value;
+            const adult = rows().find((item) => item.dataset.index === adultIndex);
+
+            return adult?.querySelector('.passenger-cabin')?.value || '';
+        }
+
+        function fareCents(cabin, type) {
+            return fares.find((item) => item.cabin === cabin && item.type === type)?.cents ?? null;
+        }
+
+        function refreshAllowances() {
+            rows().forEach((row) => {
+                const type = row.querySelector('.passenger-type').value;
+                const cabin = type === 'Infant' ? adultCabinFor(row) : row.querySelector('.passenger-cabin').value;
+                const allowanceEl = row.querySelector('.allowance-label');
+                const fareEl = row.querySelector('.passenger-fare-label');
+                const bagPrice = row.querySelector('.extra-bag-price');
+                const kgPrice = row.querySelector('.extra-kg-price');
+                const base = allowances[cabin];
+                const cents = fareCents(cabin, type === 'Infant' ? 'Infant' : type);
+
+                if (allowanceEl) {
+                    allowanceEl.textContent = base
+                        ? `Allowance ${base.pieces} × ${formatKg(base.kg)} kg`
+                        : '';
+                }
+
+                if (fareEl) {
+                    fareEl.textContent = cents === null ? '' : `${type}: ${formatMoney(cents)}`;
+                }
+
+                if (bagPrice) {
+                    bagPrice.textContent = fees.extra_bag ? `+${formatMoney(fees.extra_bag)} each` : '';
+                }
+
+                if (kgPrice) {
+                    kgPrice.textContent = fees.extra_kg ? `+${formatMoney(fees.extra_kg)} / kg` : '';
+                }
+            });
+        }
+
+        function refreshPrice() {
+            const groups = new Map();
+            let extraBags = 0;
+            let extraKg = 0;
+
+            rows().forEach((row) => {
+                const type = row.querySelector('.passenger-type').value;
+                const cabin = type === 'Infant' ? adultCabinFor(row) : row.querySelector('.passenger-cabin').value;
+
+                if (cabin !== '') {
+                    const key = `${cabin}|${type}`;
+                    groups.set(key, (groups.get(key) || 0) + 1);
+                }
+
+                if (type !== 'Infant') {
+                    extraBags += Number(row.querySelector('.passenger-extra-bags').value || 0);
+                    extraKg += Number(row.querySelector('.passenger-extra-kg').value || 0);
+                }
+            });
+
+            const lines = [];
+            let total = 0;
+
+            groups.forEach((quantity, key) => {
+                const [cabin, type] = key.split('|');
+                const unit = fareCents(cabin, type);
+
+                if (unit === null) {
+                    return;
+                }
+
+                const amount = quantity * unit;
+                total += amount;
+                lines.push({
+                    label: `${cabin} ${type}`,
+                    detail: quantity === 1 ? formatMoney(unit) : `${quantity} × ${formatMoney(unit)}`,
+                    amount: formatMoney(amount),
+                });
+            });
+
+            if (extraBags > 0 && fees.extra_bag > 0) {
+                const amount = extraBags * fees.extra_bag;
+                total += amount;
+                lines.push({
+                    label: 'Extra bags',
+                    detail: `${extraBags} × ${formatMoney(fees.extra_bag)}`,
+                    amount: formatMoney(amount),
+                });
+            }
+
+            if (extraKg > 0 && fees.extra_kg > 0) {
+                const amount = extraKg * fees.extra_kg;
+                total += amount;
+                lines.push({
+                    label: 'Extra weight',
+                    detail: `${extraKg} kg × ${formatMoney(fees.extra_kg)}`,
+                    amount: formatMoney(amount),
+                });
+            }
+
+            const listEl = document.getElementById('price-lines');
+            listEl.replaceChildren();
+
+            if (lines.length === 0) {
+                const empty = document.createElement('li');
+                empty.className = 'text-gray-500';
+                empty.textContent = 'Add passengers to build the quote.';
+                listEl.appendChild(empty);
+            } else {
+                lines.forEach((line) => {
+                    const item = document.createElement('li');
+                    item.className = 'flex items-start justify-between gap-3';
+                    item.innerHTML = `<span><span class="font-medium text-gray-900">${line.label}</span><span class="mt-0.5 block text-xs text-gray-500">${line.detail}</span></span><span class="font-medium">${line.amount}</span>`;
+                    listEl.appendChild(item);
+                });
+            }
+
+            const totalLabel = formatMoney(total);
+            document.getElementById('price-total').textContent = totalLabel;
+            document.getElementById('pay-button-amount').textContent = totalLabel;
+        }
+
+        function refreshFlightSummary() {
+            const option = flightSelect.selectedOptions[0];
+            const summary = document.getElementById('summary-flight');
+
+            if (! option || option.value === '') {
+                summary.textContent = 'Select a flight first';
+
+                return;
+            }
+
+            summary.textContent = option.textContent.trim();
+        }
 
         function refreshAdults() {
             const adults = rows().flatMap((row) => {
@@ -140,11 +381,19 @@
 
             rows().forEach((row) => {
                 const type = row.querySelector('.passenger-type').value;
+                const cabinField = row.querySelector('.cabin-field');
+                const cabinSelect = row.querySelector('.passenger-cabin');
+                const extrasField = row.querySelector('.extras-field');
                 row.querySelector('.accompanying-field').classList.toggle('hidden', type !== 'Infant');
                 row.querySelector('.seat-field').classList.toggle('hidden', type === 'Infant');
+                cabinField.classList.toggle('hidden', type === 'Infant');
+                extrasField.classList.toggle('hidden', type === 'Infant');
+                cabinSelect.required = type !== 'Infant';
 
                 if (type === 'Infant') {
                     row.querySelector('.passenger-seat').value = '';
+                    row.querySelector('.passenger-extra-bags').value = '0';
+                    row.querySelector('.passenger-extra-kg').value = '0';
                 }
 
                 const select = row.querySelector('.accompanying-adult');
@@ -192,6 +441,8 @@
             });
 
             refreshAdults();
+            refreshAllowances();
+            refreshPrice();
             paintMap();
         }
 
@@ -236,15 +487,28 @@
             map.replaceChildren();
 
             if (seatData.length === 0) {
-                hint.textContent = 'Choose a flight to see the seat map.';
+                hint.textContent = 'Select a flight to load the seat map.';
 
                 return;
             }
 
-            hint.textContent = `Choosing for passenger ${Number(activeIndex) + 1}. Taken seats stay blocked.`;
+            const activeRow = rows().find((row) => row.dataset.index === activeIndex);
+            const cabin = activeRow?.querySelector('.passenger-cabin')?.value || '';
+            const offered = seatData.filter((seat) => seat.cabin === cabin);
 
-            // Grid drawn by the shared seat map (resources/js/seat-map.js); the rules per seat stay here.
-            window.ArcsSeatMap.draw(map, seatData, (seat) => {
+            hint.textContent = cabin === ''
+                ? 'Set cabin class, then assign a free seat.'
+                : `Assigning ${cabin} seat for passenger ${Number(activeIndex) + 1}. Taken seats blocked.`;
+
+            if (offered.length === 0) {
+                hint.textContent = cabin === ''
+                    ? 'Set cabin class, then assign a free seat.'
+                    : `No ${cabin} seats on this aircraft.`;
+
+                return;
+            }
+
+            window.ArcsSeatMap.draw(map, offered, (seat) => {
                 const owner = chosen.get(String(seat.id));
                 const mine = owner === activeIndex;
                 let style = window.ArcsSeatMap.cabinStyle({ ...seat, taken: false });
@@ -277,6 +541,12 @@
                 return;
             }
 
+            const cabin = row.querySelector('.passenger-cabin').value;
+
+            if (seat.cabin !== cabin) {
+                return;
+            }
+
             const input = row.querySelector('.passenger-seat');
             const owner = chosenSeats().get(String(seat.id));
 
@@ -288,9 +558,19 @@
             paintMap();
         }
 
+        function clearSeatIfWrongCabin(row) {
+            const input = row.querySelector('.passenger-seat');
+            const cabin = row.querySelector('.passenger-cabin').value;
+            const seat = seatData.find((item) => String(item.id) === input.value);
+
+            if (input.value !== '' && (!seat || seat.cabin !== cabin)) {
+                input.value = '';
+            }
+        }
+
         async function loadMap() {
             const request = ++mapRequest;
-            const flightId = document.getElementById('flight_id').value;
+            const flightId = flightSelect.value;
             seatData = [];
 
             if (flightId === '') {
@@ -319,7 +599,7 @@
                 const input = row.querySelector('.passenger-seat');
                 const seat = seatData.find((item) => String(item.id) === input.value);
 
-                if (input.value !== '' && (!seat || seat.taken)) {
+                if (input.value !== '' && (!seat || seat.taken || seat.cabin !== row.querySelector('.passenger-cabin').value)) {
                     input.value = '';
                 }
             });
@@ -327,10 +607,11 @@
             paintMap();
         }
 
-        document.getElementById('flight_id').addEventListener('change', () => {
+        flightSelect.addEventListener('change', () => {
             rows().forEach((row) => {
                 row.querySelector('.passenger-seat').value = '';
             });
+            refreshFlightSummary();
             loadMap();
         });
 
@@ -365,13 +646,45 @@
             reindex();
         });
 
-        list.addEventListener('input', refreshAdults);
-        list.addEventListener('change', () => {
+        list.addEventListener('input', () => {
             refreshAdults();
+            refreshAllowances();
+            refreshPrice();
+        });
+        list.addEventListener('change', (event) => {
+            const row = event.target.closest('.passenger-row');
+
+            if (row && event.target.classList.contains('passenger-cabin')) {
+                clearSeatIfWrongCabin(row);
+            }
+
+            refreshAdults();
+            refreshAllowances();
+            refreshPrice();
             paintMap();
         });
 
+        const cardNumber = document.getElementById('card_number');
+        const cardExpiry = document.getElementById('card_expiry');
+        const cardBrand = document.getElementById('card-brand');
+
+        cardNumber.addEventListener('input', () => {
+            const digits = cardNumber.value.replace(/\D/g, '').slice(0, 16);
+            cardNumber.value = digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
+            const first = digits[0];
+            cardBrand.textContent = first === '4' ? 'Visa' : first === '5' ? 'Mastercard' : 'Card';
+        });
+
+        cardExpiry.addEventListener('input', () => {
+            let value = cardExpiry.value.replace(/\D/g, '').slice(0, 4);
+            if (value.length >= 3) {
+                value = `${value.slice(0, 2)}/${value.slice(2)}`;
+            }
+            cardExpiry.value = value;
+        });
+
         reindex();
+        refreshFlightSummary();
         loadMap();
     </script>
 </x-app-layout>

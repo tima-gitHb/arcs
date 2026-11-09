@@ -72,7 +72,9 @@ class FareService
         $cents = Fare::query()->where('cabin_class', $cabin)->where('passenger_type', $type)->value('amount_cents');
 
         if ($cents === null) {
-            throw new FareNotFound("No fare for {$cabin->label()} {$type->label()}.");
+            throw new FareNotFound(
+                "No published fare for {$cabin->label()} {$type->label()}. Ask a manager to set prices (card M7), then try again.",
+            );
         }
 
         return $cents;

@@ -11,6 +11,8 @@ use App\Models\Seat;
 use App\Models\SeatAssignment;
 use App\Models\User;
 use App\Services\StatusService;
+use Database\Seeders\FareSeeder;
+use Database\Seeders\SettingSeeder;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 
 abstract class TestCase extends BaseTestCase
@@ -99,5 +101,31 @@ abstract class TestCase extends BaseTestCase
         }
 
         return $flight;
+    }
+
+    /**
+     * Fares, fees and baggage allowances needed for a paid booking.
+     */
+    protected function seedBookingPrices(): void
+    {
+        $this->seed(FareSeeder::class);
+        $this->seed(SettingSeeder::class);
+    }
+
+    /**
+     * Card + optional contact fields for reservation.store (test gateway).
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    protected function paidBookingFields(array $overrides = []): array
+    {
+        return array_merge([
+            'contact_email' => null,
+            'contact_phone' => null,
+            'card_number' => '4242 4242 4242 4242',
+            'card_expiry' => '12/30',
+            'card_cvc' => '123',
+        ], $overrides);
     }
 }

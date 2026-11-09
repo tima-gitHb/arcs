@@ -16,6 +16,12 @@ class R1SeatMapTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seedBookingPrices();
+    }
+
     public function test_seat_map_marks_taken_seats_and_orders_rows_numerically(): void
     {
         $this->actingAsRole('reservation');
@@ -78,6 +84,7 @@ class R1SeatMapTest extends TestCase
             'passengers' => [
                 $this->passenger($taken->id),
             ],
+            ...$this->paidBookingFields(),
         ])->assertRedirect();
 
         $this->post(route('reservation.store'), [
@@ -85,6 +92,7 @@ class R1SeatMapTest extends TestCase
             'passengers' => [
                 $this->passenger($taken->id, 'Maya'),
             ],
+            ...$this->paidBookingFields(),
         ])->assertSessionHasErrors([
             'passengers.0.seat_id' => 'Seat taken',
         ]);
@@ -109,6 +117,7 @@ class R1SeatMapTest extends TestCase
                 $this->passenger($seat->id),
                 $this->passenger($seat->id, 'Maya'),
             ],
+            ...$this->paidBookingFields(),
         ])->assertSessionHasErrors([
             'passengers.1.seat_id' => 'Seat taken',
         ]);
@@ -141,8 +150,14 @@ class R1SeatMapTest extends TestCase
                     'date_of_birth' => '2025-06-01',
                     'accompanying_adult' => 0,
                     'seat_id' => $infantSeat->id,
+                    'passport' => [
+                        'number' => 'LR2222222',
+                        'issuing_country' => 'LB',
+                        'expiry_date' => '2031-01-01',
+                    ],
                 ],
             ],
+            ...$this->paidBookingFields(),
         ])->assertSessionHasErrors([
             'passengers.1.seat_id' => 'An infant does not get a seat.',
         ]);
@@ -159,8 +174,14 @@ class R1SeatMapTest extends TestCase
             'first_name' => $first,
             'last_name' => 'Haddad',
             'type' => 'Adult',
+            'cabin_class' => 'Economy',
             'date_of_birth' => '1985-04-12',
             'seat_id' => $seatId,
+            'passport' => [
+                'number' => 'LR'.str_pad((string) abs(crc32($first.$seatId)), 7, '0', STR_PAD_LEFT),
+                'issuing_country' => 'LB',
+                'expiry_date' => '2030-01-01',
+            ],
         ];
     }
 }
