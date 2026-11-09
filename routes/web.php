@@ -3,6 +3,7 @@
 use App\Http\Controllers\Checkin\BagController;
 use App\Http\Controllers\Checkin\BoardingPassController;
 use App\Http\Controllers\Checkin\CheckinController;
+use App\Http\Controllers\Checkin\GroupCheckInController;
 use App\Http\Controllers\Checkin\SeatController;
 use App\Http\Controllers\Checkin\SpecialServiceController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
@@ -71,6 +72,12 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
     Route::delete('/services/{service}', [SpecialServiceController::class, 'destroy'])->name('services.destroy');
     Route::get('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'show'])->name('boarding-pass.show');
     Route::post('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'reprint'])->name('boarding-pass.reprint');
+
+    // Group check-in for one PNR (C12 / SR-61).
+    Route::get('/reservations/{reservation}/group', [GroupCheckInController::class, 'show'])->name('reservations.group');
+    Route::post('/reservations/{reservation}/seats', [GroupCheckInController::class, 'assignSeats'])->name('reservations.seats');
+    Route::post('/reservations/{reservation}/confirm-all', [GroupCheckInController::class, 'confirmAll'])->name('reservations.confirm-all');
+    Route::get('/reservations/{reservation}/boarding-passes', [GroupCheckInController::class, 'boardingPasses'])->name('reservations.boarding-passes');
 });
 
 // Gate staff
