@@ -79,8 +79,22 @@ class G3CloseBoardingTest extends TestCase
         $this->assertSame(PassengerStatus::Booked, $this->people['booked'][0]->fresh()->status);
 
         $this->assertSame(FlightStatus::Closed, $this->flight->fresh()->status);
+        // seatPassenger() assigns 1F, 2F, … in creation order (2 boarded, 3 no-show, 1 booked).
         $this->getJson(route('gate.flights.counts', $this->flight))
-            ->assertExactJson(['checked_in' => 5, 'boarded' => 2, 'missing' => 3, 'status' => 'Closed']);
+            ->assertExactJson([
+                'checked_in' => 5,
+                'boarded' => 2,
+                'missing' => 3,
+                'status' => 'Closed',
+                'seats' => [
+                    '1F' => 'Boarded',
+                    '2F' => 'Boarded',
+                    '3F' => 'NoShow',
+                    '4F' => 'NoShow',
+                    '5F' => 'NoShow',
+                    '6F' => 'Booked',
+                ],
+            ]);
     }
 
     public function test_SR9_the_no_shows_bags_appear_on_the_offload_list(): void

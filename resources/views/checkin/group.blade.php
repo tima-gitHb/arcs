@@ -96,6 +96,18 @@
                                     @if ($row['excess']->hasExcess())
                                         <span class="mt-1 block text-xs text-amber-800">Excess</span>
                                     @endif
+                                    @if (($row['excessDueCents'] ?? 0) > 0)
+                                        <details class="mt-2">
+                                            <summary class="cursor-pointer text-xs font-medium text-navy">Collect payment · {{ \App\Support\Money::format($row['excessDueCents']) }}</summary>
+                                            <form method="POST" action="{{ route('checkin.excess.pay', $passenger) }}" autocomplete="off" class="mt-2">
+                                                @csrf
+                                                <x-card-form :amount-cents="$row['excessDueCents']" :id-prefix="'p'.$passenger->id" title="Collect payment" class="shadow-none border border-amber-200 p-3" />
+                                                <button type="submit" class="mt-2 rounded bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90">
+                                                    Charge {{ \App\Support\Money::format($row['excessDueCents']) }}
+                                                </button>
+                                            </form>
+                                        </details>
+                                    @endif
                                 </td>
                             </tr>
                         @endforeach

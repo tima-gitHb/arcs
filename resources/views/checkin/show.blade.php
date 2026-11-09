@@ -3,9 +3,20 @@
         <h1 class="text-2xl font-semibold text-navy">{{ $passenger->first_name }} {{ $passenger->last_name }}</h1>
     </x-slot>
 
-    @php($flight = $passenger->reservation->flight)
+    @php
+        $flight = $passenger->reservation->flight;
+        $currentSeat = $passenger->seatAssignment?->seat;
+        $picking = $passenger->status === \App\Enums\PassengerStatus::Booked
+            && $passenger->type !== \App\Enums\PassengerType::Infant;
+        $canChange = $passenger->status === \App\Enums\PassengerStatus::CheckedIn
+            && $currentSeat
+            && ! $flight->isBoardingClosed()
+            && $flight->status !== \App\Enums\FlightStatus::Cancelled;
+        $showSeatMap = $picking || ($canChange && $changingSeat);
+    @endphp
 
-    <div class="max-w-3xl space-y-6">
+    <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+    <div class="space-y-6">
         <div class="rounded-lg bg-white p-6 shadow-sm">
             <dl class="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3">
                 <div>
@@ -133,6 +144,18 @@
 
         @include('checkin.partials.seat-card')
 
+        @if (in_array($passenger->status, [\App\Enums\PassengerStatus::Booked, \App\Enums\PassengerStatus::CheckedIn], true)
+            && $passenger->type !== \App\Enums\PassengerType::Infant
+            && ! $passenger->reservation->flight->isBoardingClosed())
+            <div class="rounded-lg bg-white p-4 shadow-sm">
+                <a href="{{ route('checkin.passengers.upgrade', $passenger) }}"
+                   class="inline-block rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy hover:text-white">
+                    Upgrade
+                </a>
+                <p class="mt-1 text-xs text-gray-500">Paid cabin upgrade to a higher class.</p>
+            </div>
+        @endif
+
         @include('checkin.partials.bags-card')
 
         @include('checkin.partials.services-card')
@@ -153,5 +176,37 @@
         <a href="{{ route('checkin.home', ['q' => $passenger->reservation->pnr]) }}" class="inline-block text-sm font-medium text-navy hover:underline">
             ← Back to search
         </a>
+    </div>
+
+    @if ($showSeatMap)
+        <x-seat-map
+            :hint="$picking ? 'Click a free seat to assign it. Taken seats stay blocked.' : 'Click a free seat in the same cabin. A new boarding pass replaces the old one.'"
+            data-seats="{{ $seatMap->toJson() }}"
+            data-selected-seat="{{ $currentSeat?->id }}"
+            data-cabin="{{ $picking ? '' : $currentSeat->cabin_class->value }}"
+        />
+        <script type="module">
+            const map = document.getElementById('seat-map');
+            const seats = JSON.parse(map.dataset.seats);
+            const selected = map.dataset.selectedSeat;
+            const cabin = map.dataset.cabin;
+            const form = document.getElementById('seat-form');
+
+            window.ArcsSeatMap.draw(map, seats, (seat) => {
+                if (String(seat.id) === selected) {
+                    return { style: 'mine', disabled: true };
+                }
+
+                return {
+                    style: window.ArcsSeatMap.cabinStyle(seat),
+                    disabled: seat.taken || (cabin !== '' && seat.cabin !== cabin),
+                    onPick: (picked) => {
+                        document.getElementById('seat-input').value = picked.id;
+                        form.submit();
+                    },
+                };
+            });
+        </script>
+    @endif
     </div>
 </x-app-layout>

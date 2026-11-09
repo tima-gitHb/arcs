@@ -8,6 +8,7 @@ enum PaymentKind: string
     case ExtraBag = 'ExtraBag';
     case ExcessBaggage = 'ExcessBaggage';
     case Fee = 'Fee';
+    case Upgrade = 'Upgrade';
 
     public function label(): string
     {
@@ -16,6 +17,7 @@ enum PaymentKind: string
             self::ExtraBag => 'Extra bag',
             self::ExcessBaggage => 'Excess baggage',
             self::Fee => 'Fee',
+            self::Upgrade => 'Cabin upgrade',
         };
     }
 }

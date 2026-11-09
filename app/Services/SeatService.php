@@ -88,6 +88,26 @@ class SeatService
     }
 
     /**
+     * Move a passenger to a seat in a new cabin class during a paid upgrade.
+     * Does not issue a boarding pass — CabinUpgradeService does that when CheckedIn.
+     */
+    public function assignForUpgrade(Passenger $passenger, Seat $seat, User $by): void
+    {
+        DB::transaction(function () use ($passenger, $seat, $by) {
+            $passenger = Passenger::query()->lockForUpdate()->findOrFail($passenger->id);
+
+            if ($passenger->type === PassengerType::Infant) {
+                throw new SeatNotAllowed('An infant has no seat.');
+            }
+            if (! in_array($passenger->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
+                throw new SeatNotAllowed('The seat can only be changed for a booked or checked-in passenger.');
+            }
+
+            $this->replaceSeat($passenger, $seat, $by);
+        });
+    }
+
+    /**
      * Move a checked-in passenger to another seat in the same cabin (C6, SR-20).
      * Same swap as assign(); the old pass is voided and a new one issued in the same
      * transaction, so a refused move leaves the old seat and the old pass untouched.

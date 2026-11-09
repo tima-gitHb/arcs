@@ -45,6 +45,31 @@ class ManifestService
     }
 
     /**
+     * Seat number → passenger status for the live gate plane (no names or documents).
+     *
+     * @return array<string, string>
+     */
+    public function seatStates(Flight $flight): array
+    {
+        $rows = Passenger::query()
+            ->join('reservations', 'reservations.id', '=', 'passengers.reservation_id')
+            ->join('seat_assignments', 'seat_assignments.passenger_id', '=', 'passengers.id')
+            ->join('seats', 'seats.id', '=', 'seat_assignments.seat_id')
+            ->where('reservations.flight_id', $flight->id)
+            ->where('passengers.status', '!=', PassengerStatus::Cancelled)
+            ->get(['seats.seat_no', 'passengers.status']);
+
+        $states = [];
+        foreach ($rows as $row) {
+            $states[$row->seat_no] = $row->status instanceof PassengerStatus
+                ? $row->status->value
+                : (string) $row->status;
+        }
+
+        return $states;
+    }
+
+    /**
      * Every passenger on the flight except cancelled ones, with everything the manifest shows
      * eager-loaded, so the page runs a fixed number of queries for any flight size.
      *

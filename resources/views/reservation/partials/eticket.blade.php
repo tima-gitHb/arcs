@@ -1,6 +1,5 @@
 @php
     use App\Services\AllowanceService;
-    use App\Support\Money;
 
     $allowances = app(AllowanceService::class);
 @endphp
@@ -14,11 +13,7 @@
                 <p class="mt-2 text-sm text-gray-500">Give this PNR to the passenger for check-in.</p>
             </div>
             @if ($payment)
-                <div class="rounded-lg bg-[#F7FAFD] px-4 py-3 text-right">
-                    <p class="text-xs uppercase tracking-wide text-gray-500">Amount paid</p>
-                    <p class="mt-1 text-2xl font-semibold text-navy">{{ Money::format($payment->amount_cents) }}</p>
-                    <p class="mt-1 text-xs text-gray-500">USD</p>
-                </div>
+                <x-receipt :payment="$payment" />
             @endif
         </div>
     </div>
@@ -47,18 +42,6 @@
             <div>
                 <dt class="text-gray-500">Contact phone</dt>
                 <dd class="mt-1 font-medium">{{ $reservation->contact_phone }}</dd>
-            </div>
-        @endif
-        @if ($payment)
-            <div class="sm:col-span-2">
-                <dt class="text-gray-500">Payment</dt>
-                <dd class="mt-1 font-medium">
-                    {{ $payment->card_brand }} ••••{{ $payment->card_last4 }}
-                    · reference <span class="font-mono">{{ $payment->gateway_reference }}</span>
-                    @if ($payment->paid_at)
-                        · {{ $payment->paid_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
-                    @endif
-                </dd>
             </div>
         @endif
     </dl>

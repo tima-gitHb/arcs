@@ -68,9 +68,27 @@ class G1ManifestTest extends TestCase
             ->assertSee('data-count="missing">3<', false)
             ->assertSee(route('gate.flights.counts', $this->flight), false);
 
+        // seatPassenger() assigns 1F, 2F, … in creation order (8 checked in, first 5 boarded, 2 booked).
         $this->getJson(route('gate.flights.counts', $this->flight))
             ->assertOk()
-            ->assertExactJson(['checked_in' => 8, 'boarded' => 5, 'missing' => 3, 'status' => 'Boarding']);
+            ->assertExactJson([
+                'checked_in' => 8,
+                'boarded' => 5,
+                'missing' => 3,
+                'status' => 'Boarding',
+                'seats' => [
+                    '1F' => 'Boarded',
+                    '2F' => 'Boarded',
+                    '3F' => 'Boarded',
+                    '4F' => 'Boarded',
+                    '5F' => 'Boarded',
+                    '6F' => 'CheckedIn',
+                    '7F' => 'CheckedIn',
+                    '8F' => 'CheckedIn',
+                    '9F' => 'Booked',
+                    '10F' => 'Booked',
+                ],
+            ]);
     }
 
     public function test_SR45_each_row_shows_who_checked_in_and_boarded_and_when(): void
