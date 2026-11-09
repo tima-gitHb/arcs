@@ -32,11 +32,7 @@ class BagController extends Controller
             return $screen->with('error', $exception->getMessage());
         }
 
-        $message = 'Bag '.$bag->tag_no.' added.';
-
-        return $bag->over_allowance
-            ? $screen->with('success', $message.' It is over the allowance.')
-            : $screen->with('success', $message);
+        return $screen->with('success', 'Bag '.$bag->tag_no.' added.');
     }
 
     public function destroy(Request $request, Bag $bag, BagService $bags): RedirectResponse

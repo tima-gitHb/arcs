@@ -1,18 +1,37 @@
-{{-- Boarding panel (G2, SR-10): Start boarding, then the PNR box while the flight is Boarding.
+{{-- Boarding panel (G2 / G6, SR-10 / SR-62): Start boarding, then the scanner-friendly PNR box.
      Expects $flight, $choosing, $choosingPnr, $confirmingStart. --}}
 <div class="rounded-lg bg-white p-6 shadow-sm">
     <h2 class="text-lg font-semibold text-navy">Board a passenger</h2>
 
     @if ($flight->status === \App\Enums\FlightStatus::Boarding)
-        <form method="POST" action="{{ route('gate.flights.board', $flight) }}" class="mt-3 flex flex-wrap items-end gap-3">
+        @if (session('board_result') === 'ok')
+            <div class="boarded-ok mt-4 rounded-lg border-2 border-green-600 bg-green-50 px-6 py-8 text-center" role="status">
+                <p class="text-6xl font-bold text-green-700" aria-hidden="true">✓</p>
+                <p class="mt-3 text-2xl font-semibold text-green-900">{{ session('boarded_name') }}</p>
+                @if (session('boarded_seat'))
+                    <p class="mt-1 text-xl font-mono text-green-800">Seat {{ session('boarded_seat') }}</p>
+                @else
+                    <p class="mt-1 text-lg text-green-800">Infant · no seat</p>
+                @endif
+            </div>
+        @elseif (session('board_result') === 'fail')
+            <div class="boarded-fail mt-4 rounded-lg border-2 border-red-600 bg-red-50 px-6 py-8 text-center" role="alert">
+                <p class="text-5xl font-bold text-red-700" aria-hidden="true">✗</p>
+                <p class="mt-3 text-xl font-semibold text-red-900">{{ session('error') }}</p>
+            </div>
+        @endif
+
+        <form method="POST" action="{{ route('gate.flights.board', $flight) }}" id="board-scan-form" class="mt-3 flex flex-wrap items-end gap-3">
             @csrf
             <div>
                 <x-input-label for="pnr" value="PNR on the boarding pass" />
-                <x-text-input id="pnr" name="pnr" type="text" maxlength="6" class="mt-1 w-40 font-mono uppercase tracking-[0.2em]"
+                <x-text-input id="pnr" name="pnr" type="text" maxlength="40"
+                    class="mt-1 w-56 font-mono uppercase tracking-[0.15em]"
                     autocomplete="off" autofocus required />
             </div>
             <button type="submit" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">Board</button>
         </form>
+        <p class="mt-2 text-xs text-gray-500">Scan the boarding pass or type the PNR, then Enter.</p>
 
         @if ($choosing && $choosing->count() > 1)
             <div class="mt-4 rounded border border-navy/30 bg-sky-50 p-4">
@@ -38,6 +57,15 @@
                 </ul>
             </div>
         @endif
+
+        <script type="module">
+            // After each scan result, clear the box and put focus back for the next pass (SR-62).
+            const box = document.getElementById('pnr');
+            if (box) {
+                box.value = '';
+                box.focus();
+            }
+        </script>
     @elseif (in_array($flight->status, [\App\Enums\FlightStatus::Closed, \App\Enums\FlightStatus::Departed], true))
         <p class="mt-2 text-sm text-gray-600">Boarding is closed for this flight.</p>
     @else

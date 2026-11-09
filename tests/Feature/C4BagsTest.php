@@ -18,6 +18,8 @@ use App\Models\Seat;
 use App\Models\SeatAssignment;
 use App\Models\TravelDocument;
 use App\Models\User;
+use App\Services\BaggageExcess;
+use App\Services\BagService;
 use App\Services\StatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -39,9 +41,16 @@ class C4BagsTest extends TestCase
         $this->agent = $this->actingAsRole('checkin');
         $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME201']);
 
-        // The M4 allowances.
-        BaggageAllowance::create(['cabin_class' => CabinClass::Economy, 'pieces' => 1, 'max_kg_per_bag' => 23.0]);
-        BaggageAllowance::create(['cabin_class' => CabinClass::Business, 'pieces' => 2, 'max_kg_per_bag' => 32.0]);
+        $this->seedBookingPrices();
+        // C4 uses Economy 1×23 (overrides the seeded 2×23).
+        BaggageAllowance::query()->updateOrCreate(
+            ['cabin_class' => CabinClass::Economy],
+            ['pieces' => 1, 'max_kg_per_bag' => 23.0],
+        );
+        BaggageAllowance::query()->updateOrCreate(
+            ['cabin_class' => CabinClass::Business],
+            ['pieces' => 2, 'max_kg_per_bag' => 32.0],
+        );
     }
 
     private function passenger(CabinClass $cabin = CabinClass::Economy): Passenger
@@ -61,12 +70,9 @@ class C4BagsTest extends TestCase
             ->post(route('checkin.bags.store', $passenger), ['weight_kg' => $kg, 'type' => $type->value]);
     }
 
-    /**
-     * @return array<int, bool> over_allowance per bag, in the order they were added
-     */
-    private function flags(Passenger $passenger): array
+    private function excess(Passenger $passenger): BaggageExcess
     {
-        return $passenger->bags()->orderBy('id')->pluck('over_allowance')->map(fn ($flag) => (bool) $flag)->all();
+        return app(BagService::class)->excess($passenger->fresh());
     }
 
     public function test_SR9_two_bags_get_unique_tags_linked_to_the_passenger(): void
@@ -93,22 +99,30 @@ class C4BagsTest extends TestCase
             ->assertSeeInOrder([$bags[0]->tag_no, '18.0 kg', $bags[1]->tag_no, '23.0 kg']);
     }
 
-    public function test_SR27_economy_second_bag_and_27_kg_bag_are_flagged(): void
+    public function test_SR27_economy_second_bag_and_over_weight_are_pooled(): void
     {
+        // Economy 1×23: 20+15 → 1 extra bag, 0 kg excess (allowed kg expands to 46).
         $passenger = $this->passenger(CabinClass::Economy);
+        $this->addBag($passenger, 20);
+        $this->addBag($passenger, 15);
+        $excess = $this->excess($passenger);
+        $this->assertSame(1, $excess->extraBags);
+        $this->assertSame(0.0, $excess->excessKg);
 
-        $this->addBag($passenger, 20); // 1st piece, within 23 kg
-        $this->addBag($passenger, 15); // 2nd piece: over the 1-piece allowance
-        $this->assertSame([false, true], $this->flags($passenger));
-
+        // 20+30 → 1 extra bag and 4 kg excess (50 − 46).
         $heavy = $this->passenger(CabinClass::Economy);
-        $this->addBag($heavy, 27);    // 1st piece but over 23 kg
-        $this->assertSame([true], $this->flags($heavy));
+        $this->addBag($heavy, 20);
+        $this->addBag($heavy, 30);
+        $excess = $this->excess($heavy);
+        $this->assertSame(1, $excess->extraBags);
+        $this->assertSame(4.0, $excess->excessKg);
 
-        // Flagged, never charged: the bags are accepted and the screen shows the badge.
         $this->get(route('checkin.passengers.show', $heavy))
             ->assertOk()
-            ->assertSee('Over allowance');
+            ->assertSee('Excess baggage', false)
+            ->assertSee('1 extra bag', false)
+            ->assertSee('4 kg excess', false)
+            ->assertDontSee('Over allowance');
     }
 
     public function test_SR27_business_allowance_is_two_bags_of_32_kg(): void
@@ -119,7 +133,9 @@ class C4BagsTest extends TestCase
         $this->addBag($passenger, 32);
         $this->addBag($passenger, 10);
 
-        $this->assertSame([false, false, true], $this->flags($passenger));
+        $excess = $this->excess($passenger);
+        $this->assertSame(1, $excess->extraBags);
+        $this->assertSame(0.0, $excess->excessKg);
     }
 
     public function test_SR43_wheelchair_and_stroller_do_not_count_toward_allowance(): void
@@ -129,9 +145,11 @@ class C4BagsTest extends TestCase
         $this->addBag($passenger, 20);
         $this->addBag($passenger, 15, BagType::Wheelchair);
         $this->addBag($passenger, 9, BagType::Stroller);
-        $this->addBag($passenger, 10); // 2nd counted bag
+        $this->addBag($passenger, 10); // 2nd counted bag → 1 extra piece, weight still within 46 kg
 
-        $this->assertSame([false, false, false, true], $this->flags($passenger));
+        $excess = $this->excess($passenger);
+        $this->assertSame(1, $excess->extraBags);
+        $this->assertSame(0.0, $excess->excessKg);
 
         $wheelchair = $passenger->bags()->where('type', BagType::Wheelchair)->sole();
         $this->assertSame(BagHandling::GateDelivery, $wheelchair->handling);
@@ -143,14 +161,19 @@ class C4BagsTest extends TestCase
         $passenger = $this->passenger(CabinClass::Economy);
         $this->addBag($passenger, 20);
         $this->addBag($passenger, 30);
-        $this->assertSame([false, true], $this->flags($passenger));
+        $excess = $this->excess($passenger);
+        $this->assertSame(1, $excess->extraBags);
+        $this->assertSame(4.0, $excess->excessKg);
 
         $business = Seat::factory()->create([
             'aircraft_id' => $this->flight->aircraft_id, 'seat_no' => '2A', 'cabin_class' => CabinClass::Business,
         ]);
         $this->post(route('checkin.seats.assign', $passenger), ['seat_id' => $business->id])->assertSessionHas('success');
 
-        $this->assertSame([false, false], $this->flags($passenger));
+        $excess = $this->excess($passenger);
+        $this->assertSame(0, $excess->extraBags);
+        $this->assertSame(0.0, $excess->excessKg);
+        $this->assertFalse($excess->hasExcess());
     }
 
     public function test_an_infant_uses_the_cabin_class_of_the_accompanying_adult(): void
@@ -162,7 +185,7 @@ class C4BagsTest extends TestCase
         ]);
 
         $this->addBag($infant, 30); // within Business 32 kg
-        $this->assertSame([false], $this->flags($infant));
+        $this->assertFalse($this->excess($infant)->hasExcess());
     }
 
     public function test_adding_and_removing_a_bag_writes_audit_rows(): void
@@ -194,12 +217,12 @@ class C4BagsTest extends TestCase
         $passenger = $this->passenger(CabinClass::Economy);
         $this->addBag($passenger, 20);
         $this->addBag($passenger, 15);
-        $this->assertSame([false, true], $this->flags($passenger));
+        $this->assertSame(1, $this->excess($passenger)->extraBags);
 
         $this->delete(route('checkin.bags.destroy', $passenger->bags()->orderBy('id')->first()));
 
         // The remaining bag is now the only piece.
-        $this->assertSame([false], $this->flags($passenger));
+        $this->assertFalse($this->excess($passenger)->hasExcess());
     }
 
     public function test_a_bag_can_be_removed_only_before_check_in_is_confirmed(): void

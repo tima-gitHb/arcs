@@ -243,7 +243,10 @@ class B12Sprint2BaseTest extends TestCase
         $bags->add($passenger, 15, BagType::Standard, $agent); // covered by extra_bags
         $bags->add($passenger, 15, BagType::Standard, $agent);
 
-        $this->assertSame([false, false, true], $passenger->bags()->orderBy('id')->pluck('over_allowance')->map(fn ($f) => (bool) $f)->all());
+        // Economy 1 + prepaid extra_bags 1 → 2 pieces; the 3rd bag is one extra piece.
+        $excess = $bags->excess($passenger->fresh());
+        $this->assertSame(1, $excess->extraBags);
+        $this->assertTrue($excess->hasExcess());
     }
 
     public function test_the_migration_backfills_the_class_from_the_seat(): void

@@ -8,6 +8,7 @@
         </div>
     </x-slot>
 
+    <div class="mx-auto grid max-w-7xl gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
     <div class="space-y-6">
         {{-- Header: flight and live counts (SR-11). Counts refresh every 10 s. --}}
         <div class="rounded-lg bg-white p-6 shadow-sm" id="manifest-header" data-counts-url="{{ route('gate.flights.counts', $flight) }}">
@@ -105,9 +106,29 @@
         </div>
     </div>
 
+    <x-seat-map
+        mode="gate"
+        hint="Live seat states. Updates every 10 seconds."
+        data-seats="{{ $seatMap->toJson() }}"
+        data-seat-states="{{ json_encode($seatStates) }}"
+    />
+    </div>
+
     <script type="module">
-        // Refresh the counts every 10 seconds without reloading the page (SR-11).
+        // Refresh the counts and seat colours every 10 seconds without reloading (SR-11).
         const header = document.getElementById('manifest-header');
+        const map = document.getElementById('seat-map');
+        const seats = JSON.parse(map.dataset.seats);
+        const initialStates = JSON.parse(map.dataset.seatStates || '{}');
+
+        window.ArcsSeatMap.draw(map, seats, (seat) => {
+            const status = initialStates[seat.seat_no];
+            const style = status
+                ? window.ArcsSeatMap.statusToStyle(status)
+                : window.ArcsSeatMap.cabinStyle({ ...seat, taken: false });
+
+            return { style, disabled: true };
+        });
 
         async function refreshCounts() {
             try {
@@ -119,6 +140,9 @@
                 ['checked_in', 'boarded', 'missing'].forEach((key) => {
                     header.querySelector(`[data-count="${key}"]`).textContent = counts[key];
                 });
+                if (counts.seats) {
+                    window.ArcsSeatMap.applySeatStates(map, counts.seats);
+                }
             } catch {
                 // Network hiccup: try again at the next tick.
             }

@@ -56,6 +56,15 @@
                         </div>
                     </div>
 
+                    @if ($reservation->passengers->count() > 1)
+                        <div class="flex justify-end border-b border-gray-100 px-4 py-2">
+                            <a href="{{ route('checkin.reservations.group', $reservation) }}"
+                               class="rounded bg-navy px-3 py-1.5 text-sm font-medium text-white hover:bg-navy/90">
+                                Check in all
+                            </a>
+                        </div>
+                    @endif
+
                     <ul class="divide-y divide-gray-100">
                         @foreach ($reservation->passengers as $passenger)
                             <li class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 text-sm">

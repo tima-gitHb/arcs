@@ -7,11 +7,7 @@ Booking confirmed. Give this PNR to the passenger for check-in.
 
 **Departure (Beirut):** {{ $reservation->flight->departure_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
 
-**Amount paid:** {{ \App\Support\Money::format($payment->amount_cents) }}
-
-**Card:** {{ $payment->card_brand }} ••••{{ $payment->card_last4 }}
-
-**Payment reference:** {{ $payment->gateway_reference }}
+<x-receipt :payment="$payment" class="my-4" />
 
 ## Passengers
 

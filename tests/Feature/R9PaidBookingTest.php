@@ -41,6 +41,18 @@ class R9PaidBookingTest extends TestCase
             ->assertSee('and save PNR');
     }
 
+    public function test_booking_page_renders_the_charge_and_save_submit_button(): void
+    {
+        $this->actingAsRole('reservation');
+
+        $this->get(route('reservation.create'))
+            ->assertOk()
+            ->assertSee('type="submit"', false)
+            ->assertSee('id="pay-button-amount"', false)
+            ->assertSee('Charge')
+            ->assertSee('and save PNR');
+    }
+
     public function test_successful_card_creates_booking_with_extras_and_shows_eticket(): void
     {
         Mail::fake();

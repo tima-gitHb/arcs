@@ -115,41 +115,21 @@
                     </div>
                 </div>
 
-                <div class="rounded-lg bg-white p-6 shadow-sm">
-                    <div class="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                            <h2 class="text-lg font-semibold text-navy">Card (read from caller)</h2>
-                            <p class="mt-1 text-sm text-gray-600">Card only · test gateway · number and CVC are never stored</p>
-                        </div>
-                        <span id="card-brand" class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-600">Card</span>
-                    </div>
+                <x-card-form amount-label="$0.00" />
 
-                    <div class="mt-4 grid gap-4 sm:grid-cols-3">
-                        <div class="sm:col-span-2">
-                            <x-input-label for="card_number" value="Card number" />
-                            <x-text-input id="card_number" name="card_number" type="text" class="mt-1 block w-full font-mono tracking-wider"
-                                inputmode="numeric" autocomplete="off" required maxlength="19" placeholder="4242 4242 4242 4242" />
-                            <p class="mt-1 text-xs text-gray-500">Test approve: 4242…4242 · decline: 4000…0002 · expiry e.g. 12/30 · any CVC</p>
-                            <x-input-error :messages="$errors->get('card_number')" class="mt-2" />
-                        </div>
-                        <div>
-                            <x-input-label for="card_expiry" value="Expiry" />
-                            <x-text-input id="card_expiry" name="card_expiry" type="text" class="mt-1 block w-full font-mono"
-                                placeholder="12/30" autocomplete="off" required maxlength="5" />
-                            <p class="mt-1 text-xs text-gray-500">MM/YY · this month or later</p>
-                            <x-input-error :messages="$errors->get('card_expiry')" class="mt-2" />
-                        </div>
-                        <div>
-                            <x-input-label for="card_cvc" value="CVC" />
-                            <x-text-input id="card_cvc" name="card_cvc" type="password" class="mt-1 block w-28 font-mono"
-                                autocomplete="off" required maxlength="4" placeholder="123" />
-                            <x-input-error :messages="$errors->get('card_cvc')" class="mt-2" />
-                        </div>
-                    </div>
+                <div>
+                    <button
+                        type="submit"
+                        class="rounded bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-50"
+                        @disabled($flights->isEmpty() || ! $pricesReady)
+                    >
+                        Charge <span id="pay-button-amount">$0.00</span> and save PNR
+                    </button>
+                    <p class="mt-2 text-sm text-gray-500">Declined card → no PNR created.</p>
                 </div>
             </div>
 
-            <aside class="space-y-4 lg:sticky lg:top-4">
+            <aside class="space-y-4">
                 <x-seat-map hint="Select flight → select passenger → assign a free seat in that cabin.">
                     <x-input-error :messages="$errors->get('seat')" class="mt-3" />
                 </x-seat-map>
@@ -168,15 +148,6 @@
                             <p class="text-xs text-gray-500">USD · fare + prepaid extras</p>
                         </div>
                     </div>
-
-                    <button
-                        type="submit"
-                        class="mt-5 w-full rounded bg-navy px-4 py-3 text-sm font-semibold text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-50"
-                        @disabled($flights->isEmpty() || ! $pricesReady)
-                    >
-                        Charge <span id="pay-button-amount">$0.00</span> and save PNR
-                    </button>
-                    <p class="mt-2 text-center text-xs text-gray-500">Declined card → no PNR created.</p>
                 </div>
             </aside>
         </div>
@@ -348,6 +319,10 @@
             const totalLabel = formatMoney(total);
             document.getElementById('price-total').textContent = totalLabel;
             document.getElementById('pay-button-amount').textContent = totalLabel;
+            const cardAmount = document.getElementById('card-form-amount');
+            if (cardAmount) {
+                cardAmount.textContent = totalLabel;
+            }
         }
 
         function refreshFlightSummary() {
@@ -662,25 +637,6 @@
             refreshAllowances();
             refreshPrice();
             paintMap();
-        });
-
-        const cardNumber = document.getElementById('card_number');
-        const cardExpiry = document.getElementById('card_expiry');
-        const cardBrand = document.getElementById('card-brand');
-
-        cardNumber.addEventListener('input', () => {
-            const digits = cardNumber.value.replace(/\D/g, '').slice(0, 16);
-            cardNumber.value = digits.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
-            const first = digits[0];
-            cardBrand.textContent = first === '4' ? 'Visa' : first === '5' ? 'Mastercard' : 'Card';
-        });
-
-        cardExpiry.addEventListener('input', () => {
-            let value = cardExpiry.value.replace(/\D/g, '').slice(0, 4);
-            if (value.length >= 3) {
-                value = `${value.slice(0, 2)}/${value.slice(2)}`;
-            }
-            cardExpiry.value = value;
         });
 
         reindex();

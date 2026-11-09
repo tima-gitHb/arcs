@@ -2,7 +2,10 @@
 
 use App\Http\Controllers\Checkin\BagController;
 use App\Http\Controllers\Checkin\BoardingPassController;
+use App\Http\Controllers\Checkin\CabinUpgradeController;
 use App\Http\Controllers\Checkin\CheckinController;
+use App\Http\Controllers\Checkin\ExcessPaymentController;
+use App\Http\Controllers\Checkin\GroupCheckInController;
 use App\Http\Controllers\Checkin\SeatController;
 use App\Http\Controllers\Checkin\SpecialServiceController;
 use App\Http\Controllers\Checkin\TravelDocumentController;
@@ -67,10 +70,19 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
     Route::post('/passengers/{passenger}/seat/change', [SeatController::class, 'change'])->name('seats.change');
     Route::post('/passengers/{passenger}/bags', [BagController::class, 'store'])->name('bags.store');
     Route::delete('/bags/{bag}', [BagController::class, 'destroy'])->name('bags.destroy');
+    Route::post('/passengers/{passenger}/excess-payment', [ExcessPaymentController::class, 'store'])->name('excess.pay');
+    Route::get('/passengers/{passenger}/upgrade', [CabinUpgradeController::class, 'create'])->name('passengers.upgrade');
+    Route::post('/passengers/{passenger}/upgrade', [CabinUpgradeController::class, 'store'])->name('passengers.upgrade.store');
     Route::post('/passengers/{passenger}/services', [SpecialServiceController::class, 'store'])->name('services.store');
     Route::delete('/services/{service}', [SpecialServiceController::class, 'destroy'])->name('services.destroy');
     Route::get('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'show'])->name('boarding-pass.show');
     Route::post('/passengers/{passenger}/boarding-pass', [BoardingPassController::class, 'reprint'])->name('boarding-pass.reprint');
+
+    // Group check-in for one PNR (C12 / SR-61).
+    Route::get('/reservations/{reservation}/group', [GroupCheckInController::class, 'show'])->name('reservations.group');
+    Route::post('/reservations/{reservation}/seats', [GroupCheckInController::class, 'assignSeats'])->name('reservations.seats');
+    Route::post('/reservations/{reservation}/confirm-all', [GroupCheckInController::class, 'confirmAll'])->name('reservations.confirm-all');
+    Route::get('/reservations/{reservation}/boarding-passes', [GroupCheckInController::class, 'boardingPasses'])->name('reservations.boarding-passes');
 });
 
 // Gate staff

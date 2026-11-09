@@ -1,8 +1,11 @@
-{{-- Bags card on the check-in screen (C4: SR-9, SR-27, SR-43). Expects $passenger. --}}
+{{-- Bags card on the check-in screen (C4 / C9 / C10: SR-9, SR-43, SR-58, SR-59). Expects $passenger. --}}
 @php
     $bagErrors = $errors->getBag('addBag');
     $canRemove = $passenger->status === \App\Enums\PassengerStatus::Booked;
     $allowance = app(\App\Services\AllowanceService::class)->for($passenger);
+    $excess = app(\App\Services\BagService::class)->excess($passenger);
+    $usedKgLabel = rtrim(rtrim(number_format($excess->kgUsed, 1, '.', ''), '0'), '.');
+    $excessKgLabel = rtrim(rtrim(number_format($excess->excessKg, 1, '.', ''), '0'), '.');
 @endphp
 
 <div class="rounded-lg bg-white p-6 shadow-sm">
@@ -27,6 +30,60 @@
                 </span>
             @endif
         </p>
+        <p class="mt-1 text-sm text-gray-700">
+            Used: {{ $excess->piecesUsed }} {{ $excess->piecesUsed === 1 ? 'piece' : 'pieces' }} / {{ $usedKgLabel }} kg
+        </p>
+        @if ($excess->hasExcess())
+            @php
+                $bagsService = app(\App\Services\BagService::class);
+                $dueCents = $bagsService->excessDueCents($passenger);
+                $paidCents = $bagsService->excessPaidCents($passenger);
+                $receiptPayment = session('excess_payment_id')
+                    ? \App\Models\Payment::query()->find(session('excess_payment_id'))
+                    : \App\Models\Payment::query()
+                        ->where('passenger_id', $passenger->id)
+                        ->where('kind', \App\Enums\PaymentKind::ExcessBaggage)
+                        ->where('status', \App\Enums\PaymentStatus::Succeeded)
+                        ->latest('id')
+                        ->first();
+            @endphp
+            <p class="mt-1 text-sm font-medium text-amber-800">
+                Excess baggage:
+                @if ($excess->extraBags > 0)
+                    {{ $excess->extraBags }} extra bag{{ $excess->extraBags === 1 ? '' : 's' }}
+                @endif
+                @if ($excess->extraBags > 0 && $excess->excessKg > 0) · @endif
+                @if ($excess->excessKg > 0)
+                    {{ $excessKgLabel }} kg excess
+                @endif
+                —
+                @if ($excess->priceIsSet())
+                    {{ \App\Support\Money::format($excess->quote->totalCents) }}
+                    @if ($paidCents > 0)
+                        <span class="text-gray-600">({{ \App\Support\Money::format($paidCents) }} paid)</span>
+                    @endif
+                @else
+                    Price not set
+                @endif
+            </p>
+
+            @if ($dueCents > 0 && $excess->priceIsSet() && $passenger->checkinDetailsEditable())
+                <div class="mt-4 border-t border-gray-100 pt-4">
+                    <p class="mb-3 text-sm font-medium text-navy">Collect payment · {{ \App\Support\Money::format($dueCents) }}</p>
+                    <form method="POST" action="{{ route('checkin.excess.pay', $passenger) }}" autocomplete="off">
+                        @csrf
+                        <x-card-form :amount-cents="$dueCents" title="Collect payment" class="shadow-none border border-amber-200" />
+                        <button type="submit" class="mt-3 rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
+                            Charge {{ \App\Support\Money::format($dueCents) }}
+                        </button>
+                    </form>
+                </div>
+            @elseif ($receiptPayment && $dueCents === 0)
+                <div class="mt-3">
+                    <x-receipt :payment="$receiptPayment" :lines="$excess->quote?->lines ?? []" />
+                </div>
+            @endif
+        @endif
     @endif
 
     @if ($passenger->bags->isEmpty())
@@ -49,9 +106,7 @@
                         <td class="py-2">{{ $bag->weight_kg }} kg</td>
                         <td class="py-2">
                             {{ $bag->type->label() }}
-                            @if ($bag->over_allowance)
-                                <span class="ml-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Over allowance</span>
-                            @elseif (! $bag->type->countsTowardAllowance())
+                            @if (! $bag->type->countsTowardAllowance())
                                 <span class="ml-1 text-xs text-gray-500">(free)</span>
                             @endif
                         </td>
@@ -93,6 +148,6 @@
             </div>
             <button type="submit" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">Add bag</button>
         </form>
-        <p class="mt-2 text-xs text-gray-500">Extra bags are flagged, never charged. Wheelchairs and strollers are free.</p>
+        <p class="mt-2 text-xs text-gray-500">Excess is pooled by weight and pieces. Wheelchairs and strollers are free. Payment of excess is a separate step.</p>
     @endif
 </div>
