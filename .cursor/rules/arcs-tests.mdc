@@ -1,0 +1,18 @@
+---
+description: Rules for writing ARCS feature tests
+globs: tests/**/*.php
+alwaysApply: false
+---
+
+# ARCS tests
+
+- Feature tests in `tests/Feature/<CardId><Name>Test.php`, e.g. `C10WeightPoolingTest.php`.
+- Name each test after its requirement: `test_SR59_two_bags_20_and_26_kg_have_no_excess()`. `pint.json` keeps the method-casing rule off, so do not rename them.
+- One test per acceptance criterion on the card, plus 403 tests for the other roles.
+- Write them first, run them, and show the failing output before any app code.
+- Seat a passenger with `$this->seatPassenger($passenger)` before calling check-in.
+- Use small fixtures, never the full Passport Index CSV (only the one import test reads it).
+- Never weaken an existing assertion to make a test pass. If an existing test must change, ask first and list it.
+- Never use the real clock for windows and departures: use `Carbon::setTestNow()` / `$this->travelTo()`.
+- Assert on rendered cells, not the whole page, when a short value could appear in a CSRF token (e.g. `assertSee('>A1<', false)`).
+- Must pass on both `php artisan test` (SQLite) and `composer test:mysql`.
