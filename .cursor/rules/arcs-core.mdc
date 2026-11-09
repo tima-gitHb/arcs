@@ -1,0 +1,38 @@
+---
+description: ARCS core rules — always apply in this project
+alwaysApply: true
+---
+
+# ARCS · Airport Reservation & Check-in System (Laravel 12, Blade, MySQL)
+
+**Read `CLAUDE.md` at the project root before any task.** It is the single source of truth for the domain rules, shared building blocks, tables and out-of-scope list. If a request conflicts with CLAUDE.md or the BRD (`docs/ARCS_BRD_v1.0.docx`), STOP and ask the user before writing code.
+
+## How every task runs
+1. The user gives a card (e.g. "C9 + C10") and a branch. Check `git branch --show-current` matches it. Never work on `dev` or `main`.
+2. **Tests first**: write the feature tests from the card's acceptance criteria in `tests/Feature/`, run them, show they FAIL, then write the code.
+3. Run `php artisan test`, `composer test:mysql` and `./vendor/bin/pint` before reporting. Run `npm run build` if you touched JS or Blade with new classes.
+4. **Never commit, push or merge** unless the user says "confirmed" / "commit". Then one commit per card, message `Cxx: short description (SR-xx)`.
+5. Report: what changed, tests count, decisions you made, anything you could not do. Ask before guessing on business rules.
+
+## Never
+- Never edit an existing migration. A new migration only after the user agrees (it must be agreed with the team).
+- Never change a status (passenger or flight) outside `StatusService`.
+- Never compute an allowance outside `AllowanceService`, a price outside `FareService`, or take a payment outside `PaymentService`.
+- Never store, log, flash, return or test-print a full card number or CVC. Only brand + last 4 + reference.
+- Never show ISO country codes to staff: use `CountryList` and `<x-country-select>`.
+- Never print a travel document number directly: use `$document->maskedNumberFor(auth()->user())`.
+- Never add a composer or npm package without asking.
+- Never change another module's tests' assertions to make them pass. Setup changes only, and list them.
+- Never touch `.env` or commit secrets.
+
+## Shared building blocks (use, don't rebuild)
+StatusService · CorrectionService (all corrections and document additions, audited) · SeatService + `<x-seat-map>` + `resources/js/seat-map.js` · BagService · BoardingPassService · ManifestService · EntryRequirementChecker (advisory) · AllowanceService · FareService · PaymentService + FakeCardGateway (4242 4242 4242 4242 ok, 4000 0000 0000 0002 declined) · Money formatter · `<x-todays-flights :role="…"/>` · CountryList. Full list in CLAUDE.md.
+
+## Conventions
+- Routes only inside the role's group in `routes/web.php` (reservation / checkin / gate / manager), keep the diff small.
+- Validation in FormRequests; business logic in `app/Services`; controllers stay thin.
+- Money in integer cents. Times in Asia/Beirut.
+- Every state change writes an audit row (who, when, old → new).
+- Lists eager-load to keep a fixed number of queries.
+- Error shown to staff = the service's message as a red flash; success = green flash.
+- Tests: use `$this->seatPassenger($passenger)` before any check-in (Seat required rule). Test names start with the SR: `test_SR59_...`.
