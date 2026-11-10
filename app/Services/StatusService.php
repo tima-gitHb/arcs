@@ -167,6 +167,7 @@ class StatusService
 
     /**
      * Boarding -> Closed. Every CheckedIn passenger becomes NoShow (SR-12).
+     * The Closed step writes a flight audit row before those passenger rows (SR-55).
      * Returns the bags of those passengers, to be offloaded (SR-9).
      *
      * @return Collection<int, Bag>
@@ -180,10 +181,14 @@ class StatusService
                 throw new InvalidStatusChange('Boarding is not open');
             }
 
+            $old = $flight->status->value;
+
             $flight->forceFill([
                 'status' => FlightStatus::Closed,
                 'boarding_closed_at' => now(),
             ])->save();
+
+            AuditEntry::forFlight($flight, 'flight_status', $old, FlightStatus::Closed->value, $by);
 
             $noShows = $flight->passengers()
                 ->where('passengers.status', PassengerStatus::CheckedIn)
@@ -202,10 +207,11 @@ class StatusService
 
     /**
      * Any other flight status move (SR-25). See FLIGHT_MOVES.
+     * After a successful save, writes one flight audit row (SR-55). A refused move writes nothing.
      */
     public function setFlightStatus(Flight $flight, FlightStatus $new, User $by): void
     {
-        DB::transaction(function () use ($flight, $new) {
+        DB::transaction(function () use ($flight, $new, $by) {
             $this->lock($flight);
 
             $allowed = self::FLIGHT_MOVES[$flight->status->value] ?? [];
@@ -220,7 +226,11 @@ class StatusService
                 $this->ensureBagsOffloaded($flight);
             }
 
+            $old = $flight->status->value;
+
             $flight->forceFill(['status' => $new])->save();
+
+            AuditEntry::forFlight($flight, 'flight_status', $old, $new->value, $by);
         });
     }
 

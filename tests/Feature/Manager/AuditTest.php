@@ -95,9 +95,10 @@ class AuditTest extends TestCase
         $entries = $response->viewData('entries');
         $this->assertCount(2, $entries->whereNotNull('passenger_id'));
 
-        // Newest first: boarding (gate), then check-in (check-in).
-        $this->assertSame(['Boarded', 'CheckedIn'], $entries->pluck('new_value')->all());
-        $this->assertSame([$gateAgent->id, $this->checkinAgent->id], $entries->pluck('user_id')->all());
+        // Newest first: boarding (gate), then check-in (check-in). Flight rows are not part of this.
+        $passengers = $entries->whereNotNull('passenger_id');
+        $this->assertSame(['Boarded', 'CheckedIn'], $passengers->pluck('new_value')->all());
+        $this->assertSame([$gateAgent->id, $this->checkinAgent->id], $passengers->pluck('user_id')->all());
     }
 
     public function test_correction_entries_appear_with_field_and_old_and_new_values(): void
@@ -185,10 +186,10 @@ class AuditTest extends TestCase
         $day2 = $this->checkedInPassenger($flightDay2);
 
         $entries = $this->get(route('manager.audit', ['date' => '2026-11-10']))->assertOk()->viewData('entries');
-        $this->assertSame([$day1->id], $entries->pluck('passenger_id')->all());
+        $this->assertSame([$day1->id], $entries->whereNotNull('passenger_id')->pluck('passenger_id')->all());
 
         $entries = $this->get(route('manager.audit', ['date' => '2026-11-11']))->viewData('entries');
-        $this->assertSame([$day2->id], $entries->pluck('passenger_id')->all());
+        $this->assertSame([$day2->id], $entries->whereNotNull('passenger_id')->pluck('passenger_id')->all());
 
         $entries = $this->get(route('manager.audit', ['date' => '2026-11-12']))->viewData('entries');
         $this->assertCount(0, $entries);

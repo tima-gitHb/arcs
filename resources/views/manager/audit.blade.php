@@ -71,6 +71,19 @@
                                 // A price change (fare or fee) belongs to no passenger and no flight. It is told
                                 // by its field ("fare Business Adult", "fee ExtraBag"), not by what is missing.
                                 $isPrice = str_starts_with($entry->field, 'fare ') || str_starts_with($entry->field, 'fee ');
+
+                                // An empty gate is stored as ''. A flight status is stored as its enum value.
+                                $auditValue = function (?string $value) use ($entry): string {
+                                    if ($value === null || $value === '') {
+                                        return '—';
+                                    }
+
+                                    if ($entry->field === 'flight_status') {
+                                        return \App\Enums\FlightStatus::from($value)->label();
+                                    }
+
+                                    return $value;
+                                };
                             @endphp
                             {{-- data-audit-subject says what the row is about: fares, passenger or flight. --}}
                             <td class="px-4 py-2" data-audit-subject="{{ $isPrice ? 'fares' : ($entry->passenger ? 'passenger' : 'flight') }}">
@@ -85,7 +98,7 @@
                             </td>
                             <td class="px-4 py-2">{{ $entry->field }}</td>
                             {{-- A new value has no old one (e.g. a document added): show a dash. --}}
-                            <td class="px-4 py-2">{{ $entry->old_value ?? '—' }} → {{ $entry->new_value }}</td>
+                            <td class="px-4 py-2">{{ $auditValue($entry->old_value) }} → {{ $auditValue($entry->new_value) }}</td>
                             <td class="px-4 py-2">{{ $entry->user->name }}</td>
                         </tr>
                     @empty
