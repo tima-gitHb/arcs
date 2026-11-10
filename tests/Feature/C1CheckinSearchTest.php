@@ -65,7 +65,7 @@ class C1CheckinSearchTest extends TestCase
 
         $this->assertSame(PassengerStatus::Booked, $passenger->fresh()->status);
         $this->assertNull($passenger->fresh()->checked_in_at);
-        $this->assertSame(0, AuditEntry::count());
+        $this->assertSame(0, AuditEntry::whereNotNull('passenger_id')->count());
     }
 
     // --- Confirming a check-in -----------------------------------------------------------

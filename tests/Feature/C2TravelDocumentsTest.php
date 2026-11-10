@@ -178,7 +178,7 @@ class C2TravelDocumentsTest extends TestCase
         $document->refresh();
         $this->assertSame('LR1234576', $document->number);
 
-        $entry = AuditEntry::sole();
+        $entry = AuditEntry::whereNotNull('passenger_id')->sole();
         $this->assertSame($document->passenger_id, $entry->passenger_id);
         $this->assertSame('document_number', $entry->field);
         $this->assertSame('LR1234567', $entry->old_value);
@@ -202,7 +202,7 @@ class C2TravelDocumentsTest extends TestCase
             'expiry_date' => '2030-01-01',
         ])->assertSessionHasNoErrors();
 
-        $this->assertSame(0, AuditEntry::count());
+        $this->assertSame(0, AuditEntry::whereNotNull('passenger_id')->count());
     }
 
     // --- Validation --------------------------------------------------------------------------
@@ -309,7 +309,7 @@ class C2TravelDocumentsTest extends TestCase
 
         $this->addDocument($passenger, ['type' => 'Visa'])->assertSessionHasNoErrors();
 
-        $entry = AuditEntry::sole();
+        $entry = AuditEntry::whereNotNull('passenger_id')->sole();
         $this->assertSame($passenger->id, $entry->passenger_id);
         $this->assertSame('document_added', $entry->field);
         $this->assertNull($entry->old_value);

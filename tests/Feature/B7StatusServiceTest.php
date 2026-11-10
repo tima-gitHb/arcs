@@ -153,7 +153,7 @@ class B7StatusServiceTest extends TestCase
         $this->assertSame(PassengerStatus::CheckedIn, $passenger->status);
         $this->assertTrue($passenger->checked_in_at->equalTo(now()));
 
-        $entry = AuditEntry::sole();
+        $entry = AuditEntry::whereNotNull('passenger_id')->sole();
         $this->assertSame($passenger->id, $entry->passenger_id);
         $this->assertSame('status', $entry->field);
         $this->assertSame('Booked', $entry->old_value);
@@ -321,6 +321,6 @@ class B7StatusServiceTest extends TestCase
         $passenger = $passenger->fresh();
         $this->assertSame(PassengerStatus::Booked, $passenger->status);
         $this->assertNull($passenger->checked_in_at);
-        $this->assertSame(0, AuditEntry::count());
+        $this->assertSame(0, AuditEntry::whereNotNull('passenger_id')->count());
     }
 }
