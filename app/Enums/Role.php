@@ -58,6 +58,7 @@ enum Role: string
                 'Rules and allowances' => 'manager.rules',
                 'Fares and fees' => 'manager.fares',
                 'Sales per flight' => 'manager.sales',
+                'Payments' => 'manager.payments',
                 'Audit log' => 'manager.audit',
             ],
         };

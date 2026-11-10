@@ -22,6 +22,7 @@ use App\Http\Controllers\Manager\DashboardController;
 use App\Http\Controllers\Manager\FareController;
 use App\Http\Controllers\Manager\FlightController;
 use App\Http\Controllers\Manager\FlightListController;
+use App\Http\Controllers\Manager\PaymentReportController;
 use App\Http\Controllers\Manager\RuleController;
 use App\Http\Controllers\Manager\SalesController;
 use App\Http\Controllers\ProfileController;
@@ -120,6 +121,7 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::get('/fares', [FareController::class, 'index'])->name('fares');
     Route::put('/fares', [FareController::class, 'update'])->name('fares.update');
     Route::get('/sales', [SalesController::class, 'index'])->name('sales');
+    Route::get('/payments', [PaymentReportController::class, 'index'])->name('payments');
     Route::get('/audit', [AuditController::class, 'index'])->name('audit');
 });
 
