@@ -9,9 +9,11 @@ use App\Http\Requests\Manager\StoreFlightRequest;
 use App\Http\Requests\Manager\UpdateFlightGateRequest;
 use App\Http\Requests\Manager\UpdateFlightStatusRequest;
 use App\Models\Aircraft;
+use App\Models\AuditEntry;
 use App\Models\Flight;
 use App\Services\StatusService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class FlightController extends Controller
@@ -56,11 +58,24 @@ class FlightController extends Controller
     }
 
     /**
-     * An empty gate clears it (SR-42).
+     * An empty gate clears it (SR-42). A real change is recorded on the flight (SR-55).
      */
     public function updateGate(UpdateFlightGateRequest $request, Flight $flight): RedirectResponse
     {
-        $flight->update(['gate' => $request->validated('gate')]);
+        $new = $request->validated('gate');
+
+        DB::transaction(function () use ($flight, $new, $request) {
+            $old = $flight->gate;
+
+            if ($old === $new) {
+                return;
+            }
+
+            $flight->update(['gate' => $new]);
+
+            // The audit column cannot store null. A cleared gate is an empty string, shown as a dash.
+            AuditEntry::forFlight($flight, 'gate', $old, $new ?? '', $request->user());
+        });
 
         return redirect()->route('manager.flights')
             ->with('success', "Gate for {$flight->flight_no} saved.");

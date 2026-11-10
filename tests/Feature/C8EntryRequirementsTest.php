@@ -287,7 +287,7 @@ class C8EntryRequirementsTest extends TestCase
         $this->get(route('checkin.passengers.show', [$passenger, 'check_entry' => 1]))->assertOk();
 
         $this->assertSame(PassengerStatus::Booked, $passenger->fresh()->status);
-        $this->assertSame(0, AuditEntry::count());
+        $this->assertSame(0, AuditEntry::whereNotNull('passenger_id')->count());
     }
 
     // --- Acknowledgement at Confirm check-in ---------------------------------------------------
@@ -306,7 +306,7 @@ class C8EntryRequirementsTest extends TestCase
 
         $this->assertSame(PassengerStatus::Booked, $passenger->fresh()->status);
         $this->assertSame(0, $passenger->boardingPasses()->count());
-        $this->assertSame(0, AuditEntry::count());
+        $this->assertSame(0, AuditEntry::whereNotNull('passenger_id')->count());
     }
 
     public function test_SR49_with_a_reason_check_in_succeeds_and_the_audit_row_has_reason_and_result(): void

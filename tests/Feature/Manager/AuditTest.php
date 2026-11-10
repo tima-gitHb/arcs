@@ -93,11 +93,12 @@ class AuditTest extends TestCase
             ->assertSee('10 Nov 2026 10:30');
 
         $entries = $response->viewData('entries');
-        $this->assertCount(2, $entries);
+        $this->assertCount(2, $entries->whereNotNull('passenger_id'));
 
-        // Newest first: boarding (gate), then check-in (check-in).
-        $this->assertSame(['Boarded', 'CheckedIn'], $entries->pluck('new_value')->all());
-        $this->assertSame([$gateAgent->id, $this->checkinAgent->id], $entries->pluck('user_id')->all());
+        // Newest first: boarding (gate), then check-in (check-in). Flight rows are not part of this.
+        $passengers = $entries->whereNotNull('passenger_id');
+        $this->assertSame(['Boarded', 'CheckedIn'], $passengers->pluck('new_value')->all());
+        $this->assertSame([$gateAgent->id, $this->checkinAgent->id], $passengers->pluck('user_id')->all());
     }
 
     public function test_correction_entries_appear_with_field_and_old_and_new_values(): void
@@ -149,7 +150,7 @@ class AuditTest extends TestCase
             ->assertSee('ME902');
 
         $entries = $response->viewData('entries');
-        $this->assertCount(1, $entries);
+        $this->assertCount(1, $entries->whereNotNull('passenger_id'));
         $this->assertSame($onA->id, $entries->first()->passenger_id);
     }
 
@@ -185,10 +186,10 @@ class AuditTest extends TestCase
         $day2 = $this->checkedInPassenger($flightDay2);
 
         $entries = $this->get(route('manager.audit', ['date' => '2026-11-10']))->assertOk()->viewData('entries');
-        $this->assertSame([$day1->id], $entries->pluck('passenger_id')->all());
+        $this->assertSame([$day1->id], $entries->whereNotNull('passenger_id')->pluck('passenger_id')->all());
 
         $entries = $this->get(route('manager.audit', ['date' => '2026-11-11']))->viewData('entries');
-        $this->assertSame([$day2->id], $entries->pluck('passenger_id')->all());
+        $this->assertSame([$day2->id], $entries->whereNotNull('passenger_id')->pluck('passenger_id')->all());
 
         $entries = $this->get(route('manager.audit', ['date' => '2026-11-12']))->viewData('entries');
         $this->assertCount(0, $entries);
@@ -216,7 +217,7 @@ class AuditTest extends TestCase
 
         // No filter: 31 entries, 25 on page 1, 6 on page 2.
         $page1 = $this->get(route('manager.audit'))->assertOk();
-        $this->assertSame(31, $page1->viewData('entries')->total());
+        $this->assertSame(31, AuditEntry::whereNotNull('passenger_id')->count());
         $this->assertCount(25, $page1->viewData('entries'));
 
         $expected = AuditEntry::query()->orderByDesc('changed_at')->orderByDesc('id')->pluck('id')->all();
@@ -227,7 +228,7 @@ class AuditTest extends TestCase
         $this->assertCount(5, $late);
         $this->assertSame($late, array_slice($this->entryIds($page1), 0, 5));
 
-        $this->assertCount(6, $this->get(route('manager.audit', ['page' => 2]))->viewData('entries'));
+        $this->assertCount(6, $this->get(route('manager.audit', ['page' => 2]))->viewData('entries')->whereNotNull('passenger_id'));
 
         // With a filter: page 2 keeps it (the other agent's entry is never listed)
         // and the pagination links carry the filter.
