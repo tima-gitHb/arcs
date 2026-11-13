@@ -8,6 +8,8 @@ use App\Enums\PassengerType;
 use App\Exceptions\FareNotFound;
 use App\Models\Fare;
 use App\Models\Fee;
+use App\Models\Passenger;
+use App\Models\Reservation;
 
 /**
  * The only place to compute a price. It reads the fares and fees tables, so changing a
@@ -20,16 +22,21 @@ class FareService
     /**
      * @param  list<array{cabin_class: CabinClass, type: PassengerType}>  $passengers
      * @param  array{extra_bags?: int, extra_kg?: int, fees?: list<FeeCode>}  $extras
+     * @param  int  $flights  flights in the journey (B13b): the class/type fare is charged per flight,
+     *                        so the journey price is the sum of each segment's fare (SR-69). Extras once.
+     * @param  string|null  $origin  with $destination: the route's fare when it has one, else the default
+     *                               (SR-69). Without a route: the default fare, as before B13b.
      */
-    public function quote(array $passengers, array $extras = []): Quote
+    public function quote(array $passengers, array $extras = [], int $flights = 1, ?string $origin = null, ?string $destination = null): Quote
     {
         $lines = [];
+        $flights = max(1, $flights);
 
         foreach ($this->groupPassengers($passengers) as $group) {
             $lines[] = $this->line(
-                "{$group['cabin_class']->label()} {$group['type']->label()} fare",
-                $group['quantity'],
-                $this->fareCents($group['cabin_class'], $group['type']),
+                "{$group['cabin_class']->label()} {$group['type']->label()} fare".($flights > 1 ? " × {$flights} flights" : ''),
+                $group['quantity'] * $flights,
+                $this->fareCents($group['cabin_class'], $group['type'], $origin, $destination),
             );
         }
 
@@ -67,9 +74,39 @@ class FareService
         return array_values($groups);
     }
 
-    private function fareCents(CabinClass $cabin, PassengerType $type): int
+    /**
+     * The price of a journey (B13b, SR-69): for every flight, each passenger's fare on that route (the
+     * route fare, else the default), added up. One line per flight and class/type. No extras.
+     */
+    public function journeyQuote(Reservation $reservation): Quote
     {
-        $cents = Fare::query()->where('cabin_class', $cabin)->where('passenger_type', $type)->value('amount_cents');
+        $reservation->loadMissing(['segments.flight', 'passengers']);
+        $passengers = $reservation->passengers
+            ->map(fn (Passenger $passenger) => [
+                'cabin_class' => $passenger->cabin_class ?? CabinClass::Economy,
+                'type' => $passenger->type,
+            ])
+            ->all();
+
+        $lines = [];
+        foreach ($reservation->segments as $segment) {
+            $flight = $segment->flight;
+
+            foreach ($this->quote($passengers, origin: $flight->origin, destination: $flight->destination)->lines as $line) {
+                $lines[] = ['label' => "{$flight->origin}→{$flight->destination} {$flight->flight_no}: {$line['label']}"] + $line;
+            }
+        }
+
+        return new Quote($lines, array_sum(array_column($lines, 'amount_cents')), self::CURRENCY);
+    }
+
+    private function fareCents(CabinClass $cabin, PassengerType $type, ?string $origin = null, ?string $destination = null): int
+    {
+        $fares = Fare::query()->where('cabin_class', $cabin)->where('passenger_type', $type);
+
+        $cents = ($origin !== null && $destination !== null
+            ? (clone $fares)->forRoute($origin, $destination)->value('amount_cents')
+            : null) ?? $fares->defaults()->value('amount_cents');
 
         if ($cents === null) {
             throw new FareNotFound(

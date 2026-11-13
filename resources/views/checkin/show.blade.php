@@ -4,7 +4,8 @@
     </x-slot>
 
     @php
-        $flight = $passenger->reservation->flight;
+        // The flight this screen is about (B13b: the first of the agent's direction, or ?flight=).
+        $flight ??= $passenger->reservation->flight;
         $currentSeat = $passenger->seatAssignment?->seat;
         $picking = $passenger->status === \App\Enums\PassengerStatus::Booked
             && $passenger->type !== \App\Enums\PassengerType::Infant;
@@ -51,6 +52,27 @@
                     </div>
                 @endif
             </dl>
+
+            @if (isset($journeyFlights) && $journeyFlights->count() > 1)
+                {{-- A connection (B13b): check-in covers every flight below; each needs a seat. --}}
+                <div class="mt-4 border-t border-gray-100 pt-4" data-journey>
+                    <p class="text-sm text-gray-500">
+                        Connection to {{ $journeyFlights->last()->destination }}: check-in covers every flight, bags go to {{ $journeyFlights->last()->destination }}.
+                    </p>
+                    <ul class="mt-2 space-y-1 text-sm">
+                        @foreach ($journeyFlights as $leg)
+                            <li @class(['font-medium text-navy' => $leg->is($flight)])>
+                                {{ $leg->flight_no }} · {{ $leg->origin }} → {{ $leg->destination }},
+                                <x-local-time :at="$leg->departure_at" :airport="$leg->origin" format="d M H:i" />
+                                · Seat {{ $seatsByFlight->get($leg->id)?->seat?->seat_no ?? 'none' }}
+                                @unless ($leg->is($flight))
+                                    <a href="{{ route('checkin.passengers.show', [$passenger, 'flight' => $leg->id]) }}" class="ml-1 text-navy hover:underline">Seat on {{ $leg->flight_no }}</a>
+                                @endunless
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
         </div>
 
         <div class="rounded-lg bg-white p-6 shadow-sm">
@@ -146,7 +168,7 @@
 
         @if (in_array($passenger->status, [\App\Enums\PassengerStatus::Booked, \App\Enums\PassengerStatus::CheckedIn], true)
             && $passenger->type !== \App\Enums\PassengerType::Infant
-            && ! $passenger->reservation->flight->isBoardingClosed())
+            && ! $flight->isBoardingClosed())
             <div class="rounded-lg bg-white p-4 shadow-sm">
                 <a href="{{ route('checkin.passengers.upgrade', $passenger) }}"
                    class="inline-block rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy hover:text-white">

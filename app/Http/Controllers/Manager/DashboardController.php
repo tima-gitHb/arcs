@@ -23,23 +23,26 @@ class DashboardController extends Controller
             ->orderBy('departure_at')
             ->get();
 
-        // [flight_id => [status => number of passengers]], counted by the database.
-        $passengerCounts = DB::table('passengers')
-            ->join('reservations', 'reservations.id', '=', 'passengers.reservation_id')
-            ->whereIn('reservations.flight_id', $flights->modelKeys())
-            ->select('reservations.flight_id', 'passengers.status', DB::raw('count(*) as total'))
-            ->groupBy('reservations.flight_id', 'passengers.status')
+        // [flight_id => [status => number of passengers]], counted by the database: one coupon
+        // per passenger per flight (B13b), so connecting passengers count on each of their flights.
+        $passengerCounts = DB::table('coupons')
+            ->whereIn('coupons.flight_id', $flights->modelKeys())
+            ->select('coupons.flight_id', 'coupons.status', DB::raw('count(*) as total'))
+            ->groupBy('coupons.flight_id', 'coupons.status')
             ->get()
             ->groupBy('flight_id')
             ->map(fn ($rows) => $rows->pluck('total', 'status'));
 
-        // [flight_id => number of bags]. A bag belongs to a passenger, who belongs to a reservation.
+        // [flight_id => number of bags]. A bag travels on every flight of its direction (B13b, SR-67):
+        // the passenger's coupons in that direction.
         $bagCounts = DB::table('bags')
-            ->join('passengers', 'passengers.id', '=', 'bags.passenger_id')
-            ->join('reservations', 'reservations.id', '=', 'passengers.reservation_id')
-            ->whereIn('reservations.flight_id', $flights->modelKeys())
-            ->select('reservations.flight_id', DB::raw('count(*) as total'))
-            ->groupBy('reservations.flight_id')
+            ->join('coupons', 'coupons.passenger_id', '=', 'bags.passenger_id')
+            ->join('reservation_segments', fn ($join) => $join
+                ->on('reservation_segments.id', '=', 'coupons.reservation_segment_id')
+                ->on('reservation_segments.direction', '=', 'bags.direction'))
+            ->whereIn('coupons.flight_id', $flights->modelKeys())
+            ->select('coupons.flight_id', DB::raw('count(*) as total'))
+            ->groupBy('coupons.flight_id')
             ->pluck('total', 'flight_id');
 
         $rows = $flights->map(function (Flight $flight) use ($passengerCounts, $bagCounts) {

@@ -15,6 +15,7 @@ class GateOverride extends Model
      */
     protected $fillable = [
         'passenger_id',
+        'coupon_id',
         'approved_by',
         'reason',
         'approved_at',
@@ -28,6 +29,11 @@ class GateOverride extends Model
         return [
             'approved_at' => 'datetime',
         ];
+    }
+
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     public function passenger(): BelongsTo

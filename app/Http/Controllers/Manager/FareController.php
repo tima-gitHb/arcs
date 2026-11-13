@@ -20,7 +20,8 @@ class FareController extends Controller
     public function index(): View
     {
         // Prices are stored in cents; the form shows plain dollars ("187.50") so it can be posted back as typed.
-        $fares = Fare::all()->mapWithKeys(fn (Fare $fare) => [
+        // The default fares; route fares get their own page (card M14).
+        $fares = Fare::query()->defaults()->get()->mapWithKeys(fn (Fare $fare) => [
             strtolower($fare->cabin_class->value).'.'.strtolower($fare->passenger_type->value) => $this->dollars($fare->amount_cents),
         ]);
 
@@ -48,7 +49,7 @@ class FareController extends Controller
         DB::transaction(function () use ($data, &$changed) {
             foreach (CabinClass::cases() as $cabin) {
                 foreach (PassengerType::cases() as $type) {
-                    $fare = Fare::where('cabin_class', $cabin)->where('passenger_type', $type)->firstOrFail();
+                    $fare = Fare::query()->defaults()->where('cabin_class', $cabin)->where('passenger_type', $type)->firstOrFail();
                     $typed = $data['fares'][strtolower($cabin->value)][strtolower($type->value)];
 
                     $changed += $this->save($fare, $typed, "fare {$cabin->label()} {$type->label()}");

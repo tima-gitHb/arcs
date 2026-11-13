@@ -1,6 +1,6 @@
 # B13b — Segments and coupons (design, Phase 1)
 
-Status: **draft for approval**. No code is written until it is approved.
+Status: **approved** (decisions recorded below, 13 Nov 2026). Phase 2 in progress.
 
 Goal: a reservation holds one or more flights in order: one-way (BEY→CDG), connection (BEY→IST→CDG),
 round trip (BEY→CDG, later CDG→BEY). What is per flight today (status, seat, boarding pass, check-in/boarded
@@ -13,16 +13,23 @@ multi-flight journeys use coupons.
 
 ---
 
-## 0. Scope conflict to resolve first
+## 0. Scope and decisions (approved)
 
-CLAUDE.md says "no connecting flights" (What ARCS is) and lists **connecting flights** as out of scope.
-B13b builds exactly that. Before Phase 2 the team lead must confirm the scope change (and the client, since the
-BRD has no SR for it). If confirmed, Phase 2 updates CLAUDE.md: remove "connecting flights" from out of scope,
-add the journey rules below. Transit visas stay out of scope (already stated).
-
-New SR numbers are needed for the tests. Proposed (please confirm or renumber): **SR-60** journey rules
-(connect, minimum connection, return after outbound), **SR-61** check-in of a whole direction,
-**SR-62** bags tagged to the final destination, **SR-63** entry check on the final destination only.
+- **Scope**: connections and round trips are an agreed client change request. CLAUDE.md no longer lists
+  "connecting flights" as out of scope and describes segments. Transit visas stay out of scope.
+- **SR numbers** (SR-49 to SR-64 are taken, so B13b continues at SR-65):
+  **SR-65** journey rules (segments connect, minimum connection, return after outbound);
+  **SR-66** check-in of a whole direction at its origin, boarding per flight, the return stays Booked;
+  **SR-67** bags tagged to the final destination of the direction, allowance from the booked class on connections;
+  **SR-68** entry check on the final destination of the direction only;
+  **SR-69** journey price = the sum of each flight's fare (FareService only).
+- **Fares**: per flight; journey price = sum of each segment's fare. Only `FareService` computes it.
+- **Allowance**: a one-flight direction keeps today's rule (seat cabin first, then booked class); a connection uses
+  the booked class. The C13 upgrade tests stay green unchanged.
+- **No-show on a connection**: not in B13b (card G7). `StatusService` gets the building block G7 needs
+  (`cancelLaterCoupons()`, see d), but `closeBoarding()` only touches coupons on its own flight.
+- **Booking screen**: not in B13b (card R11). B13b keeps the existing pages working; the seeder creates one
+  BEY→IST→CDG connection and one BEY→CDG→BEY round trip for demos and tests.
 
 ---
 
@@ -104,9 +111,11 @@ Optional parameters keep every existing call valid. `Coupon` is the new model.
 - `board(Passenger $p, User $by): void` → `board(Passenger $p, User $by, ?Flight $flight = null): void`
   — boards only the coupon on `$flight` (null = the reservation's first flight, old behaviour). Gate controllers
   pass the manifest's flight.
-- `closeBoarding(Flight $flight, User $by)` — unchanged signature: CheckedIn coupons **on this flight** → NoShow;
-  later coupons of the same direction → NoShow as well (the passenger is not travelling on; their bags were
-  checked through and come off here). Returns the bags to offload.
+- `closeBoarding(Flight $flight, User $by)` — unchanged signature: CheckedIn coupons **on this flight** → NoShow,
+  as today. Later coupons of the direction are not touched in B13b (card G7).
+- New `cancelLaterCoupons(Coupon $coupon, User $by): Collection<Coupon>` — Booked or CheckedIn coupons after
+  `$coupon` in the same direction → Cancelled, seats released, one audit row each. Built and tested in B13b so G7
+  can call it from `closeBoarding()`; nothing calls it yet.
 - `setFlightStatus`, `ensureBagsOffloaded`, `allowedFlightMoves` — unchanged signatures, queries on coupons.
 - `changePassengerStatus(...)` (private) → `changeCouponStatus(Coupon $c, PassengerStatus $new, User $by, array $extra = [])`;
   the audit row gets `passenger_id`, `flight_id`, `coupon_id`.
@@ -141,17 +150,17 @@ Optional parameters keep every existing call valid. `Coupon` is the new model.
 Fixed query counts are kept (eager load `coupons` filtered to the flight).
 
 **AllowanceService** — `for(Passenger)` → `for(Passenger, ?SegmentDirection $direction = null)`.
-Decision needed (see §Questions 3): today the class is the **seat's** class, else the booked class. Proposal:
-one-flight direction = unchanged (seat first); multi-flight direction = **booked class** (seats may be in
-different cabins on each flight).
+Decided: a one-flight direction is unchanged (seat's class first, then booked class); a multi-flight direction
+uses the **booked class** (seats may be in different cabins on each flight) — SR-67.
 
 **EntryRequirementChecker** — `check(Passenger)` → `check(Passenger, ?SegmentDirection $direction = null)`:
 destination country = **final destination** of the direction only (BEY→IST→CDG checks France, not Turkey);
 document validity on the first flight's departure date. Transit rules stay out of scope.
 
-**FareService** — `quote(array $passengers, array $extras = [])` → `+ int $flights = 1`. Decision needed
-(§Questions 2): proposal = the class/type fare **per flight** (the `fares` table has no route), extras once per
-booking.
+**FareService** — `quote(array $passengers, array $extras = [])` → `+ int $flights = 1`. Decided: the
+class/type fare is charged **per flight** (the `fares` table has no route), so the journey price is the sum of each
+segment's fare; one fare line per class and type with quantity = passengers × flights; extras once per booking
+— SR-69.
 
 **ReservationService** — `create(Flight $flight, …)` → `create(Flight|Journey $journey, …)`; a `Flight` is a
 one-way journey (old behaviour). Seats chosen at booking apply to the flight they were picked for.
@@ -177,7 +186,7 @@ booking). A `Flight` parameter is unchanged.
 
 - Entry check: final destination of the direction only. BEY→IST→CDG on a Lebanese passport checks France
   (visa required); Turkey is not checked.
-- Allowance: from the booked class (see §Questions 3 for the one-flight case).
+- Allowance: a connection uses the booked class; a one-flight direction keeps today's rule (SR-67).
 
 ## g) Seeder
 
@@ -190,7 +199,7 @@ flight (real block times: BEY–CDG 4h45, CDG–BEY 4h15, BEY–LHR 5h05, BEY–
 - **Round trip BEY→CDG→BEY**: outbound on ME201 (existing), return on a new ME204 CDG→BEY in 3 days. 2 passengers
   Booked on both directions.
 
-## h) Existing tests I expect to change (each needs your approval)
+## h) Existing tests I expect to change (approved: B8 and SalesTest 342–343; any other is asked first)
 
 With the compatibility layer most tests should not change. Expected:
 
@@ -200,7 +209,7 @@ With the compatibility layer most tests should not change. Expected:
 | `B8SeedersTest` lines 126, 138, 190, 200, 206 | Query `passengers.status`, a column that is dropped: change to the coupon status (`whereHas('coupons', …)`). Same assertions. |
 | `Manager/SalesTest` lines 342–343 | Same: `where('passengers.status', …)`. |
 | `B3ModelsTest::test_mass_assigning_passenger_status_is_ignored` | Probably unchanged (reads go through the accessor); listed in case the column drop changes `Passenger::create` with unknown attributes. |
-| `B13aStationsTimeTest::test_seeded_paris_demo…` | Only if passenger counts per station change with the new seed data. |
+| `B13aStationsTimeTest::test_seeded_paris_demo…` | Only if passenger counts per station change with the new seed data (not approved: will ask). |
 
 Tests that create `SeatAssignment`/`GateOverride` rows directly (B7, B12, C3, C13: 9 places) are expected to stay
 unchanged: a `creating` hook fills `coupon_id` from passenger + flight. If any of them still fail, I will list the
@@ -214,24 +223,16 @@ the airport's local time with `<x-local-time>`".
 
 ---
 
-## Acceptance tests for Phase 2 (written first, `B13bSegmentsTest`)
+## Acceptance tests for Phase 2 (written first, `tests/Feature/B13bSegmentsTest.php`)
 
-- `test_SR60_a_30_minute_connection_at_IST_is_refused` / `..._90_minutes_is_accepted`
-- `test_SR60_segments_must_connect` / `test_SR60_return_departs_after_outbound_arrives`
-- `test_SR61_check_in_at_BEY_checks_in_both_outbound_coupons`
-- `test_SR10_boarding_at_BEY_boards_only_that_flights_coupon`
-- `test_SR61_round_trip_return_stays_booked_after_outbound_is_boarded`
-- `test_SR63_entry_check_for_BEY_IST_CDG_checks_France_only`
-- `test_SR62_bags_are_tagged_to_the_final_destination`
-- `test_existing_data_becomes_one_segment_and_one_coupon_per_passenger` (migration test)
+- `test_SR65_a_30_minute_connection_at_IST_is_refused` / `test_SR65_a_90_minute_connection_at_IST_is_accepted`
+- `test_SR65_segments_must_connect` / `test_SR65_return_departs_after_outbound_arrives`
+- `test_SR66_check_in_at_BEY_checks_in_both_outbound_coupons`
+- `test_SR66_boarding_at_BEY_boards_only_that_flights_coupon`
+- `test_SR66_round_trip_return_stays_booked_after_outbound_is_boarded`
+- `test_SR67_bags_are_tagged_to_the_final_destination` / `test_SR67_a_connection_uses_the_booked_class_allowance`
+- `test_SR68_entry_check_for_BEY_IST_CDG_checks_France_only`
+- `test_SR69_journey_price_is_the_sum_of_each_flights_fare`
+- `test_existing_data_becomes_one_segment_and_one_coupon_per_passenger` (migration)
 - `test_old_single_flight_reservations_work_as_before` (plus the whole existing suite)
-
-## Questions for you
-
-1. **Scope**: confirm connecting flights move into scope (CLAUDE.md + client), and the SR numbers 60–63.
-2. **Fares**: fare per flight (proposal) or one fare per journey?
-3. **Allowance**: keep "seat's class first" for one-flight directions and use the booked class for multi-flight
-   (proposal), or switch everything to the booked class (changes C13 upgrade tests)?
-4. **No-show on a connection**: also mark the later coupons of that direction NoShow (proposal)?
-5. **Booking screen**: B13b delivers the data model, services, seeder and the pages that must change to keep
-   working. Choosing a connection or a return on the reservation screen is a separate card. OK?
+- `test_cancel_later_coupons_cancels_the_rest_of_the_direction` (building block for G7)

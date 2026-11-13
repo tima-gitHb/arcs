@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Manager;
 use App\Http\Controllers\Controller;
 use App\Models\Bag;
 use App\Models\Flight;
+use App\Models\Passenger;
 use App\Models\SpecialService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
@@ -56,11 +57,24 @@ class FlightListController extends Controller
      */
     private function passengers(Flight $flight)
     {
+        // Through the flight's coupons (B13b): connecting passengers too, each with this flight's
+        // status, seat and "who did it".
         return $flight->passengers()
-            ->with(['reservation', 'seatAssignment.seat', 'checkedInBy.user', 'boardedBy.user'])
+            ->with([
+                'reservation',
+                'coupon' => fn ($query) => $query->where('coupons.flight_id', $flight->id),
+                'coupon.checkedInBy.user',
+                'coupon.boardedBy.user',
+                'seatAssignment' => fn ($query) => $query->where('seat_assignments.flight_id', $flight->id),
+                'seatAssignment.seat',
+            ])
             ->orderBy('passengers.last_name')
             ->orderBy('passengers.first_name')
-            ->get();
+            ->get()
+            ->each(function (Passenger $passenger) {
+                $passenger->setRelation('checkedInBy', $passenger->coupon?->checkedInBy);
+                $passenger->setRelation('boardedBy', $passenger->coupon?->boardedBy);
+            });
     }
 
     /**
@@ -71,7 +85,13 @@ class FlightListController extends Controller
      */
     private function baggage(Flight $flight): array
     {
-        $bags = Bag::whereHas('passenger.reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id))
+        // A bag is on every flight of its direction (B13b, SR-67).
+        $bags = Bag::whereExists(fn ($coupons) => $coupons
+            ->from('coupons')
+            ->join('reservation_segments', 'reservation_segments.id', '=', 'coupons.reservation_segment_id')
+            ->whereColumn('coupons.passenger_id', 'bags.passenger_id')
+            ->whereColumn('reservation_segments.direction', 'bags.direction')
+            ->where('coupons.flight_id', $flight->id))
             ->with('passenger')
             ->orderBy('tag_no')
             ->get();
@@ -88,7 +108,7 @@ class FlightListController extends Controller
      */
     private function services(Flight $flight)
     {
-        return SpecialService::whereHas('passenger.reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id))
+        return SpecialService::whereHas('passenger.coupons', fn ($coupon) => $coupon->where('coupons.flight_id', $flight->id))
             ->with('passenger')
             ->get()
             ->sortBy(fn (SpecialService $service) => $service->passenger->last_name.' '.$service->passenger->first_name)

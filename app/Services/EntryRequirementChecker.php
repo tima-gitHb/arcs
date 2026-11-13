@@ -4,9 +4,9 @@ namespace App\Services;
 
 use App\Enums\DocumentType;
 use App\Enums\EntryStatus;
+use App\Enums\SegmentDirection;
 use App\Models\Airport;
 use App\Models\EntryRule;
-use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\TravelDocument;
 use Illuminate\Support\Collection;
@@ -29,11 +29,17 @@ class EntryRequirementChecker
 
     private const DOCUMENT_NEEDED = ['e-visa', 'eta', 'visa required'];
 
-    public function __construct(private CountryList $countries) {}
+    public function __construct(private CountryList $countries, private JourneyService $journeys) {}
 
-    public function check(Passenger $passenger): EntryResult
+    /**
+     * Entry into the final destination of the direction only (SR-68): BEY→IST→CDG checks France,
+     * not Turkey (transit rules are out of scope). Direction: null = the passenger's current one.
+     */
+    public function check(Passenger $passenger, ?SegmentDirection $direction = null): EntryResult
     {
-        $flight = $passenger->reservation->flight;
+        $direction ??= $this->journeys->directionOf($passenger);
+        $flight = $this->journeys->flightsOf($passenger->reservation, $direction)->first() ?? $passenger->reservation->flight;
+        $destination = $this->journeys->finalDestination($passenger->reservation, $direction);
 
         // Valid means not expired on the departure date.
         $departure = $flight->departureDate();
@@ -47,7 +53,7 @@ class EntryRequirementChecker
         }
 
         // Two valid passports: the one that allows entry counts.
-        $results = $passports->map(fn ($passport) => $this->checkPassport($passport->issuing_country, $flight, $documents));
+        $results = $passports->map(fn ($passport) => $this->checkPassport($passport->issuing_country, $destination, $documents));
 
         return $results->first(fn (EntryResult $result) => $result->status === EntryStatus::Ok) ?? $results->first();
     }
@@ -55,14 +61,14 @@ class EntryRequirementChecker
     /**
      * @param  Collection<int, TravelDocument>  $documents  the valid documents
      */
-    private function checkPassport(string $passportCountry, Flight $flight, Collection $documents): EntryResult
+    private function checkPassport(string $passportCountry, string $airport, Collection $documents): EntryResult
     {
         $from = $this->countries->name($passportCountry);
         // The destination country comes from the airports table (B13a).
-        $destination = Airport::find($flight->destination)?->country;
+        $destination = Airport::find($airport)?->country;
 
         if ($destination === null) {
-            return new EntryResult(EntryStatus::Unknown, "No entry rule for {$from} → airport {$flight->destination}, check manually");
+            return new EntryResult(EntryStatus::Unknown, "No entry rule for {$from} → airport {$airport}, check manually");
         }
 
         $to = $this->countries->name($destination);

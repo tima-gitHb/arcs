@@ -339,8 +339,9 @@ class SalesTest extends TestCase
         $this->seed(DatabaseSeeder::class);
         $london = Flight::where('flight_no', 'ME110')->firstOrFail();
 
-        $this->assertSame(6, $london->passengers()->where('passengers.status', 'Boarded')->count());
-        $this->assertSame(2, $london->passengers()->where('passengers.status', 'NoShow')->count());
+        // Status on this flight's coupon (B13b).
+        $this->assertSame(6, $london->passengers()->wherePivot('status', 'Boarded')->count());
+        $this->assertSame(2, $london->passengers()->wherePivot('status', 'NoShow')->count());
 
         $response = $this->get(route('manager.sales'))->assertOk();
 

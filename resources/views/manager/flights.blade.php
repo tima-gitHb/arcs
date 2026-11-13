@@ -112,6 +112,11 @@
                         <x-text-input id="departure_at" name="departure_at" type="datetime-local" class="mt-1 block w-full" :value="old('departure_at')" required />
                         <x-input-error :messages="$errors->get('departure_at')" class="mt-2" />
                     </div>
+                    <div>
+                        <x-input-label for="arrives_at" value="Arrival (local time at destination, optional)" />
+                        <x-text-input id="arrives_at" name="arrives_at" type="datetime-local" class="mt-1 block w-full" :value="old('arrives_at')" />
+                        <x-input-error :messages="$errors->get('arrives_at')" class="mt-2" />
+                    </div>
 
                     <div>
                         <x-input-label for="gate" value="Gate (optional)" />

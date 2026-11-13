@@ -2,14 +2,14 @@
 
 namespace Database\Seeders;
 
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
-    use WithoutModelEvents;
-
     /**
+     * Model events stay on (B13b): a reservation gets its first segment and every passenger a coupon
+     * per segment through them, exactly as in the app.
+     *
      * Seed the application's database with invented sample data (development only).
      * Order matters: flights need the users, the aircraft and its seats, the settings and the entry rules.
      */
@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             SettingSeeder::class,
             EntryRuleSeeder::class,
             FareSeeder::class,
+            RouteFareSeeder::class,
             FlightSeeder::class,
             PaymentSeeder::class,
         ]);

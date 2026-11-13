@@ -15,9 +15,11 @@ use App\Http\Requests\Gate\LateCheckInRequest;
 use App\Models\Passenger;
 use App\Models\Seat;
 use App\Services\EntryRequirementChecker;
+use App\Services\JourneyService;
 use App\Services\LateCheckInService;
 use App\Services\SeatService;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
@@ -25,10 +27,16 @@ use Illuminate\View\View;
  */
 class LateCheckInController extends Controller
 {
-    public function create(Passenger $passenger, SeatService $seats, EntryRequirementChecker $entryCheck): View|RedirectResponse
+    public function create(Request $request, Passenger $passenger, SeatService $seats, EntryRequirementChecker $entryCheck, JourneyService $journeys): View|RedirectResponse
     {
-        $passenger->load(['reservation.flight', 'seatAssignment.seat']);
-        $flight = $passenger->reservation->flight;
+        // The first flight of the direction leaving from the gate agent's station (B13b).
+        $flight = $journeys->firstFlightFor($passenger, $request->user());
+        $passenger->load([
+            'reservation.flight',
+            'coupon' => fn ($query) => $query->where('coupons.flight_id', $flight->id),
+            'seatAssignment' => fn ($query) => $query->where('seat_assignments.flight_id', $flight->id),
+            'seatAssignment.seat',
+        ]);
 
         if ($passenger->status !== PassengerStatus::Booked || ! $flight->isLateCheckInOpen()) {
             return redirect()->route('gate.flights.show', $flight)
@@ -67,8 +75,10 @@ class LateCheckInController extends Controller
                 ->withErrors(['entry_reason' => $exception->getMessage()]);
         }
 
-        return redirect()->route('gate.flights.show', $passenger->reservation->flight_id)
+        $flight = app(JourneyService::class)->firstFlightFor($passenger, $request->user());
+
+        return redirect()->route('gate.flights.show', $flight)
             ->with('success', $passenger->first_name.' '.$passenger->last_name.' checked in late. Boarding pass issued.')
-            ->with('boardingPassUrl', route('gate.flights.boarding-pass', [$passenger->reservation->flight_id, $passenger]));
+            ->with('boardingPassUrl', route('gate.flights.boarding-pass', [$flight, $passenger]));
     }
 }

@@ -7,6 +7,7 @@ use App\Enums\BagType;
 use App\Enums\PassengerStatus;
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
+use App\Enums\SegmentDirection;
 use App\Exceptions\BagNotAllowed;
 use App\Exceptions\FareNotFound;
 use App\Models\AuditEntry;
@@ -26,6 +27,7 @@ class BagService
     public function __construct(
         private AllowanceService $allowances,
         private FareService $fares,
+        private JourneyService $journeys,
     ) {}
 
     private const TAG_DIGITS = 6;
@@ -35,22 +37,26 @@ class BagService
     /**
      * Add a bag with a new unique tag, write an audit row and refresh the allowance flags.
      */
-    public function add(Passenger $passenger, float $weightKg, BagType $type, User $by): Bag
+    public function add(Passenger $passenger, float $weightKg, BagType $type, User $by, ?SegmentDirection $direction = null): Bag
     {
-        return DB::transaction(function () use ($passenger, $weightKg, $type, $by) {
+        return DB::transaction(function () use ($passenger, $weightKg, $type, $by, $direction) {
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($passenger->id);
+            // The direction being checked in; the bag goes to its final destination (SR-67).
+            $direction ??= $this->journeys->directionFor($passenger, $by);
 
-            if (! $passenger->checkinDetailsEditable()) {
+            if (! in_array($this->journeys->statusOf($passenger, $direction), [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
                 throw new BagNotAllowed('Bags can only be added for a booked or checked-in passenger.');
             }
 
-            $allowance = $this->allowances->for($passenger);
+            $allowance = $this->allowances->for($passenger, $direction);
             if ($weightKg > $allowance->hardMaxKg) {
                 throw new BagNotAllowed('Bag over 32 kg must be repacked');
             }
 
             $bag = $passenger->bags()->create([
-                'tag_no' => $this->newTag($passenger),
+                'direction' => $direction,
+                'destination' => $this->journeys->finalDestination($passenger->reservation, $direction),
+                'tag_no' => $this->newTag($passenger, $direction),
                 'type' => $type,
                 // Wheelchairs and strollers go back to the passenger at the aircraft door.
                 'handling' => $type->countsTowardAllowance() ? BagHandling::Hold : BagHandling::GateDelivery,
@@ -80,7 +86,7 @@ class BagService
         DB::transaction(function () use ($bag, $by) {
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($bag->passenger_id);
 
-            if ($passenger->status !== PassengerStatus::Booked) {
+            if ($this->journeys->statusOf($passenger, $bag->direction) !== PassengerStatus::Booked) {
                 throw new BagNotAllowed('A bag can only be removed before check-in is confirmed.');
             }
 
@@ -108,7 +114,9 @@ class BagService
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($bag->passenger_id);
             $bag = Bag::query()->lockForUpdate()->findOrFail($bag->id);
 
-            if ($passenger->status !== PassengerStatus::NoShow) {
+            $noShow = $this->journeys->couponsOf($passenger, $bag->direction)
+                ->contains(fn ($coupon) => $coupon->status === PassengerStatus::NoShow);
+            if (! $noShow) {
                 throw new BagNotAllowed('Only the bags of a no-show passenger can be offloaded.');
             }
             if ($bag->offloaded_at !== null) {
@@ -135,10 +143,13 @@ class BagService
      * allowed kg = (allowed pieces + extra bags) × kg per bag (+ prepaid extra_kg).
      * Wheelchairs and strollers are ignored. Missing fees → quote null ("Price not set").
      */
-    public function excess(Passenger $passenger): BaggageExcess
+    public function excess(Passenger $passenger, ?SegmentDirection $direction = null): BaggageExcess
     {
-        $allowance = $this->allowances->for($passenger);
+        // Each direction has its own allowance and its own bags (B13b). Default: the passenger's current direction.
+        $direction ??= $this->journeys->directionOf($passenger);
+        $allowance = $this->allowances->for($passenger, $direction);
         $counted = $passenger->bags()
+            ->where('direction', $direction)
             ->whereNull('offloaded_at')
             ->orderBy('id')
             ->get()
@@ -190,9 +201,9 @@ class BagService
      * What is still owed for the current pooled excess after prior payments (C11).
      * Zero when there is no excess, fees are missing, or payments cover the quote.
      */
-    public function excessDueCents(Passenger $passenger): int
+    public function excessDueCents(Passenger $passenger, ?SegmentDirection $direction = null): int
     {
-        $excess = $this->excess($passenger);
+        $excess = $this->excess($passenger, $direction);
 
         if (! $excess->hasExcess() || ! $excess->priceIsSet()) {
             return 0;
@@ -220,9 +231,10 @@ class BagService
      * Tag number: the airline code of the flight (first 2 characters, e.g. ME) + 6 digits,
      * unique in bags (SR-9). Retried on the rare collision, like the PNR.
      */
-    private function newTag(Passenger $passenger): string
+    private function newTag(Passenger $passenger, SegmentDirection $direction): string
     {
-        $airline = strtoupper(substr($passenger->reservation->flight->flight_no, 0, 2));
+        $first = $this->journeys->flightsOf($passenger->reservation, $direction)->first() ?? $passenger->reservation->flight;
+        $airline = strtoupper(substr($first->flight_no, 0, 2));
 
         for ($attempt = 0; $attempt < self::MAX_TAG_ATTEMPTS; $attempt++) {
             $tag = $airline.str_pad((string) random_int(0, 10 ** self::TAG_DIGITS - 1), self::TAG_DIGITS, '0', STR_PAD_LEFT);

@@ -6,13 +6,18 @@ use App\Enums\BagHandling;
 use App\Enums\PassengerStatus;
 use App\Exceptions\PnrNotOnFlight;
 use App\Models\Bag;
+use App\Models\Coupon;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
+use App\Models\SeatAssignment;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
  * The gate manifest (G1: SR-11, SR-45). Read-only: status changes stay in StatusService.
+ * Since B13b everything is per flight through coupons: a connecting passenger is on the
+ * manifest of each of their flights, with that flight's status, seat and "who did it".
  */
 class ManifestService
 {
@@ -26,11 +31,10 @@ class ManifestService
      */
     public function counts(Flight $flight): array
     {
-        $byStatus = Passenger::query()
-            ->join('reservations', 'reservations.id', '=', 'passengers.reservation_id')
-            ->where('reservations.flight_id', $flight->id)
-            ->groupBy('passengers.status')
-            ->selectRaw('passengers.status as status, count(*) as total')
+        $byStatus = Coupon::query()
+            ->where('flight_id', $flight->id)
+            ->groupBy('status')
+            ->selectRaw('status, count(*) as total')
             ->pluck('total', 'status');
 
         $boarded = (int) ($byStatus[PassengerStatus::Boarded->value] ?? 0);
@@ -51,19 +55,17 @@ class ManifestService
      */
     public function seatStates(Flight $flight): array
     {
-        $rows = Passenger::query()
-            ->join('reservations', 'reservations.id', '=', 'passengers.reservation_id')
-            ->join('seat_assignments', 'seat_assignments.passenger_id', '=', 'passengers.id')
+        $rows = SeatAssignment::query()
+            ->join('coupons', 'coupons.id', '=', 'seat_assignments.coupon_id')
             ->join('seats', 'seats.id', '=', 'seat_assignments.seat_id')
-            ->where('reservations.flight_id', $flight->id)
-            ->where('passengers.status', '!=', PassengerStatus::Cancelled)
-            ->get(['seats.seat_no', 'passengers.status']);
+            ->where('seat_assignments.flight_id', $flight->id)
+            ->where('coupons.status', '!=', PassengerStatus::Cancelled->value)
+            ->toBase()
+            ->get(['seats.seat_no', 'coupons.status']);
 
         $states = [];
         foreach ($rows as $row) {
-            $states[$row->seat_no] = $row->status instanceof PassengerStatus
-                ? $row->status->value
-                : (string) $row->status;
+            $states[$row->seat_no] = (string) $row->status;
         }
 
         return $states;
@@ -71,43 +73,41 @@ class ManifestService
 
     /**
      * Every passenger on the flight except cancelled ones, with everything the manifest shows
-     * eager-loaded, so the page runs a fixed number of queries for any flight size.
+     * eager-loaded for this flight, so the page runs a fixed number of queries for any flight size.
      *
      * @return Collection<int, Passenger>
      */
     public function passengers(Flight $flight): Collection
     {
-        return Passenger::query()
-            ->whereHas('reservation', fn ($query) => $query->where('flight_id', $flight->id))
-            ->where('status', '!=', PassengerStatus::Cancelled)
+        return $this->onFlight(Passenger::query(), $flight)
             ->with([
                 'reservation',
                 'accompanyingAdult',
-                'seatAssignment.seat',
-                'checkedInBy.user',
-                'boardedBy.user',
                 'specialServices',
                 // Items handed back at the aircraft door (wheelchair, stroller…).
                 'bags' => fn ($query) => $query->where('handling', BagHandling::GateDelivery)->orderBy('id'),
             ])
             ->orderBy('last_name')
             ->orderBy('first_name')
-            ->get();
+            ->get()
+            ->each(fn (Passenger $passenger) => $this->showWhoDidIt($passenger));
     }
 
     /**
-     * Bags to take off the aircraft after boarding is closed (G3, SR-9): every bag of the
-     * flight's NoShow passengers. Offloaded ones stay on the list, shown as done (G4, SR-28).
+     * Bags to take off the aircraft after boarding is closed (G3, SR-9): every bag the flight's
+     * NoShow passengers checked in that direction. Offloaded ones stay on the list, shown as done (G4, SR-28).
      *
      * @return Collection<int, Bag>
      */
     public function bagsToOffload(Flight $flight): Collection
     {
         return Bag::query()
-            ->whereHas('passenger', fn ($passenger) => $passenger
-                ->where('status', PassengerStatus::NoShow)
-                ->whereHas('reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id)))
-            ->with(['passenger.seatAssignment.seat', 'offloadedBy'])
+            ->noShowOn($flight)
+            ->with([
+                'passenger.seatAssignment' => fn ($query) => $query->where('seat_assignments.flight_id', $flight->id),
+                'passenger.seatAssignment.seat',
+                'offloadedBy',
+            ])
             ->orderBy('passenger_id')
             ->orderBy('id')
             ->get();
@@ -123,19 +123,51 @@ class ManifestService
     public function passengersForPnr(Flight $flight, string $pnr): Collection
     {
         $pnr = strtoupper(trim($pnr));
-        $reservation = Reservation::query()->with('flight')->where('pnr', $pnr)->first();
+        $reservation = Reservation::query()->with(['flight', 'segments'])->where('pnr', $pnr)->first();
 
         if ($reservation === null) {
             throw new PnrNotOnFlight("No reservation with PNR {$pnr}.");
         }
-        if ($reservation->flight_id !== $flight->id) {
+        if (! $reservation->segments->contains('flight_id', $flight->id)) {
             throw new PnrNotOnFlight("PNR {$pnr} is booked on {$reservation->flight->flight_no}, not on this flight.");
         }
 
-        return $reservation->passengers()
-            ->with(['reservation', 'seatAssignment.seat'])
-            ->where('status', '!=', PassengerStatus::Cancelled)
+        return $this->onFlight($reservation->passengers(), $flight)
+            ->with('reservation')
             ->orderBy('id')
             ->get();
+    }
+
+    /**
+     * Passengers with a coupon on the flight that is not cancelled, with that coupon as their current
+     * one (so ->status is this flight's) and this flight's seat.
+     *
+     * @template TQuery of Builder|\Illuminate\Database\Eloquent\Relations\HasMany
+     *
+     * @param  TQuery  $query
+     * @return TQuery
+     */
+    private function onFlight($query, Flight $flight)
+    {
+        return $query
+            ->whereHas('coupons', fn ($coupon) => $coupon
+                ->where('coupons.flight_id', $flight->id)
+                ->where('coupons.status', '!=', PassengerStatus::Cancelled->value))
+            ->with([
+                'coupon' => fn ($coupon) => $coupon->where('coupons.flight_id', $flight->id),
+                'coupon.checkedInBy.user',
+                'coupon.boardedBy.user',
+                'seatAssignment' => fn ($seat) => $seat->where('seat_assignments.flight_id', $flight->id),
+                'seatAssignment.seat',
+            ]);
+    }
+
+    /**
+     * "Checked in by / boarded by" (SR-45) for this flight's coupon, not the passenger's latest anywhere.
+     */
+    private function showWhoDidIt(Passenger $passenger): void
+    {
+        $passenger->setRelation('checkedInBy', $passenger->coupon?->checkedInBy);
+        $passenger->setRelation('boardedBy', $passenger->coupon?->boardedBy);
     }
 }

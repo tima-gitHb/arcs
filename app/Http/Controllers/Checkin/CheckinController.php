@@ -8,8 +8,10 @@ use App\Exceptions\ExcessBaggageUnpaid;
 use App\Exceptions\InvalidStatusChange;
 use App\Http\Controllers\Controller;
 use App\Models\Passenger;
+use App\Models\SeatAssignment;
 use App\Services\BoardingPassService;
 use App\Services\EntryRequirementChecker;
+use App\Services\JourneyService;
 use App\Services\SeatService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -33,9 +35,10 @@ class CheckinController extends Controller
                 ->where(fn ($query) => $query
                     ->whereHas('reservation', fn ($reservation) => $reservation->where('pnr', strtoupper($search)))
                     ->orWhere('last_name', 'like', $search.'%'))
-                // Only flights from the agent's station (B13a). Flights that left before today
-                // (at the station) are not checked in any more.
-                ->whereHas('reservation.flight', fn ($flight) => $flight
+                // Only flights from the agent's station (B13a), through any flight of the journey
+                // (B13b: the return of a trip is checked in at its own origin). Flights that left
+                // before today (at the station) are not checked in any more.
+                ->whereHas('coupons.flight', fn ($flight) => $flight
                     ->departingFrom($request->user()->airport_code)
                     ->where('departure_at', '>=', $request->user()->stationDay()[0]))
                 ->orderBy('id')
@@ -57,22 +60,41 @@ class CheckinController extends Controller
      * The check-in screen of one passenger. Opening it changes nothing: documents (C2),
      * seat (C3) and bags (C4) are added here before the agent confirms.
      */
-    public function show(Request $request, Passenger $passenger, SeatService $seats, EntryRequirementChecker $entryCheck): View
+    public function show(Request $request, Passenger $passenger, SeatService $seats, EntryRequirementChecker $entryCheck, JourneyService $journeys): View
     {
+        // B13b: the direction the agent checks in (the return at its own origin), and in it the flight
+        // this screen is about: the first one, or ?flight=<id> to choose a seat on a later flight.
+        $direction = $journeys->directionFor($passenger, $request->user());
+        $journeyFlights = $journeys->flightsOf($passenger->reservation, $direction);
+        $flight = $journeyFlights->firstWhere('id', $request->integer('flight')) ?? $journeyFlights->first() ?? $passenger->reservation->flight;
+        $coupon = $passenger->couponOn($flight);
+
         $passenger->load([
             'reservation.flight',
             'travelDocuments' => fn ($query) => $query->orderBy('id'),
             'travelDocuments.verifier',
             'accompanyingAdult',
-            'checkedInBy.user',
+            'coupon' => fn ($query) => $query->where('coupons.flight_id', $flight->id),
+            'coupon.checkedInBy.user',
+            'seatAssignment' => fn ($query) => $query->where('seat_assignments.flight_id', $flight->id),
             'seatAssignment.seat',
-            'bags' => fn ($query) => $query->orderBy('id'),
+            'bags' => fn ($query) => $query->where('direction', $direction)->orderBy('id'),
             'specialServices' => fn ($query) => $query->orderBy('id'),
-            'activeBoardingPass',
+            'activeBoardingPass' => fn ($query) => $query->where('boarding_passes.coupon_id', $coupon?->id),
         ]);
+        $passenger->setRelation('checkedInBy', $passenger->coupon?->checkedInBy);
 
         return view('checkin.show', [
             'passenger' => $passenger,
+            'flight' => $flight,
+            // Every flight of the direction with the passenger's seat on it (a connection has several).
+            'journeyFlights' => $journeyFlights,
+            'seatsByFlight' => SeatAssignment::query()
+                ->where('passenger_id', $passenger->id)
+                ->whereIn('flight_id', $journeyFlights->modelKeys())
+                ->with('seat')
+                ->get()
+                ->keyBy('flight_id'),
             // ?edit=<document id> opens the edit form for that document.
             'editing' => $passenger->travelDocuments->firstWhere('id', $request->integer('edit')),
             // Advisory entry check (SR-49): read only. ?check_entry=1 shows the full result.
@@ -83,7 +105,7 @@ class CheckinController extends Controller
             // Same data as the reservation seat map (R1); infants have no seat.
             'seatMap' => $passenger->type === PassengerType::Infant
                 ? collect()
-                : $seats->seatMap($passenger->reservation->flight),
+                : $seats->seatMap($flight),
         ]);
     }
 
