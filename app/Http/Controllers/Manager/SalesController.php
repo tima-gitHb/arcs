@@ -31,10 +31,11 @@ class SalesController extends Controller
 
         $selected = $request->filled('flight') ? $flights->firstWhere('id', (int) $request->query('flight')) : null;
 
-        // Same definition of "today" as the <x-todays-flights> component (SR-41) and the dashboard.
+        // Same definition of "today" as the <x-todays-flights> component (SR-41) and the dashboard:
+        // today at the Manager's station, every station's flights (B13a).
         $reported = $selected
             ? $flights->where('id', $selected->id)->values()
-            : Flight::whereBetween('departure_at', [now()->startOfDay(), now()->endOfDay()])->orderBy('departure_at')->get();
+            : Flight::departingToday($request->user())->orderBy('departure_at')->get();
 
         $capacity = $this->capacity($reported);
         $sold = $this->sold($reported);

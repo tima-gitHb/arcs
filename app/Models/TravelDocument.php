@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\DocumentType;
 use App\Enums\Role;
+use App\Models\Concerns\StoresTimesInUtc;
 use App\Services\CountryList;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -11,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TravelDocument extends Model
 {
-    use HasFactory;
+    use HasFactory, StoresTimesInUtc;
 
     /**
      * @var list<string>

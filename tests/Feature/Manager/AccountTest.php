@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Notifications\WelcomeAccount;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
@@ -46,7 +47,10 @@ class AccountTest extends TestCase
         $this->assertTrue($new->active);
         $this->assertFalse($new->locked);
 
+        // No station yet (B13a): the Manager sets it (the dropdown is card M13).
         $this->actingAs($new);
+        $this->get('/gate')->assertForbidden()->assertSee('No station set: ask your manager');
+        $new->update(['airport_code' => 'BEY']);
         $this->get('/gate')->assertOk();
         $this->get('/checkin')->assertForbidden();
         $this->get('/reservation/create')->assertForbidden();
@@ -126,7 +130,7 @@ class AccountTest extends TestCase
 
     public function test_SR40_list_shows_last_login(): void
     {
-        User::factory()->create(['name' => 'Rita Recent', 'email' => 'rita@arcs.test', 'last_login_at' => '2026-11-10 08:30:00']);
+        User::factory()->create(['name' => 'Rita Recent', 'email' => 'rita@arcs.test', 'last_login_at' => Carbon::parse('2026-11-10 08:30:00', 'Asia/Beirut')]);
         User::factory()->create(['name' => 'Nina New', 'email' => 'nina@arcs.test', 'last_login_at' => null]);
         User::factory()->create(['name' => 'Larry Locked', 'email' => 'larry@arcs.test', 'locked' => true, 'failed_logins' => 5]);
 

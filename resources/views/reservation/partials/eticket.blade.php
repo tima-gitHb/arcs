@@ -29,7 +29,7 @@
         <div>
             <dt class="text-gray-500">Departure (Beirut time)</dt>
             <dd class="mt-1 font-medium">
-                {{ $reservation->flight->departure_at->timezone(config('app.timezone'))->format('D d M Y · H:i') }}
+                <x-local-time :at="$reservation->flight->departure_at" :airport="$reservation->flight->origin" format="D d M Y · H:i" />
             </dd>
         </div>
         @if ($reservation->contact_email)

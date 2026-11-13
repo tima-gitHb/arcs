@@ -73,7 +73,7 @@
                                     <span class="text-green-700">Active</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-2">{{ $user->last_login_at?->format('Y-m-d H:i') ?? 'Never' }}</td>
+                            <td class="px-4 py-2">@if ($user->last_login_at)<x-station-time :at="$user->last_login_at" format="Y-m-d H:i" />@else Never @endif</td>
                             <td class="px-4 py-2">
                                 <div class="flex flex-wrap gap-2">
                                     @if ($user->locked)

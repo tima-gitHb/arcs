@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\DocumentType;
 use App\Enums\EntryStatus;
+use App\Models\Airport;
 use App\Models\EntryRule;
 use App\Models\Flight;
 use App\Models\Passenger;
@@ -35,7 +36,7 @@ class EntryRequirementChecker
         $flight = $passenger->reservation->flight;
 
         // Valid means not expired on the departure date.
-        $departure = $flight->departure_at->copy()->startOfDay();
+        $departure = $flight->departureDate();
         $documents = $passenger->travelDocuments()->get()
             ->filter(fn ($document) => $document->expiry_date->gte($departure));
 
@@ -57,7 +58,8 @@ class EntryRequirementChecker
     private function checkPassport(string $passportCountry, Flight $flight, Collection $documents): EntryResult
     {
         $from = $this->countries->name($passportCountry);
-        $destination = config("airports.{$flight->destination}");
+        // The destination country comes from the airports table (B13a).
+        $destination = Airport::find($flight->destination)?->country;
 
         if ($destination === null) {
             return new EntryResult(EntryStatus::Unknown, "No entry rule for {$from} → airport {$flight->destination}, check manually");

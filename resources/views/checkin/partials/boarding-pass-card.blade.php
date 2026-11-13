@@ -5,7 +5,7 @@
     <div class="rounded-lg bg-white p-6 shadow-sm">
         <h2 class="text-lg font-semibold text-navy">Boarding pass</h2>
         <p class="mt-2 text-sm text-gray-700">
-            Issued {{ $pass->issued_at->format('d M H:i') }} · <span class="font-mono">{{ $pass->barcode }}</span>
+            Issued <x-station-time :at="$pass->issued_at" format="d M H:i" /> · <span class="font-mono">{{ $pass->barcode }}</span>
         </p>
 
         <div class="mt-4 flex flex-wrap items-center gap-3">

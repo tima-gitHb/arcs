@@ -73,7 +73,7 @@
                     </p>
                     <p class="mt-1 text-gray-500">
                         {{ $entry->user->name }}
-                        · {{ $entry->changed_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
+                        · <x-station-time :at="$entry->changed_at" format="d M Y H:i" />
                     </p>
                 </div>
             @empty

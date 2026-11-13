@@ -21,7 +21,7 @@
                 <select id="flight" name="flight" class="mt-1 block w-64 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" onchange="this.form.submit()">
                     <option value="" @selected($flight === null)>Choose a flight</option>
                     @foreach ($flights as $option)
-                        <option value="{{ $option->id }}" @selected($flight?->is($option))>{{ $option->flight_no }} — {{ $option->departure_at->format('d M Y') }}</option>
+                        <option value="{{ $option->id }}" @selected($flight?->is($option))>{{ $option->flight_no }} — {{ $option->departureLocal()->format('d M Y') }}</option>
                     @endforeach
                 </select>
             </div>
@@ -39,7 +39,7 @@
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-semibold text-navy">{{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }}</h2>
-                        <p class="text-sm text-gray-600">Departs {{ $flight->departure_at->format('d M Y H:i') }} · {{ $flight->status->label() }}</p>
+                        <p class="text-sm text-gray-600">Departs <x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M Y H:i" /> · {{ $flight->status->label() }}</p>
                     </div>
 
                     <button type="button" onclick="window.print()" class="no-print rounded border border-gray-300 bg-white px-3 py-1.5 text-sm hover:bg-gray-50">Print</button>

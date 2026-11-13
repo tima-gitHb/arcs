@@ -34,7 +34,7 @@ class G4OffloadTest extends TestCase
     {
         parent::setUp();
 
-        $this->travelTo(Carbon::parse('2026-11-10 10:00'));
+        $this->travelTo(Carbon::parse('2026-11-10 10:00', 'Asia/Beirut')); // staff are at BEY (B13a)
         $this->makeAgents();
         $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME305']);
 

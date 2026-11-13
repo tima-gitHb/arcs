@@ -46,9 +46,9 @@ return [
 
         'mysql' => [
             'driver' => 'mysql',
-            // Same clock as the app. An offset, not a name: MySQL on Windows has no time zone
-            // tables. It is worked out on each boot, so it follows Beirut summer time.
-            'timezone' => env('DB_TIMEZONE', (new DateTimeImmutable('now', new DateTimeZone(env('APP_TIMEZONE', 'Asia/Beirut'))))->format('P')),
+            // Same clock as the app: UTC (B13a). An offset, not a name: MySQL on Windows has no
+            // time zone tables. Not an env setting, so NOW() in SQL always agrees with now() in PHP.
+            'timezone' => '+00:00',
             'url' => env('DB_URL'),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),

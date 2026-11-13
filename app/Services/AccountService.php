@@ -16,8 +16,9 @@ class AccountService
 {
     /**
      * Create an account and send the welcome email with a set-password link (SR-36).
+     * airport_code is the station (B13a): an airports.code, or null for none yet.
      *
-     * @param  array{name: string, email: string, role: string}  $data
+     * @param  array{name: string, email: string, role: string, airport_code?: string|null}  $data
      */
     public function create(array $data): User
     {

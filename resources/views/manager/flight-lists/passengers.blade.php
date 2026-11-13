@@ -22,7 +22,7 @@
                     <td class="px-4 py-2">
                         @if ($passenger->checkedInBy)
                             {{ $passenger->checkedInBy->user->name }}
-                            <span class="block text-xs text-gray-500">{{ $passenger->checkedInBy->changed_at->format('d M Y H:i') }}</span>
+                            <span class="block text-xs text-gray-500"><x-station-time :at="$passenger->checkedInBy->changed_at" format="d M Y H:i" /></span>
                         @else
                             —
                         @endif
@@ -30,7 +30,7 @@
                     <td class="px-4 py-2">
                         @if ($passenger->boardedBy)
                             {{ $passenger->boardedBy->user->name }}
-                            <span class="block text-xs text-gray-500">{{ $passenger->boardedBy->changed_at->format('d M Y H:i') }}</span>
+                            <span class="block text-xs text-gray-500"><x-station-time :at="$passenger->boardedBy->changed_at" format="d M Y H:i" /></span>
                         @else
                             —
                         @endif

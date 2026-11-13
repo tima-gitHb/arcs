@@ -91,18 +91,24 @@
 
                     <div>
                         <x-input-label for="origin" value="From (airport code)" />
-                        <x-text-input id="origin" name="origin" type="text" maxlength="3" class="mt-1 block w-full uppercase" :value="old('origin')" placeholder="BEY" required />
+                        <x-text-input id="origin" name="origin" type="text" maxlength="3" list="airport-codes" class="mt-1 block w-full uppercase" :value="old('origin')" placeholder="BEY" required />
                         <x-input-error :messages="$errors->get('origin')" class="mt-2" />
                     </div>
 
                     <div>
                         <x-input-label for="destination" value="To (airport code)" />
-                        <x-text-input id="destination" name="destination" type="text" maxlength="3" class="mt-1 block w-full uppercase" :value="old('destination')" placeholder="CDG" required />
+                        <x-text-input id="destination" name="destination" type="text" maxlength="3" list="airport-codes" class="mt-1 block w-full uppercase" :value="old('destination')" placeholder="CDG" required />
                         <x-input-error :messages="$errors->get('destination')" class="mt-2" />
+                        {{-- Only airports of the network are accepted (B13a). --}}
+                        <datalist id="airport-codes">
+                            @foreach ($airports as $airport)
+                                <option value="{{ $airport->code }}">{{ $airport->city }} — {{ $airport->name }}</option>
+                            @endforeach
+                        </datalist>
                     </div>
 
                     <div>
-                        <x-input-label for="departure_at" value="Departure" />
+                        <x-input-label for="departure_at" value="Departure (local time at origin)" />
                         <x-text-input id="departure_at" name="departure_at" type="datetime-local" class="mt-1 block w-full" :value="old('departure_at')" required />
                         <x-input-error :messages="$errors->get('departure_at')" class="mt-2" />
                     </div>
@@ -114,13 +120,13 @@
                     </div>
 
                     <div>
-                        <x-input-label for="checkin_opens_at" value="Check-in opens" />
+                        <x-input-label for="checkin_opens_at" value="Check-in opens (local time at origin)" />
                         <x-text-input id="checkin_opens_at" name="checkin_opens_at" type="datetime-local" class="mt-1 block w-full" :value="old('checkin_opens_at')" required />
                         <x-input-error :messages="$errors->get('checkin_opens_at')" class="mt-2" />
                     </div>
 
                     <div>
-                        <x-input-label for="checkin_closes_at" value="Check-in closes" />
+                        <x-input-label for="checkin_closes_at" value="Check-in closes (local time at origin)" />
                         <x-text-input id="checkin_closes_at" name="checkin_closes_at" type="datetime-local" class="mt-1 block w-full" :value="old('checkin_closes_at')" required />
                         <x-input-error :messages="$errors->get('checkin_closes_at')" class="mt-2" />
                     </div>
@@ -155,8 +161,8 @@
                             <tr class="border-b border-gray-100 last:border-0 align-top">
                                 <td class="px-4 py-2 font-medium">{{ $flight->flight_no }}</td>
                                 <td class="px-4 py-2">{{ $flight->origin }} → {{ $flight->destination }}</td>
-                                <td class="px-4 py-2 whitespace-nowrap">{{ $flight->departure_at->format('d M Y H:i') }}</td>
-                                <td class="px-4 py-2 whitespace-nowrap">{{ $flight->checkin_opens_at->format('H:i') }}–{{ $flight->checkin_closes_at->format('H:i') }}</td>
+                                <td class="px-4 py-2 whitespace-nowrap"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" /></td>
+                                <td class="px-4 py-2 whitespace-nowrap"><x-local-time :at="$flight->checkin_opens_at" :airport="$flight->origin" format="H:i" />–<x-local-time :at="$flight->checkin_closes_at" :airport="$flight->origin" format="H:i" /></td>
                                 <td class="px-4 py-2">{{ $flight->aircraft->registration }}</td>
                                 <td class="px-4 py-2">
                                     <form method="POST" action="{{ route('manager.flights.gate', $flight) }}" class="flex items-center gap-2">

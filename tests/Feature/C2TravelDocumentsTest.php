@@ -31,7 +31,7 @@ class C2TravelDocumentsTest extends TestCase
         parent::setUp();
 
         // flightWithStatus(): check-in window 09:00–11:15, departure 2026-11-10 12:00.
-        $this->travelTo(Carbon::parse('2026-11-10 10:00'));
+        $this->travelTo(Carbon::parse('2026-11-10 10:00', 'Asia/Beirut')); // staff are at BEY (B13a)
         $this->agent = $this->actingAsRole('checkin');
         $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen);
     }

@@ -29,7 +29,7 @@
                 </div>
                 <div>
                     <dt class="text-gray-500">Departure</dt>
-                    <dd>{{ $flight->departure_at->format('d M H:i') }} · Gate {{ $flight->gate ?? '—' }}</dd>
+                    <dd><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M H:i" /> · Gate {{ $flight->gate ?? '—' }}</dd>
                 </div>
                 <div>
                     <dt class="text-gray-500">Passenger</dt>
@@ -47,7 +47,7 @@
                 @if ($passenger->checkedInBy)
                     <div>
                         <dt class="text-gray-500">Checked in by</dt>
-                        <dd>{{ $passenger->checkedInBy->user->name }}, {{ $passenger->checkedInBy->changed_at->format('H:i') }}</dd>
+                        <dd>{{ $passenger->checkedInBy->user->name }}, <x-station-time :at="$passenger->checkedInBy->changed_at" format="H:i" /></dd>
                     </div>
                 @endif
             </dl>
@@ -81,7 +81,7 @@
                                 <td class="py-2">{{ $document->expiry_date->format('d M Y') }}</td>
                                 <td class="py-2">
                                     @if ($document->verified_at)
-                                        {{ $document->verifier?->name }}, {{ $document->verified_at->format('d M H:i') }}
+                                        {{ $document->verifier?->name }}, <x-station-time :at="$document->verified_at" format="d M H:i" />
                                     @elseif (! $editable)
                                         <span class="text-gray-500">Not verified</span>
                                     @else

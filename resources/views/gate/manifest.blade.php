@@ -13,7 +13,7 @@
         {{-- Header: flight and live counts (SR-11). Counts refresh every 10 s. --}}
         <div class="rounded-lg bg-white p-6 shadow-sm" id="manifest-header" data-counts-url="{{ route('gate.flights.counts', $flight) }}">
             <div class="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
-                <span>Departure <span class="font-semibold">{{ $flight->departure_at->format('d M H:i') }}</span></span>
+                <span>Departure <span class="font-semibold"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M H:i" /></span></span>
                 <span class="text-lg font-semibold text-navy">Gate {{ $flight->gate ?? 'TBA' }}</span>
                 <span class="rounded-full bg-gray-100 px-3 py-0.5 font-medium text-gray-800" data-flight-status>{{ $flight->status->label() }}</span>
             </div>
@@ -83,10 +83,10 @@
                             </td>
                             <td class="px-4 py-2 text-xs text-gray-700">
                                 @if ($passenger->checkedInBy)
-                                    <span class="block">Checked in by {{ $passenger->checkedInBy->user->name }} at {{ $passenger->checkedInBy->changed_at->format('H:i') }}</span>
+                                    <span class="block">Checked in by {{ $passenger->checkedInBy->user->name }} at <x-station-time :at="$passenger->checkedInBy->changed_at" format="H:i" /></span>
                                 @endif
                                 @if ($passenger->boardedBy)
-                                    <span class="block">Boarded by {{ $passenger->boardedBy->user->name }} at {{ $passenger->boardedBy->changed_at->format('H:i') }}</span>
+                                    <span class="block">Boarded by {{ $passenger->boardedBy->user->name }} at <x-station-time :at="$passenger->boardedBy->changed_at" format="H:i" /></span>
                                 @endif
                             </td>
                             <td class="px-4 py-2 text-xs">

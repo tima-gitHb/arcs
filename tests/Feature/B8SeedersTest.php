@@ -87,6 +87,8 @@ class B8SeedersTest extends TestCase
         $this->assertSame([
             'ME110' => 'Closed',
             'ME201' => 'CheckinOpen',
+            'ME202' => 'CheckinOpen',
+            'ME216' => 'Scheduled',
             'ME305' => 'Boarding',
             'ME422' => 'Scheduled',
         ], $statuses);
@@ -101,6 +103,8 @@ class B8SeedersTest extends TestCase
         $this->assertSame([
             'ME110' => 'BEY-LHR',
             'ME201' => 'BEY-CDG',
+            'ME202' => 'CDG-BEY',
+            'ME216' => 'IST-CDG',
             'ME305' => 'BEY-DXB',
             'ME422' => 'BEY-FCO',
         ], $routes);

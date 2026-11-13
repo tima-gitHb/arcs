@@ -66,7 +66,7 @@
                             <td class="py-2 text-right">
                                 @if ($bag->offloaded_at)
                                     <span class="text-xs font-medium text-green-800">
-                                        Offloaded by {{ $bag->offloadedBy?->name }} at {{ $bag->offloaded_at->format('H:i') }}
+                                        Offloaded by {{ $bag->offloadedBy?->name }} at <x-station-time :at="$bag->offloaded_at" format="H:i" />
                                     </span>
                                 @else
                                     <form method="POST" action="{{ route('gate.bags.offload', $bag) }}">

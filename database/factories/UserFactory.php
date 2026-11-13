@@ -31,6 +31,8 @@ class UserFactory extends Factory
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
             'role' => 'reservation',
+            // Staff work at a station (B13a); Beirut unless a test says otherwise.
+            'airport_code' => 'BEY',
         ];
     }
 

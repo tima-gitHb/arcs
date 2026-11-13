@@ -21,7 +21,7 @@
                     <option value="">All flights</option>
                     @foreach ($flights as $flight)
                         <option value="{{ $flight->id }}" @selected((string) request('flight_id') === (string) $flight->id)>
-                            {{ $flight->flight_no }} — {{ $flight->departure_at->format('d M Y') }}
+                            {{ $flight->flight_no }} — {{ $flight->departureLocal()->format('d M Y') }}
                         </option>
                     @endforeach
                 </select>
@@ -94,7 +94,7 @@
                             $linked = $payment->reservation ?? $payment->passenger?->reservation;
                         @endphp
                         <tr data-payment="{{ $payment->id }}" @class(['border-b border-gray-100 last:border-0', 'text-red-600' => $payment->status === \App\Enums\PaymentStatus::Failed])>
-                            <td class="px-4 py-2 whitespace-nowrap" data-cell="date">{{ $payment->created_at->format('d M Y H:i') }}</td>
+                            <td class="px-4 py-2 whitespace-nowrap" data-cell="date"><x-station-time :at="$payment->created_at" format="d M Y H:i" /></td>
                             <td class="px-4 py-2" data-cell="flight">{{ $linked?->flight?->flight_no }}</td>
                             <td class="px-4 py-2" data-cell="pnr">{{ $linked?->pnr }}</td>
                             <td class="px-4 py-2" data-cell="passenger">{{ $payment->passenger ? $payment->passenger->first_name.' '.$payment->passenger->last_name : 'Whole booking' }}</td>

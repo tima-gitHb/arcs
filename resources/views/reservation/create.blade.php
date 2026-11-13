@@ -58,7 +58,7 @@
                         <optgroup label="{{ App\Enums\FlightStatus::from($status)->label() }}">
                             @foreach ($group as $flight)
                                 <option value="{{ $flight->id }}" @selected((string) old('flight_id') === (string) $flight->id)>
-                                    {{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }} · {{ $flight->departure_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
+                                    {{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }} · {{ $flight->departureLocal()->format('d M Y H:i') }}
                                 </option>
                             @endforeach
                         </optgroup>

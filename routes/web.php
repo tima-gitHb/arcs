@@ -59,8 +59,8 @@ Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('re
     Route::post('/passengers/{passenger}/cancel', [ReservationController::class, 'cancel'])->name('cancel');
 });
 
-// Check-in staff
-Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')->group(function () {
+// Check-in staff, at their station: only flights departing from it (B13a).
+Route::middleware(['auth', 'role:checkin', 'station'])->prefix('checkin')->name('checkin.')->group(function () {
     Route::get('/', [CheckinController::class, 'home'])->name('home');
     Route::get('/passengers/{passenger}', [CheckinController::class, 'show'])->name('passengers.show');
     Route::post('/passengers/{passenger}/confirm', [CheckinController::class, 'confirm'])->name('passengers.confirm');
@@ -86,8 +86,8 @@ Route::middleware(['auth', 'role:checkin'])->prefix('checkin')->name('checkin.')
     Route::get('/reservations/{reservation}/boarding-passes', [GroupCheckInController::class, 'boardingPasses'])->name('reservations.boarding-passes');
 });
 
-// Gate staff
-Route::middleware(['auth', 'role:gate'])->prefix('gate')->name('gate.')->group(function () {
+// Gate staff, at their station: only flights departing from it (B13a).
+Route::middleware(['auth', 'role:gate', 'station'])->prefix('gate')->name('gate.')->group(function () {
     Route::get('/', [GateController::class, 'home'])->name('home');
     Route::get('/flights/{flight}', [ManifestController::class, 'show'])->name('flights.show');
     Route::get('/flights/{flight}/counts', [ManifestController::class, 'counts'])->name('flights.counts');

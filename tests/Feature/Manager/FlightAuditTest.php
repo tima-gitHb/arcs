@@ -30,7 +30,7 @@ class FlightAuditTest extends TestCase
     {
         parent::setUp();
 
-        $this->travelTo(Carbon::parse('2026-11-10 10:00:00'));
+        $this->travelTo(Carbon::parse('2026-11-10 10:00:00', 'Asia/Beirut')); // staff are at BEY (B13a)
     }
 
     /**

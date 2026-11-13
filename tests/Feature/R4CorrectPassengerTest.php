@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AuditEntry;
 use App\Models\Passenger;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class R4CorrectPassengerTest extends TestCase
@@ -13,7 +14,7 @@ class R4CorrectPassengerTest extends TestCase
 
     public function test_SR33_correcting_a_last_name_shows_both_values_who_and_when(): void
     {
-        $this->travelTo('2026-11-01 13:11:00');
+        $this->travelTo(Carbon::parse('2026-11-01 13:11:00', 'Asia/Beirut')); // staff are at BEY (B13a)
 
         $agent = $this->actingAsRole('reservation');
         $passenger = Passenger::factory()->create([
