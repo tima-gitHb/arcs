@@ -112,6 +112,14 @@ gate_overrides, settings, entry_rules, fares, fees, payments, airports.
   - Reservation contact: `reservations.contact_email`, `contact_phone`; rules in `ReservationContactRules::rules()`.
   - Cabins: enum `CabinClass` is Business, Premium, Economy. `AircraftService` places `premium_rows` after the Business rows.
   - Flight audit rows: `AuditEntry::forFlight(...)` (`audit_log.flight_id`; `passenger_id` can be null).
+  - **Email** (B13c): every email uses the ARCS layout, i.e. a markdown mailable (`<x-mail::message>`) or a notification
+    `MailMessage`. Both render through `resources/views/vendor/mail/{html,text}/message.blade.php` (ARCS header and
+    footer); never build an email with its own layout. Tests use `Mail::fake()` / `Notification::fake()`
+    (phpunit.xml: `MAIL_MAILER=array`). Development: Mailtrap sandbox or `MAIL_MAILER=log`.
+    **Never put real mail credentials in the repo**: they go in `.env` only; `.env.example` keeps them empty.
+  - **PDF** (B13c): `App\Support\Pdf::fromView($view, $data, $filename)` returns the download response;
+    `Pdf::raw($view, $data)` returns the PDF bytes for an email attachment (`Attachment::fromData()`). Never call
+    dompdf directly. PDF views are full HTML pages with plain CSS (no Tailwind, no JavaScript).
 - Names: models singular (`Passenger`), tables plural snake_case (`seat_assignments`),
   routes `role.resource.action` (e.g. `checkin.seats.assign`).
 

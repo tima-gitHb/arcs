@@ -31,7 +31,7 @@ StatusService · CorrectionService (all corrections and document additions, audi
 ## Conventions
 - Routes only inside the role's group in `routes/web.php` (reservation / checkin / gate / manager), keep the diff small.
 - Validation in FormRequests; business logic in `app/Services`; controllers stay thin.
-- Money in integer cents. Times in Asia/Beirut.
+- Money in integer cents. Times are stored in UTC, shown in the airport's local time with `<x-local-time>` (see CLAUDE.md, B13a).
 - Every state change writes an audit row (who, when, old → new).
 - Lists eager-load to keep a fixed number of queries.
 - Error shown to staff = the service's message as a red flash; success = green flash.

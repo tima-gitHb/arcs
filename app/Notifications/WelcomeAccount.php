@@ -36,6 +36,7 @@ class WelcomeAccount extends Notification
             ->line("An ARCS account has been created for you as {$notifiable->role->label()}.")
             ->line('Click the button below to choose your password.')
             ->action('Set your password', $url)
-            ->line("This link expires in {$minutes} minutes. If it has expired, ask the Manager to send you a new link.");
+            ->line("This link expires in {$minutes} minutes. If it has expired, ask the Manager to send you a new link.")
+            ->salutation('The ARCS team');
     }
 }
