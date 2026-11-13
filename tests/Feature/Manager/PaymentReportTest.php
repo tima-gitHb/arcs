@@ -60,7 +60,7 @@ class PaymentReportTest extends TestCase
     {
         parent::setUp();
 
-        $this->travelTo('2026-11-10 10:00:00');
+        $this->travelTo(Carbon::parse('2026-11-10 10:00:00', 'Asia/Beirut')); // staff are at BEY (B13a)
 
         $this->agent = User::factory()->create(['role' => Role::Reservation, 'name' => 'Rita Nassar']);
         $this->manager = $this->actingAsRole(Role::Manager);

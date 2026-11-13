@@ -33,8 +33,11 @@ class CheckinController extends Controller
                 ->where(fn ($query) => $query
                     ->whereHas('reservation', fn ($reservation) => $reservation->where('pnr', strtoupper($search)))
                     ->orWhere('last_name', 'like', $search.'%'))
-                // Flights that left before today are not checked in any more.
-                ->whereHas('reservation.flight', fn ($flight) => $flight->where('departure_at', '>=', today()))
+                // Only flights from the agent's station (B13a). Flights that left before today
+                // (at the station) are not checked in any more.
+                ->whereHas('reservation.flight', fn ($flight) => $flight
+                    ->departingFrom($request->user()->airport_code)
+                    ->where('departure_at', '>=', $request->user()->stationDay()[0]))
                 ->orderBy('id')
                 ->limit(self::MAX_RESULTS)
                 ->get()

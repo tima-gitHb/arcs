@@ -47,7 +47,7 @@
             {{ $payment->card_brand }} ••••{{ $payment->card_last4 }}
             · reference <span class="font-mono">{{ $payment->gateway_reference }}</span>
             @if ($payment->paid_at)
-                · {{ $payment->paid_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
+                · <x-station-time :at="$payment->paid_at" format="d M Y H:i" :user="$payment->takenBy" />
             @endif
         </p>
     @endif

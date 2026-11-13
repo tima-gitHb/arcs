@@ -6,7 +6,7 @@
                 <p class="mt-1 text-sm text-gray-600">
                     <span class="font-mono tracking-[0.2em] text-navy">{{ $reservation->pnr }}</span>
                     · {{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }}
-                    · {{ $flight->departure_at->format('d M H:i') }}
+                    · <x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M H:i" />
                 </p>
             </div>
             <a href="{{ route('checkin.home', ['q' => $reservation->pnr]) }}" class="text-sm font-medium text-navy hover:underline">

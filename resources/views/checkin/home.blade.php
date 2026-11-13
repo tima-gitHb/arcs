@@ -40,7 +40,7 @@
                             <span class="font-mono text-lg font-semibold tracking-[0.2em] text-navy">{{ $reservation->pnr }}</span>
                             <span class="ml-2 text-sm text-gray-700">
                                 {{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }}
-                                · {{ $flight->departure_at->format('d M H:i') }}
+                                · <x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M H:i" />
                             </span>
                         </div>
                         <div class="flex flex-wrap gap-2 text-xs font-medium">
@@ -49,9 +49,9 @@
                                 'rounded-full px-2.5 py-0.5',
                                 'bg-green-100 text-green-800' => $windowOpen,
                                 'bg-red-100 text-red-800' => ! $windowOpen,
-                            ]) title="Check-in {{ $flight->checkin_opens_at->format('H:i') }}–{{ $flight->checkin_closes_at->format('H:i') }}">
+                            ]) title="Check-in {{ $flight->atOrigin($flight->checkin_opens_at)->format('H:i') }}–{{ $flight->atOrigin($flight->checkin_closes_at)->format('H:i') }} local time">
                                 {{ $windowOpen ? 'Window open' : 'Window closed' }}
-                                ({{ $flight->checkin_opens_at->format('H:i') }}–{{ $flight->checkin_closes_at->format('H:i') }})
+                                (<x-local-time :at="$flight->checkin_opens_at" :airport="$flight->origin" format="H:i" />–<x-local-time :at="$flight->checkin_closes_at" :airport="$flight->origin" format="H:i" />)
                             </span>
                         </div>
                     </div>

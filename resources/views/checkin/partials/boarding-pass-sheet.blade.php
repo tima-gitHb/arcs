@@ -21,7 +21,7 @@
         </div>
         <div>
             <p class="text-xs uppercase text-gray-500">Date</p>
-            <p class="text-lg font-semibold">{{ $flight->departure_at->format('d M Y') }}</p>
+            <p class="text-lg font-semibold"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M Y" /></p>
         </div>
 
         <div>
@@ -30,11 +30,11 @@
         </div>
         <div>
             <p class="text-xs uppercase text-gray-500">Boarding</p>
-            <p class="text-2xl font-bold text-navy">{{ $boardingTime->format('H:i') }}</p>
+            <p class="text-2xl font-bold text-navy"><x-local-time :at="$boardingTime" :airport="$flight->origin" format="H:i" /></p>
         </div>
         <div>
             <p class="text-xs uppercase text-gray-500">Departure</p>
-            <p class="text-lg font-semibold">{{ $flight->departure_at->format('H:i') }}</p>
+            <p class="text-lg font-semibold"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="H:i" /></p>
         </div>
 
         <div>
@@ -54,7 +54,7 @@
         </div>
         <div>
             <p class="text-xs uppercase text-gray-500">Issued</p>
-            <p>{{ $pass->issued_at->format('d M H:i') }}</p>
+            <p><x-station-time :at="$pass->issued_at" format="d M H:i" /></p>
         </div>
     </div>
 

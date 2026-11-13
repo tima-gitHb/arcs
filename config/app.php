@@ -61,11 +61,13 @@ return [
     |
     | Here you may specify the default timezone for your application, which
     | will be used by the PHP date and date-time functions. The timezone
-    | is set to "UTC" by default as it is suitable for most use cases.
+    | ARCS stores every date and time in UTC (B13a). This is not an env setting:
+    | changing it would shift stored times. Pages show local times through
+    | <x-local-time> (airport time) and <x-station-time> (the viewer's station).
     |
     */
 
-    'timezone' => env('APP_TIMEZONE', 'Asia/Beirut'),
+    'timezone' => 'UTC',
 
     /*
     |--------------------------------------------------------------------------

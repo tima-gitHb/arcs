@@ -30,7 +30,7 @@ class PaymentReportController extends Controller
             'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
-        $payments = $this->payments($filters);
+        $payments = $this->payments($filters, $request->user());
 
         $succeeded = $payments->where('status', PaymentStatus::Succeeded);
         $totals = [];
@@ -54,10 +54,12 @@ class PaymentReportController extends Controller
     /**
      * The filtered payments, with every relation the page reads loaded for the whole list.
      *
+     * The date is a day at the Manager's station (UTC without one), B13a.
+     *
      * @param  array{flight_id?: int, user_id?: int, date?: string}  $filters
      * @return Collection<int, Payment>
      */
-    private function payments(array $filters): Collection
+    private function payments(array $filters, User $viewer): Collection
     {
         $flightId = 'COALESCE(booking.flight_id, traveller.flight_id)';
 
@@ -69,7 +71,7 @@ class PaymentReportController extends Controller
             ->with(['reservation.flight', 'passenger.reservation.flight', 'takenBy'])
             ->when($filters['flight_id'] ?? null, fn (Builder $query, int $id) => $query->whereRaw($flightId.' = ?', [$id]))
             ->when($filters['user_id'] ?? null, fn (Builder $query, int $id) => $query->where('payments.taken_by', $id))
-            ->when($filters['date'] ?? null, fn (Builder $query, string $date) => $query->whereDate('payments.created_at', $date))
+            ->when($filters['date'] ?? null, fn (Builder $query, string $date) => $query->whereBetween('payments.created_at', $viewer->stationDay($date)))
             ->orderByDesc('payments.created_at')
             ->orderByDesc('payments.id')
             ->get();

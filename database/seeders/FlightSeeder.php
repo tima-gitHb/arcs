@@ -27,7 +27,9 @@ use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
 /**
- * Four sample flights on OD-MRA, with times relative to now().
+ * Six sample flights on OD-MRA, with times relative to now(): four from Beirut, the return
+ * flight from Paris and one from Istanbul to Paris (B13a), so each station has its own demo.
+ * Times are stored in UTC; pages show them in the origin airport's local time.
  * Every status is reached through StatusService, so audit_log fills naturally.
  * Check-ins go through BoardingPassService::completeCheckIn(), so passengers get their pass.
  * Everyone who is checked in holds a visa for the destination (SR-49); some Booked ME 201
@@ -65,6 +67,8 @@ class FlightSeeder extends Seeder
 
     private User $manager;
 
+    private User $parisCheckinAgent;
+
     private Aircraft $aircraft;
 
     private int $nameIndex = 0;
@@ -87,12 +91,15 @@ class FlightSeeder extends Seeder
         $this->checkinAgent = User::where('role', Role::Checkin)->firstOrFail();
         $this->gateAgent = User::where('role', Role::Gate)->firstOrFail();
         $this->manager = User::where('role', Role::Manager)->firstOrFail();
+        $this->parisCheckinAgent = User::where('role', Role::Checkin)->where('airport_code', 'CDG')->firstOrFail();
         $this->aircraft = Aircraft::where('registration', 'OD-MRA')->firstOrFail();
 
         $this->seedParis();
         $this->seedDubai();
         $this->seedLondon();
         $this->seedRome();
+        $this->seedParisToBeirut();
+        $this->seedIstanbulToParis();
     }
 
     /**
@@ -224,6 +231,40 @@ class FlightSeeder extends Seeder
     private function seedRome(): void
     {
         $this->flight('ME422', 'BEY', 'FCO', gate: null, departs: 24 * 60, opens: 24 * 60 - 180, closes: 24 * 60 - 45);
+    }
+
+    /**
+     * ME 202 Paris → Beirut, the return flight: check-in open now at CDG, for the Paris staff (B13a).
+     * 5 Booked and 2 CheckedIn by the Paris check-in agent. Lebanese passports: no visa needed.
+     */
+    private function seedParisToBeirut(): void
+    {
+        $flight = $this->flight('ME202', 'CDG', 'BEY', gate: 'K32', departs: 240, opens: -30, closes: 195);
+        $this->status->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->manager);
+
+        for ($i = 0; $i < 5; $i++) {
+            $this->passenger($flight);
+        }
+
+        for ($i = 0; $i < 2; $i++) {
+            $passenger = $this->passenger($flight);
+            $this->seat($flight, $passenger);
+            $this->passes->completeCheckIn($passenger, $this->parisCheckinAgent);
+            $this->bag($passenger);
+        }
+    }
+
+    /**
+     * ME 216 Istanbul → Paris: departs in 6 hours, still Scheduled, 4 Booked with a French visa.
+     * Not a Paris flight for check-in (it departs from IST); it shows in Paris as an arrival later (B13b).
+     */
+    private function seedIstanbulToParis(): void
+    {
+        $flight = $this->flight('ME216', 'IST', 'CDG', gate: null, departs: 360, opens: 180, closes: 315);
+
+        for ($i = 0; $i < 4; $i++) {
+            $this->passenger($flight, visaCountry: 'FR');
+        }
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Manager;
 use App\Enums\PassengerStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Flight;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
@@ -14,10 +15,11 @@ class DashboardController extends Controller
      * Figures for each of today's flights (SR-47). Read only: nothing is changed here.
      * Always 3 queries, however many passengers there are: flights, passenger counts, bag counts.
      */
-    public function index(): View
+    public function index(Request $request): View
     {
-        // Same definition of "today" as the <x-todays-flights> component (SR-41).
-        $flights = Flight::whereBetween('departure_at', [now()->startOfDay(), now()->endOfDay()])
+        // Same definition of "today" as the <x-todays-flights> component (SR-41): today at the
+        // Manager's station (UTC without one), flights from every station (B13a).
+        $flights = Flight::departingToday($request->user())
             ->orderBy('departure_at')
             ->get();
 

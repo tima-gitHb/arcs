@@ -5,7 +5,7 @@ Booking confirmed. Give this PNR to the passenger for check-in.
 
 **Flight:** {{ $reservation->flight->flight_no }} · {{ $reservation->flight->origin }} → {{ $reservation->flight->destination }}
 
-**Departure (Beirut):** {{ $reservation->flight->departure_at->timezone(config('app.timezone'))->format('d M Y H:i') }}
+**Departure ({{ $reservation->flight->origin }} local time):** {{ $reservation->flight->departureLocal()->format('d M Y H:i') }}
 
 <x-receipt :payment="$payment" class="my-4" />
 

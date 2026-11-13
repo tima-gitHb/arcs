@@ -12,6 +12,9 @@ use Illuminate\View\View;
  * Today's flights, sorted by departure (SR-41). Shared by the role home pages:
  *     <x-todays-flights :role="auth()->user()->role" />
  * The role is passed on to the view so each module can add its own action per row later.
+ * "Today" is today at the viewer's station (B13a). Check-in, gate and reservation staff see
+ * their station's departures (reservation staff with no station see all); the Manager sees all.
+ * Departure times are shown in the origin airport's local time.
  */
 class TodaysFlights extends Component
 {
@@ -23,8 +26,13 @@ class TodaysFlights extends Component
     public function __construct(Role|string $role)
     {
         $this->role = $role instanceof Role ? $role : Role::from($role);
+        $user = auth()->user();
+        // The Manager sees every station; the others their own (none set: every station).
+        $station = $this->role === Role::Manager ? null : $user?->airport_code;
 
-        $this->flights = Flight::whereBetween('departure_at', [now()->startOfDay(), now()->endOfDay()])
+        $this->flights = Flight::query()
+            ->when($user, fn ($query) => $query->departingToday($user), fn ($query) => $query->whereBetween('departure_at', [now()->startOfDay(), now()->endOfDay()]))
+            ->when($station, fn ($query, string $code) => $query->departingFrom($code))
             ->orderBy('departure_at')
             ->get();
     }

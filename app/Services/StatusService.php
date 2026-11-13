@@ -272,7 +272,7 @@ class StatusService
     private function ensureValidDocument(Passenger $passenger, Flight $flight): void
     {
         $minMonths = (int) (Setting::find('passport_min_months')?->value ?? 0);
-        $validUntil = $flight->departure_at->copy()->startOfDay()->addMonthsNoOverflow($minMonths);
+        $validUntil = $flight->departureDate()->addMonthsNoOverflow($minMonths);
 
         $documents = $passenger->travelDocuments()
             ->whereIn('type', [DocumentType::Passport, DocumentType::IdCard])

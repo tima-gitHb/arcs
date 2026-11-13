@@ -17,6 +17,7 @@ use App\Services\AircraftService;
 use App\Services\ReservationService;
 use App\Services\StatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
@@ -55,7 +56,7 @@ class FlightListTest extends TestCase
         parent::setUp();
 
         // flightWithStatus() opens the check-in window around now(): 09:00 to 11:15, departure 12:00.
-        $this->travelTo('2026-11-10 10:00:00');
+        $this->travelTo(Carbon::parse('2026-11-10 10:00:00', 'Asia/Beirut')); // staff are at BEY (B13a)
 
         $this->manager = $this->actingAsRole(Role::Manager);
         $this->reservationAgent = User::factory()->create(['role' => Role::Reservation, 'name' => 'Reserv Rita']);
@@ -157,7 +158,7 @@ class FlightListTest extends TestCase
         $lina = $this->addPassenger($this->flight, 'Lina', 'Karam', '2B', checkedIn: true); // 10:00 by Carl
 
         app(StatusService::class)->setFlightStatus($this->flight, FlightStatus::Boarding, $this->manager);
-        $this->travelTo('2026-11-10 10:30:00');
+        $this->travelTo(Carbon::parse('2026-11-10 10:30:00', 'Asia/Beirut'));
         app(StatusService::class)->board($lina, $this->gateAgent);
 
         $this->openList($this->flight, 'passengers')

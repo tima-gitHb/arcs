@@ -9,6 +9,7 @@ use App\Http\Requests\Manager\StoreFlightRequest;
 use App\Http\Requests\Manager\UpdateFlightGateRequest;
 use App\Http\Requests\Manager\UpdateFlightStatusRequest;
 use App\Models\Aircraft;
+use App\Models\Airport;
 use App\Models\AuditEntry;
 use App\Models\Flight;
 use App\Services\StatusService;
@@ -25,6 +26,7 @@ class FlightController extends Controller
         return view('manager.flights', [
             'flights' => $flights,
             'aircraft' => Aircraft::withCount('seats')->orderBy('registration')->get(),
+            'airports' => Airport::orderBy('code')->get(),
             // flight id => the statuses StatusService would accept: one button each.
             'moves' => $flights->mapWithKeys(fn (Flight $flight) => [
                 $flight->id => $statusService->allowedFlightMoves($flight),
@@ -34,7 +36,7 @@ class FlightController extends Controller
 
     public function store(StoreFlightRequest $request): RedirectResponse
     {
-        $flight = Flight::create($request->validated());
+        $flight = Flight::create($request->flightData());
 
         return redirect()->route('manager.flights')
             ->with('success', "Flight {$flight->flight_no} created.");

@@ -22,7 +22,7 @@
                     <tr class="border-b border-gray-100 last:border-0">
                         <td class="px-4 py-2 font-medium">{{ $flight->flight_no }}</td>
                         <td class="px-4 py-2">{{ $flight->origin }} → {{ $flight->destination }}</td>
-                        <td class="px-4 py-2">{{ $flight->departure_at->format('H:i') }}</td>
+                        <td class="px-4 py-2"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="H:i" /></td>
                         <td class="px-4 py-2">{{ $flight->gate ?? '—' }}</td>
                         <td class="px-4 py-2">{{ $flight->status->label() }}</td>
                         @if ($hasActions())

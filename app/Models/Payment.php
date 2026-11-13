@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
+use App\Models\Concerns\StoresTimesInUtc;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -13,6 +14,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 class Payment extends Model
 {
+    use StoresTimesInUtc;
+
     /**
      * Why the gateway refused, for the screen. Not stored.
      */

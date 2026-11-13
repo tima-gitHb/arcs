@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\CorrectionService;
 use App\Services\StatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Illuminate\Testing\TestResponse;
 use Tests\TestCase;
 
@@ -72,6 +73,7 @@ class AuditTest extends TestCase
 
     public function test_SR26_check_in_and_boarding_show_two_entries_with_staff_and_time(): void
     {
+        $this->travelTo(Carbon::parse('2026-11-10 10:00:00', 'Asia/Beirut')); // the Manager is at BEY (B13a)
         $gateAgent = User::factory()->create(['role' => Role::Gate, 'name' => 'Gate Gina']);
         $this->checkinAgent->update(['name' => 'Checkin Carl']);
 
@@ -79,7 +81,7 @@ class AuditTest extends TestCase
         $passenger = $this->checkedInPassenger($flight, ['first_name' => 'Zaid', 'last_name' => 'Qortbawi']);
 
         app(StatusService::class)->setFlightStatus($flight, FlightStatus::Boarding, $this->manager);
-        $this->travelTo('2026-11-10 10:30:00');
+        $this->travelTo(Carbon::parse('2026-11-10 10:30:00', 'Asia/Beirut'));
         app(StatusService::class)->board($passenger, $gateAgent);
 
         $response = $this->get(route('manager.audit'))
@@ -181,7 +183,7 @@ class AuditTest extends TestCase
         $day1 = $this->checkedInPassenger($flightDay1);
 
         // Next day, late evening: the date filter must use the day of changed_at, not the time.
-        $this->travelTo('2026-11-11 23:30:00');
+        $this->travelTo(Carbon::parse('2026-11-11 23:30:00', 'Asia/Beirut'));
         $flightDay2 = $this->flightWithStatus(FlightStatus::CheckinOpen);
         $day2 = $this->checkedInPassenger($flightDay2);
 

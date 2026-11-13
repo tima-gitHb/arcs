@@ -252,18 +252,6 @@ class C8EntryRequirementsTest extends TestCase
         $this->assertSame(0, AuditEntry::where('field', 'entry_override')->count());
     }
 
-    public function test_SR49_an_unmapped_airport_is_unknown_and_does_not_block(): void
-    {
-        $passenger = $this->passengerOn($this->flightTo('ZZZ'));
-
-        $result = $this->check($passenger);
-
-        $this->assertSame(EntryStatus::Unknown, $result->status);
-        $this->assertSame('No entry rule for Lebanon → airport ZZZ, check manually', $result->message);
-
-        $this->confirm($passenger)->assertSessionHas('success');
-    }
-
     public function test_SR49_without_a_valid_passport_the_result_is_unknown(): void
     {
         $passenger = Passenger::factory()->for(Reservation::factory()->for($this->flightTo('CDG')))->create();

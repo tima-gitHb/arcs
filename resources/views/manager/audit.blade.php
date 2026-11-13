@@ -13,7 +13,7 @@
                         <option value="">All flights</option>
                         @foreach ($flights as $flight)
                             <option value="{{ $flight->id }}" @selected((string) request('flight_id') === (string) $flight->id)>
-                                {{ $flight->flight_no }} — {{ $flight->departure_at->format('d M Y') }}
+                                {{ $flight->flight_no }} — {{ $flight->departureLocal()->format('d M Y') }}
                             </option>
                         @endforeach
                     </select>
@@ -66,7 +66,7 @@
                 <tbody>
                     @forelse ($entries as $entry)
                         <tr class="border-b border-gray-100 last:border-0">
-                            <td class="px-4 py-2 whitespace-nowrap">{{ $entry->changed_at->format('d M Y H:i') }}</td>
+                            <td class="px-4 py-2 whitespace-nowrap"><x-station-time :at="$entry->changed_at" format="d M Y H:i" /></td>
                             @php
                                 // A price change (fare or fee) belongs to no passenger and no flight. It is told
                                 // by its field ("fare Business Adult", "fee ExtraBag"), not by what is missing.

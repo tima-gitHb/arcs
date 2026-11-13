@@ -37,7 +37,8 @@ class AuditController extends Controller
                     ->orWhere('last_name', 'like', "%{$text}%")
                     ->orWhereHas('reservation', fn ($reservation) => $reservation->where('pnr', 'like', "%{$text}%"))))
             ->when($filters['user_id'] ?? null, fn ($query, $userId) => $query->where('user_id', $userId))
-            ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereDate('changed_at', $date))
+            // A day at the Manager's station (UTC without one), B13a.
+            ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereBetween('changed_at', $request->user()->stationDay($date)))
             // Same second? Highest id (the latest written) first, so the order is stable.
             ->orderByDesc('changed_at')
             ->orderByDesc('id')

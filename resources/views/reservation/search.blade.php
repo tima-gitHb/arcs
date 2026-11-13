@@ -58,14 +58,14 @@
                             >
                         </div>
                         <div id="flight-list" class="relative max-h-80 overflow-y-auto">
-                            @foreach ($flights->groupBy(fn ($flight) => $flight->departure_at->timezone(config('app.timezone'))->format('Y-m-d')) as $day => $dayFlights)
+                            @foreach ($flights->groupBy(fn ($flight) => $flight->departureLocal()->format('Y-m-d')) as $day => $dayFlights)
                                 <div data-flight-day>
                                     <p class="sticky top-0 border-b border-gray-100 bg-gray-50 px-4 py-1.5 text-xs font-medium uppercase tracking-wide text-gray-500">
-                                        {{ \Illuminate\Support\Carbon::parse($day, config('app.timezone'))->format('d M Y') }}
+                                        {{ \Illuminate\Support\Carbon::parse($day)->format('d M Y') }}
                                     </p>
                                     @foreach ($dayFlights as $flight)
                                         @php
-                                            $when = $flight->departure_at->timezone(config('app.timezone'));
+                                            $when = $flight->departureLocal();
                                             $search = strtolower(implode(' ', [
                                                 $flight->flight_no,
                                                 $flight->origin,

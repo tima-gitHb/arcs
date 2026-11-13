@@ -13,7 +13,7 @@
                         <option value="">Choose a flight</option>
                         @foreach ($flights as $flight)
                             <option value="{{ $flight->id }}" @selected($selected?->is($flight))>
-                                {{ $flight->flight_no }} — {{ $flight->origin }} → {{ $flight->destination }}, {{ $flight->departure_at->format('d M Y H:i') }}
+                                {{ $flight->flight_no }} — {{ $flight->origin }} → {{ $flight->destination }}, {{ $flight->departureLocal()->format('d M Y H:i') }}
                             </option>
                         @endforeach
                     </select>
@@ -53,7 +53,7 @@
                                 <tr data-today-flight="{{ $flight->flight_no }}" class="border-b border-gray-100 last:border-0">
                                     <td class="px-4 py-2 font-medium">{{ $flight->flight_no }}</td>
                                     <td class="px-4 py-2">{{ $flight->origin }} → {{ $flight->destination }}</td>
-                                    <td class="px-4 py-2">{{ $flight->departure_at->format('H:i') }}</td>
+                                    <td class="px-4 py-2"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="H:i" /></td>
                                     <td class="px-4 py-2 text-right">
                                         <a href="{{ route('manager.sales', ['flight' => $flight->id]) }}" class="font-medium text-navy hover:underline">Sales</a>
                                     </td>
@@ -85,7 +85,7 @@
                 <h2 class="text-lg font-semibold text-navy">
                     {{ $flight->flight_no }} — {{ $flight->origin }} → {{ $flight->destination }}
                 </h2>
-                <p class="text-sm text-gray-600">{{ $flight->departure_at->format('d M Y H:i') }} · {{ $flight->status->label() }}</p>
+                <p class="text-sm text-gray-600"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M Y H:i" /> · {{ $flight->status->label() }}</p>
 
                 <div class="mt-4 overflow-x-auto">
                     <table class="w-full text-sm">

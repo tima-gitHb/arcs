@@ -31,6 +31,7 @@ use App\Services\FareService;
 use App\Services\Payments\CardDetails;
 use App\Services\Payments\FakeCardGateway;
 use App\Services\PaymentService;
+use App\Support\LocalTime;
 use App\Support\Money;
 use App\Support\ReservationContactRules;
 use Database\Seeders\FareSeeder;
@@ -75,22 +76,13 @@ class B12Sprint2BaseTest extends TestCase
 
     // --- 1. Local time -------------------------------------------------------------------------
 
-    public function test_the_app_and_mysql_use_beirut_time(): void
-    {
-        $this->assertSame('Asia/Beirut', config('app.timezone'));
-
-        $offset = now('Asia/Beirut')->format('P');
-        $this->assertSame($offset, config('database.connections.mysql.timezone'));
-
-        if (DB::getDriverName() === 'mysql') {
-            $this->assertSame($offset, DB::selectOne('select @@session.time_zone as tz')->tz);
-        }
-    }
+    // B13a: times are stored in UTC (B13aStationsTimeTest::test_the_app_and_mysql_use_utc)
+    // and shown in the airport's local time; Beirut is still shown in Beirut time.
 
     public function test_beirut_time_handles_summer_and_winter(): void
     {
-        $this->assertSame('15:00', Carbon::parse('2026-07-01 12:00', 'UTC')->setTimezone(config('app.timezone'))->format('H:i'));
-        $this->assertSame('14:00', Carbon::parse('2026-01-15 12:00', 'UTC')->setTimezone(config('app.timezone'))->format('H:i'));
+        $this->assertSame('15:00', LocalTime::at(Carbon::parse('2026-07-01 12:00', 'UTC'), 'BEY')->format('H:i'));
+        $this->assertSame('14:00', LocalTime::at(Carbon::parse('2026-01-15 12:00', 'UTC'), 'BEY')->format('H:i'));
     }
 
     public function test_today_means_today_in_beirut(): void
@@ -99,6 +91,7 @@ class B12Sprint2BaseTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-10 22:30', 'UTC'));
         Flight::factory()->create(['flight_no' => 'ME111', 'departure_at' => Carbon::parse('2026-11-11 08:00', 'Asia/Beirut')]);
         Flight::factory()->create(['flight_no' => 'ME100', 'departure_at' => Carbon::parse('2026-11-10 20:00', 'Asia/Beirut')]);
+        $this->actingAs(User::factory()->create(['role' => Role::Gate, 'airport_code' => 'BEY'])); // a Beirut agent (B13a)
 
         $this->blade('<x-todays-flights role="gate" />')
             ->assertSee('ME111')

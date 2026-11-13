@@ -8,6 +8,7 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
 - A **staff-only** web app (no passenger side, no connecting flights). Payments: card only, test mode, fake gateway.
 - Covers reservation → check-in → baggage → seat → boarding, and **enforces the order**.
 - Four roles, one per account: `reservation`, `checkin`, `gate`, `manager`.
+- One airline's system, used by staff at every airport of its network; each staff member works at a station (airport).
 
 ## Stack
 - Laravel 12, PHP 8.2, MySQL (managed with MySQL Workbench), Blade + Breeze, Tailwind, Vite.
@@ -39,8 +40,29 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
 - **Special services** (enum `SpecialServiceCode`, IATA codes): codes where `requiresDetails()` is true
   (UMNR, PETC, AVIH, DPNA, MEDA) must have `details` (SR-44).
   **UMNR only for a Child with no Adult on the same PNR.** (Both validated in task C7.)
-- **Times are Beirut time** (summer time included): `APP_TIMEZONE=Asia/Beirut`, and the MySQL connection uses the
-  same clock (`config/database.php`). "Today", departures, check-in windows, boarding passes and the audit log follow it.
+- **Airports and stations** (B13a): one airline, staff at every airport of its network. The `airports` table
+  (`code` IATA primary key, name, city, ISO-2 `country`, IANA `timezone`, `min_connection_minutes`) is filled by its
+  migration; `flights.origin`/`destination` and `users.airport_code` (the staff member's **station**, nullable) are
+  foreign keys to it. `config/airports.php` no longer exists: the entry check reads the country from `airports`.
+  - Check-in and gate staff work **only on flights departing from their station**: their pages and
+    `<x-todays-flights>` list only those, and any action on another station's flight is 403 (middleware `station`).
+    Without a station they see "No station set: ask your manager".
+  - Reservation staff book any flight (their today's flights default to their station). The Manager sees every station.
+  - Query scopes: `Flight::departingFrom($code)` (a station's departures) and `Flight::departingToday($user)`
+    ("today" = the calendar day at the user's station, UTC without one). `$user->worksAt($flight)`.
+- **Times are stored in UTC, shown in local time** (B13a). `config/app.php` timezone is `UTC` and the MySQL connection
+  is `+00:00` (not env settings). Models with `StoresTimesInUtc` convert any date-time given to them to UTC.
+  Compare instants (`departure_at`, check-in window, boarding) directly; never compare formatted local times.
+  - **Never format a stored time directly** (`->format()` on `departure_at`, `changed_at`, ...). Use:
+    - Flight times, in the airport's time (departure and check-in at the origin):
+      `<x-local-time :at="$flight->departure_at" :airport="$flight->origin" />`, `$flight->departureLocal()`,
+      `$flight->atOrigin($time)`, or `App\Support\LocalTime::at($time, $code)` in PHP (mail, services).
+      There is no `arrivalLocal()` yet: flights have no arrival time until segments (B13b).
+    - When something happened (audit log, payments, logins, check-in by...): `<x-station-time :at="..." />`, in the
+      viewer's station time; a viewer without a station sees UTC, labelled "UTC".
+  - Date filters ("payments on 14 Nov") are a day at the viewer's station: `$user->stationDay($date)`.
+  - Document validity is checked against `$flight->departureDate()`, the departure date at the origin airport.
+  - The Manager's flight form takes times in the origin airport's local time.
 - **Money is always integer cents** (`amount_cents`), currency USD. Show amounts with `App\Support\Money::format()`.
 - **Never store a card.** The full card number and the CVC are never stored, logged, flashed or returned;
   only the brand, last 4 digits and gateway reference are kept.
@@ -59,10 +81,10 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
   blocking automatic visa checks and live/external visa or APIS checks, external systems (GDS, APIS),
   connecting flights, payroll.
 
-## Database (19 tables)
+## Database (20 tables)
 users, aircraft, seats, flights, reservations, passengers, seat_assignments, bags,
 boarding_passes, special_services, travel_documents, audit_log, baggage_allowances,
-gate_overrides, settings, entry_rules, fares, fees, payments.
+gate_overrides, settings, entry_rules, fares, fees, payments, airports.
 - **Never edit an existing migration** once it is on `dev` or `main`. Schema change = new migration,
   agreed with the team first.
 - Foreign keys always declared (`constrained()`), with `cascadeOnDelete()` only for seats → aircraft.
@@ -117,6 +139,9 @@ gate_overrides, settings, entry_rules, fares, fees, payments.
   - `flightWithStatus(FlightStatus::Boarding)` — a flight in that status, reached through `StatusService`,
     with the check-in window open around `now()`. Use `$this->travelTo()` for fixed times.
   - Never set a status directly in a test; reach it through `StatusService`.
+- Factory users work at BEY (`airport_code`); pass another station or `null` when the test needs it.
+- Test clocks are UTC: `travelTo('2026-11-10 10:00')` is 12:00 in Beirut. When a page shows a time, set the clock in
+  the staff member's zone: `travelTo(Carbon::parse('2026-11-10 10:00', 'Asia/Beirut'))`.
 - `php artisan test` (SQLite in memory, fast) before every commit.
   `composer test:mysql` runs the same suite on the local MySQL database `arcs_test` — use it when a change
   depends on MySQL behaviour (unique keys, row locks, transactions). See `.env.testing.example`.

@@ -3,15 +3,20 @@
 namespace App\Models;
 
 use App\Enums\FlightStatus;
+use App\Models\Concerns\StoresTimesInUtc;
+use App\Support\LocalTime;
+use DateTimeInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Support\Carbon;
 
 class Flight extends Model
 {
-    use HasFactory;
+    use HasFactory, StoresTimesInUtc;
 
     /**
      * 'status' and 'boarding_closed_at' are deliberately not fillable:
@@ -47,6 +52,61 @@ class Flight extends Model
     public function aircraft(): BelongsTo
     {
         return $this->belongsTo(Aircraft::class);
+    }
+
+    public function originAirport(): BelongsTo
+    {
+        return $this->belongsTo(Airport::class, 'origin', 'code');
+    }
+
+    public function destinationAirport(): BelongsTo
+    {
+        return $this->belongsTo(Airport::class, 'destination', 'code');
+    }
+
+    /**
+     * Flights leaving this airport (B13a). Check-in and gate staff only work their station's
+     * departures; the Manager's station filter (M17) builds on this.
+     */
+    public function scopeDepartingFrom(Builder $query, string $airportCode): void
+    {
+        $query->where('flights.origin', $airportCode);
+    }
+
+    /**
+     * Flights departing on the user's "today": the calendar day at their station (UTC without one).
+     * The day only: add departingFrom() for the station's own flights.
+     */
+    public function scopeDepartingToday(Builder $query, User $user): void
+    {
+        $query->whereBetween('flights.departure_at', $user->stationDay());
+    }
+
+    /**
+     * Departure in the origin airport's local time, for display (B13a). Comparisons use departure_at (UTC).
+     * There is no arrivalLocal() yet: flights have no arrival time (segments come in B13b).
+     */
+    public function departureLocal(): Carbon
+    {
+        return LocalTime::at($this->departure_at, $this->origin);
+    }
+
+    /**
+     * The calendar date of departure at the origin airport, as a date (midnight UTC, like the
+     * 'date' casts), to compare with document expiry dates (SR-23). Not the UTC date: a 01:00
+     * Beirut departure is still the day before in UTC.
+     */
+    public function departureDate(): Carbon
+    {
+        return Carbon::parse($this->departureLocal()->toDateString(), 'UTC');
+    }
+
+    /**
+     * Any time of this flight (check-in window, boarding) in the origin airport's local time, for display.
+     */
+    public function atOrigin(?DateTimeInterface $time): ?Carbon
+    {
+        return LocalTime::at($time, $this->origin);
     }
 
     public function reservations(): HasMany

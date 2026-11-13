@@ -4,13 +4,14 @@ namespace App\Models;
 
 use App\Enums\BagHandling;
 use App\Enums\BagType;
+use App\Models\Concerns\StoresTimesInUtc;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Bag extends Model
 {
-    use HasFactory;
+    use HasFactory, StoresTimesInUtc;
 
     /**
      * @var list<string>

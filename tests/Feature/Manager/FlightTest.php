@@ -167,9 +167,11 @@ class FlightTest extends TestCase
         $this->assertSame($data['aircraft_id'], $flight->aircraft_id);
         $this->assertSame('B4', $flight->gate);
         $this->assertSame(FlightStatus::Scheduled, $flight->status);
-        $this->assertSame('2026-11-11 14:00', $flight->departure_at->format('Y-m-d H:i'));
-        $this->assertSame('2026-11-11 11:00', $flight->checkin_opens_at->format('Y-m-d H:i'));
-        $this->assertSame('2026-11-11 13:15', $flight->checkin_closes_at->format('Y-m-d H:i'));
+        // Typed in Beirut time (the origin), stored in UTC: Beirut is UTC+2 in November (B13a).
+        $this->assertSame('2026-11-11 14:00', $flight->departureLocal()->format('Y-m-d H:i'));
+        $this->assertSame('2026-11-11 11:00', $flight->atOrigin($flight->checkin_opens_at)->format('Y-m-d H:i'));
+        $this->assertSame('2026-11-11 13:15', $flight->atOrigin($flight->checkin_closes_at)->format('Y-m-d H:i'));
+        $this->assertSame('2026-11-11 12:00', $flight->departure_at->format('Y-m-d H:i'));
     }
 
     public function test_lowercase_airport_codes_and_gate_are_accepted_and_saved_uppercase(): void

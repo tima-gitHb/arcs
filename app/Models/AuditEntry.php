@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\StoresTimesInUtc;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AuditEntry extends Model
 {
+    use StoresTimesInUtc;
+
     protected $table = 'audit_log';
 
     /**
