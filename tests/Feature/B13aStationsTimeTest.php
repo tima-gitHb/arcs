@@ -565,6 +565,9 @@ class B13aStationsTimeTest extends TestCase
 
     public function test_seeded_paris_demo_has_return_flights_with_passengers(): void
     {
+        // A fixed morning: the seeder places flights relative to now, and late in the evening
+        // ME202 (departs in 4 hours) would already be tomorrow in Paris.
+        $this->travelTo(Carbon::parse('2026-11-15 10:00', 'Europe/Paris'));
         $this->seed(DatabaseSeeder::class);
 
         $toBeirut = Flight::where('origin', 'CDG')->where('destination', 'BEY')->firstOrFail();
