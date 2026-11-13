@@ -88,7 +88,10 @@ class B8SeedersTest extends TestCase
             'ME110' => 'Closed',
             'ME201' => 'CheckinOpen',
             'ME202' => 'CheckinOpen',
+            'ME203' => 'Scheduled', // B13b round trip, out
+            'ME204' => 'Scheduled', // B13b round trip, back
             'ME216' => 'Scheduled',
+            'ME264' => 'CheckinOpen', // B13b connection BEY→IST→CDG, first flight
             'ME305' => 'Boarding',
             'ME422' => 'Scheduled',
         ], $statuses);
@@ -104,7 +107,10 @@ class B8SeedersTest extends TestCase
             'ME110' => 'BEY-LHR',
             'ME201' => 'BEY-CDG',
             'ME202' => 'CDG-BEY',
+            'ME203' => 'BEY-CDG',
+            'ME204' => 'CDG-BEY',
             'ME216' => 'IST-CDG',
+            'ME264' => 'BEY-IST',
             'ME305' => 'BEY-DXB',
             'ME422' => 'BEY-FCO',
         ], $routes);
@@ -123,7 +129,7 @@ class B8SeedersTest extends TestCase
         $paris = Flight::where('flight_no', 'ME201')->firstOrFail();
 
         // Checked-in passengers have a seat and at least one bag (except the infant: no seat, no bag).
-        $checkedIn = $paris->passengers()->where('passengers.status', 'CheckedIn')->get();
+        $checkedIn = $paris->passengers()->wherePivot('status', 'CheckedIn')->get(); // status on this flight's coupon (B13b)
         foreach ($checkedIn as $passenger) {
             if ($passenger->type === PassengerType::Infant) {
                 $this->assertNull($passenger->seatAssignment);
@@ -135,7 +141,7 @@ class B8SeedersTest extends TestCase
         }
 
         // The cancelled passenger's seat was released.
-        $cancelled = $paris->passengers()->where('passengers.status', 'Cancelled')->sole();
+        $cancelled = $paris->passengers()->wherePivot('status', 'Cancelled')->sole();
         $this->assertNull($cancelled->seatAssignment);
 
         // The infant is linked to an adult on the same booking and has no seat.
@@ -187,7 +193,7 @@ class B8SeedersTest extends TestCase
     public function test_no_show_bags_exist_on_london(): void
     {
         $london = Flight::where('flight_no', 'ME110')->firstOrFail();
-        $noShowIds = $london->passengers()->where('passengers.status', 'NoShow')->pluck('passengers.id');
+        $noShowIds = $london->passengers()->wherePivot('status', 'NoShow')->pluck('passengers.id');
 
         $this->assertSame(2, Bag::whereIn('passenger_id', $noShowIds)->count());
     }
@@ -197,13 +203,13 @@ class B8SeedersTest extends TestCase
         $this->assertGreaterThan(0, AuditEntry::count());
 
         // One audit row per status change: every passenger that is no longer Booked has at least one.
-        $changed = Passenger::where('status', '!=', PassengerStatus::Booked)->count();
+        $changed = Passenger::whereHas('coupons', fn ($coupon) => $coupon->where('status', '!=', PassengerStatus::Booked))->count(); // B13b
         $this->assertSame($changed, AuditEntry::distinct()->count('passenger_id'));
     }
 
     public function test_every_checked_in_or_boarded_passenger_has_exactly_one_active_pass(): void
     {
-        $passengers = Passenger::whereIn('status', [PassengerStatus::CheckedIn, PassengerStatus::Boarded])->get();
+        $passengers = Passenger::whereHas('coupons', fn ($coupon) => $coupon->whereIn('status', [PassengerStatus::CheckedIn, PassengerStatus::Boarded]))->get(); // B13b
 
         $this->assertGreaterThan(0, $passengers->count());
 
@@ -220,7 +226,7 @@ class B8SeedersTest extends TestCase
 
     public function test_fares_fees_and_one_paid_reservation_are_seeded(): void
     {
-        $this->assertSame(9, Fare::count());
+        $this->assertSame(9, Fare::query()->defaults()->count()); // B13b: plus the BEY→IST route fare
         $this->assertSame(4, Fee::count());
 
         $payment = Payment::sole();

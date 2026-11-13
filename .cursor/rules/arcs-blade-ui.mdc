@@ -10,6 +10,6 @@ alwaysApply: false
 - `<x-seat-map>` and `resources/js/seat-map.js` are shared by reservation, check-in and gate. If you change them, say so in the report and keep R1, C3, C6 tests green.
 - Confirmations are on-page panels, never JavaScript `confirm()`.
 - Staff see names, not codes (countries, cabin classes, statuses).
-- Amounts through the Money formatter; times in Beirut time.
+- Amounts through the Money formatter. Times are stored in UTC, shown in the airport's local time with `<x-local-time>` (flight times) or `<x-station-time>` (when something happened); never `->format()` a stored time.
 - Card fields: never `old()` a card number or CVC; never put them in the session.
 - Tailwind classes only (no inline styles); run `npm run build` after adding new classes.

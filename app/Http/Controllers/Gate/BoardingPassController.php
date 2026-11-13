@@ -17,12 +17,13 @@ class BoardingPassController extends Controller
 {
     public function show(Flight $flight, Passenger $passenger, BoardingPassService $passes): View
     {
-        $pass = $passenger->activeBoardingPass;
+        // The pass of this flight's coupon (one pass per flight since B13b).
+        $coupon = $passenger->couponOn($flight);
+        $pass = $coupon?->activeBoardingPass;
 
         abort_if(
             $pass === null
-            || $passenger->reservation->flight_id !== $flight->id
-            || ! in_array($passenger->status, [PassengerStatus::CheckedIn, PassengerStatus::Boarded], true),
+            || ! in_array($coupon->status, [PassengerStatus::CheckedIn, PassengerStatus::Boarded], true),
             404,
         );
 

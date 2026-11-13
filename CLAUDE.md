@@ -5,7 +5,9 @@ Team: Tima Karanouh (lead), Yasmina Souki, Serge Kahwaji. Client (role-play): Ka
 Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID in the BRD.
 
 ## What ARCS is
-- A **staff-only** web app (no passenger side, no connecting flights). Payments: card only, test mode, fake gateway.
+- A **staff-only** web app (no passenger side). Payments: card only, test mode, fake gateway.
+- A reservation is a **journey** of one or more flights: one-way, connection (BEY→IST→CDG) or round trip (B13b,
+  agreed client change request).
 - Covers reservation → check-in → baggage → seat → boarding, and **enforces the order**.
 - Four roles, one per account: `reservation`, `checkin`, `gate`, `manager`.
 - One airline's system, used by staff at every airport of its network; each staff member works at a station (airport).
@@ -27,7 +29,35 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
     - CheckedIn → NoShow (automatically when gate staff close boarding) — SR-12
   - `Boarded`, `Cancelled`, `NoShow` are final.
 - **Only `App\Services\StatusService` may change a passenger's status.** It checks the rule,
-  saves the change and writes an `audit_log` row (SR-26). Never set `$passenger->status` anywhere else.
+  saves the change and writes an `audit_log` row (SR-26). Never set a status anywhere else.
+- **Segments and coupons** (B13b, design: `docs/design/B13b-segments.md`):
+  - `reservation_segments`: the flights of a reservation in order (`sequence`), each `Outbound` or `Return`
+    (enum `SegmentDirection`). `reservations.flight_id` = the first outbound flight (`$reservation->flight`);
+    for every flight use `$reservation->segments`.
+  - `coupons`: one per passenger per segment. **The passenger status lives on the coupon** (with `checked_in_at`,
+    `boarded_at`); seat, boarding pass, gate override and audit row point at it (`coupon_id`).
+    `passengers` has no status column any more: `$passenger->status` / `checked_in_at` / `boarded_at` read the
+    passenger's current coupon (the first one, or the one a page loaded for its flight), so a one-flight
+    reservation works exactly as before. In SQL, query `coupons.status`, never a passenger status.
+  - The first segment is created with the reservation and a coupon per segment with each passenger (model events:
+    do not use `WithoutModelEvents` in seeders). Later segments only through `JourneyService::addSegments()`.
+  - **Journey rules (SR-65), only in `App\Services\JourneyService`**: each flight departs where the previous one
+    lands; the gap is at least the connecting airport's `min_connection_minutes`; a flight followed by another needs
+    `flights.arrives_at`; a return starts where the outbound ends, ends where it started, and leaves after the
+    outbound lands. Max 3 flights per direction.
+  - **Check-in covers a whole direction (SR-66)**: every coupon of the direction, all or none, at the direction's
+    origin (the return is checked in at its own origin by that station). Window and `CheckinOpen` on the first
+    flight; documents and a seat on every flight. One boarding pass per flight. **Boarding is per flight**
+    (`board($passenger, $by, $flight)`); a round trip's return stays Booked until its own check-in.
+  - Bags go to the **final destination of their direction** (`bags.direction`, `bags.destination`, SR-67). Each
+    direction has its own allowance and bags. Allowance: one-flight direction = seat cabin first, then booked
+    class; connection = booked class.
+  - Entry check on the **final destination of the direction only** (SR-68). Fares are **per flight**: journey
+    price = sum of each flight's fare, `FareService::quote(..., flights: n)` (SR-69).
+  - Services take an optional direction or flight; null = the direction whose first flight departs from the
+    agent's station (`JourneyService::directionFor()` / `firstFlightFor()`), else the first flight.
+  - `StatusService::cancelLaterCoupons()` exists for card G7 (no-show on a connection) and is not called yet;
+    `closeBoarding()` only touches coupons of its own flight.
 - **Flight status** (enum `FlightStatus`): `Scheduled`, `CheckinOpen`, `Boarding`, `Closed`, `Departed`, `Delayed`, `Cancelled` — SR-25.
   - A flight cannot go to `Departed` until every no-show bag is offloaded (enforced in `setFlightStatus()`) — SR-28.
 - **No double seat:** `seat_assignments` has UNIQUE (`flight_id`, `seat_id`). Assign seats inside a
@@ -57,7 +87,8 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
     - Flight times, in the airport's time (departure and check-in at the origin):
       `<x-local-time :at="$flight->departure_at" :airport="$flight->origin" />`, `$flight->departureLocal()`,
       `$flight->atOrigin($time)`, or `App\Support\LocalTime::at($time, $code)` in PHP (mail, services).
-      There is no `arrivalLocal()` yet: flights have no arrival time until segments (B13b).
+      Arrival in the destination's time: `$flight->arrivalLocal()` or
+      `<x-local-time :at="$flight->arrives_at" :airport="$flight->destination" />` (B13b; null when not set).
     - When something happened (audit log, payments, logins, check-in by...): `<x-station-time :at="..." />`, in the
       viewer's station time; a viewer without a station sees UTC, labelled "UTC".
   - Date filters ("payments on 14 Nov") are a day at the viewer's station: `$user->stationDay($date)`.
@@ -77,14 +108,14 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
   Schengen: for a destination in `config/schengen.php`, a valid visa or residence permit from any member counts, not
   only one from the destination. The 90/180-day stay limit is not checked. Transit rules are not covered.
 - Staff never type or read country codes: the database stores ISO-2 codes, `App\Services\CountryList` gives the names.
-- Out of scope (never build): refunds, online/passenger check-in,
+- Out of scope (never build): refunds (also: cancelling only one direction of a journey), online/passenger check-in,
   blocking automatic visa checks and live/external visa or APIS checks, external systems (GDS, APIS),
-  connecting flights, payroll.
+  transit visa rules, payroll.
 
-## Database (20 tables)
+## Database (22 tables)
 users, aircraft, seats, flights, reservations, passengers, seat_assignments, bags,
 boarding_passes, special_services, travel_documents, audit_log, baggage_allowances,
-gate_overrides, settings, entry_rules, fares, fees, payments, airports.
+gate_overrides, settings, entry_rules, fares, fees, payments, airports, reservation_segments, coupons.
 - **Never edit an existing migration** once it is on `dev` or `main`. Schema change = new migration,
   agreed with the team first.
 - Foreign keys always declared (`constrained()`), with `cascadeOnDelete()` only for seats → aircraft.
@@ -98,6 +129,11 @@ gate_overrides, settings, entry_rules, fares, fees, payments, airports.
 - Enums in `app/Enums/`.
 - Shared layout: `resources/views/layouts/app.blade.php` (header with role badge + role menu).
 - **Shared building blocks — use them, do not rebuild them:**
+  - Journeys (B13b): `JourneyService` (`validate`, `addSegments`, `directionFor`, `firstFlightFor`, `couponsOf`,
+    `flightsOf`, `finalDestination`, `isConnection`, `statusOf`), value object `App\Support\Journey`.
+    On a page about one flight, eager-load that flight's coupon and seat:
+    `with(['coupon' => fn ($q) => $q->where('coupons.flight_id', $id), 'seatAssignment' => fn ($q) => $q->where('seat_assignments.flight_id', $id)])`
+    (see `ManifestService`). `Flight::passengers()` goes through coupons; `Bag::noShowOn($flight)`.
   - Who did it (SR-45): `$passenger->checkedInBy`, `boardedBy`, `cancelledBy`, `markedNoShowBy` give the
     `audit_log` row (`->user`, `->changed_at`) or null. In lists, eager-load: `Passenger::with('checkedInBy.user')`.
   - Today's flights (SR-41): `<x-todays-flights :role="auth()->user()->role" />`.
@@ -107,11 +143,26 @@ gate_overrides, settings, entry_rules, fares, fees, payments, airports.
     the seat's, else the booked `passengers.cabin_class`; an infant uses the adult's. Extras: `extra_bags`, `extra_kg`.
   - Prices: `FareService::quote($passengers, $extras)` gives lines and a total in cents, from the `fares` and `fees`
     tables. Enum `FeeCode`. Show amounts with `Money::format()`.
+  - **Route fares** (B13b, SR-69): a `fares` row with `origin_airport_code` + `destination_airport_code` is the price on
+    that route; a row with neither is the **default**. `quote(..., origin: 'BEY', destination: 'IST')` uses the route
+    fare when it exists, else the default; without a route it uses the default, as before. One fare per
+    (route, class, type), defaults included (unique key on generated `route_origin` / `route_destination`).
+    `FareService::journeyQuote($reservation)` = each flight's route fare per passenger, added up (no UI yet).
+    Pages that show "the" fares read `Fare::query()->defaults()`; the M7 page edits defaults only.
+    The Fares page with a route selector is card M14; the booking screen using route fares is card R11/R12.
   - Payments: `PaymentService::charge(...)` through `App\Contracts\PaymentGateway` (bound to `FakeCardGateway`: 4242 4242
     4242 4242 accepted, anything else declined). Card data travels in `CardDetails`. Enums `PaymentKind`, `PaymentStatus`.
   - Reservation contact: `reservations.contact_email`, `contact_phone`; rules in `ReservationContactRules::rules()`.
   - Cabins: enum `CabinClass` is Business, Premium, Economy. `AircraftService` places `premium_rows` after the Business rows.
   - Flight audit rows: `AuditEntry::forFlight(...)` (`audit_log.flight_id`; `passenger_id` can be null).
+  - **Email** (B13c): every email uses the ARCS layout, i.e. a markdown mailable (`<x-mail::message>`) or a notification
+    `MailMessage`. Both render through `resources/views/vendor/mail/{html,text}/message.blade.php` (ARCS header and
+    footer); never build an email with its own layout. Tests use `Mail::fake()` / `Notification::fake()`
+    (phpunit.xml: `MAIL_MAILER=array`). Development: Mailtrap sandbox or `MAIL_MAILER=log`.
+    **Never put real mail credentials in the repo**: they go in `.env` only; `.env.example` keeps them empty.
+  - **PDF** (B13c): `App\Support\Pdf::fromView($view, $data, $filename)` returns the download response;
+    `Pdf::raw($view, $data)` returns the PDF bytes for an email attachment (`Attachment::fromData()`). Never call
+    dompdf directly. PDF views are full HTML pages with plain CSS (no Tailwind, no JavaScript).
 - Names: models singular (`Passenger`), tables plural snake_case (`seat_assignments`),
   routes `role.resource.action` (e.g. `checkin.seats.assign`).
 
@@ -139,6 +190,10 @@ gate_overrides, settings, entry_rules, fares, fees, payments, airports.
   - `flightWithStatus(FlightStatus::Boarding)` — a flight in that status, reached through `StatusService`,
     with the check-in window open around `now()`. Use `$this->travelTo()` for fixed times.
   - Never set a status directly in a test; reach it through `StatusService`.
+  - A multi-flight journey in a test: `Reservation::factory()` for the first flight, then
+    `JourneyService::addSegments($reservation, new Journey([...], [...]))`, then the passengers (see `B13bSegmentsTest`).
+  - Never use the real clock with seeded data or "today": the seeder works relative to `now()`, so set a fixed
+    morning with `travelTo()` first.
 - Factory users work at BEY (`airport_code`); pass another station or `null` when the test needs it.
 - Test clocks are UTC: `travelTo('2026-11-10 10:00')` is 12:00 in Beirut. When a page shows a time, set the clock in
   the staff member's zone: `travelTo(Carbon::parse('2026-11-10 10:00', 'Asia/Beirut'))`.

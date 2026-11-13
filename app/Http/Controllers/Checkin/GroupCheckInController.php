@@ -19,6 +19,7 @@ use App\Models\Setting;
 use App\Services\BagService;
 use App\Services\BoardingPassService;
 use App\Services\EntryRequirementChecker;
+use App\Services\JourneyService;
 use App\Services\SeatService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -35,7 +36,11 @@ class GroupCheckInController extends Controller
         SeatService $seats,
         EntryRequirementChecker $entryCheck,
         BagService $bags,
-    ): View {
+    ): View|RedirectResponse {
+        if ($refused = $this->refuseConnection($reservation)) {
+            return $refused;
+        }
+
         $reservation->load([
             'flight',
             'passengers.seatAssignment.seat',
@@ -86,6 +91,10 @@ class GroupCheckInController extends Controller
 
     public function assignSeats(Request $request, Reservation $reservation, SeatService $seats): RedirectResponse
     {
+        if ($refused = $this->refuseConnection($reservation)) {
+            return $refused;
+        }
+
         $reservation->load(['flight', 'passengers']);
         $screen = redirect()->route('checkin.reservations.group', $reservation);
 
@@ -133,6 +142,10 @@ class GroupCheckInController extends Controller
 
     public function confirmAll(Request $request, Reservation $reservation, BoardingPassService $passes): RedirectResponse
     {
+        if ($refused = $this->refuseConnection($reservation)) {
+            return $refused;
+        }
+
         $reservation->load(['passengers']);
         $request->validate([
             'entry_reasons' => ['nullable', 'array'],
@@ -189,5 +202,19 @@ class GroupCheckInController extends Controller
             'reservation' => $reservation,
             'cards' => $cards,
         ]);
+    }
+
+    /**
+     * Group check-in handles one flight per passenger: a reservation with a connection is checked in
+     * passenger by passenger (B13b). Null when the group screen can be used.
+     */
+    private function refuseConnection(Reservation $reservation): ?RedirectResponse
+    {
+        if (! app(JourneyService::class)->hasConnection($reservation)) {
+            return null;
+        }
+
+        return redirect()->route('checkin.home', ['q' => $reservation->pnr])
+            ->with('error', 'Connecting passenger: use single check-in');
     }
 }

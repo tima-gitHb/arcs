@@ -21,14 +21,18 @@ use App\Models\SpecialService;
 use App\Models\TravelDocument;
 use App\Models\User;
 use App\Services\BoardingPassService;
+use App\Services\JourneyService;
 use App\Services\PnrGenerator;
 use App\Services\StatusService;
+use App\Support\Journey;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
 
 /**
- * Six sample flights on OD-MRA, with times relative to now(): four from Beirut, the return
- * flight from Paris and one from Istanbul to Paris (B13a), so each station has its own demo.
+ * Nine sample flights on OD-MRA, with times relative to now(): six from Beirut, two from Paris
+ * and one from Istanbul to Paris (B13a), so each station has its own demo. Every flight has an
+ * arrival time. B13b adds a BEY→IST→CDG connection (ME264 + ME216) and a BEY→CDG→BEY round trip
+ * (ME203 + ME204), all passengers Booked.
  * Times are stored in UTC; pages show them in the origin airport's local time.
  * Every status is reached through StatusService, so audit_log fills naturally.
  * Check-ins go through BoardingPassService::completeCheckIn(), so passengers get their pass.
@@ -40,6 +44,19 @@ use Illuminate\Support\Carbon;
  */
 class FlightSeeder extends Seeder
 {
+    /**
+     * Flight time per route in minutes (real block times, rounded): arrives_at = departure + this (B13b).
+     */
+    private const BLOCK_MINUTES = [
+        'BEY-CDG' => 285,
+        'CDG-BEY' => 255,
+        'BEY-LHR' => 305,
+        'BEY-DXB' => 180,
+        'BEY-FCO' => 200,
+        'BEY-IST' => 110,
+        'IST-CDG' => 225,
+    ];
+
     private const FIRST_NAMES = [
         'Karim', 'Lara', 'Nadim', 'Rita', 'Fadi', 'Nour', 'Elie', 'Yara', 'Marc', 'Dana',
         'Ziad', 'Christelle', 'Hadi', 'Maria', 'Tarek', 'Joelle', 'Samir', 'Rania', 'Georges', 'Lina',
@@ -100,6 +117,56 @@ class FlightSeeder extends Seeder
         $this->seedRome();
         $this->seedParisToBeirut();
         $this->seedIstanbulToParis();
+        $this->seedConnectionViaIstanbul();
+        $this->seedRoundTripToParis();
+    }
+
+    /**
+     * B13b connection BEY→IST→CDG: ME264 BEY→IST (check-in open now, lands at IST 130 min before
+     * ME216 leaves; IST needs 60) then ME216 IST→CDG. 3 passengers Booked on both flights, with a
+     * seat on each and a French visa: checking in at BEY checks in both flights, bags go to CDG.
+     */
+    private function seedConnectionViaIstanbul(): void
+    {
+        $toIstanbul = $this->flight('ME264', 'BEY', 'IST', gate: 'A5', departs: 120, opens: -60, closes: 75);
+        $this->status->setFlightStatus($toIstanbul, FlightStatus::CheckinOpen, $this->manager);
+        $toParis = Flight::where('flight_no', 'ME216')->firstOrFail();
+
+        $reservation = $this->reservation($toIstanbul);
+        app(JourneyService::class)->addSegments($reservation, new Journey([$toIstanbul, $toParis]));
+
+        for ($i = 0; $i < 3; $i++) {
+            $passenger = $this->passenger($toIstanbul, visaCountry: 'FR', reservation: $reservation);
+            $this->seat($toIstanbul, $passenger);
+            $this->seat($toParis, $passenger);
+        }
+    }
+
+    /**
+     * B13b round trip BEY→CDG→BEY: out on ME203 tomorrow, back on ME204 CDG→BEY in 3 days.
+     * 2 passengers Booked both ways; the return is checked in at CDG by the Paris staff.
+     */
+    private function seedRoundTripToParis(): void
+    {
+        $out = $this->flight('ME203', 'BEY', 'CDG', gate: null, departs: 24 * 60 + 120, opens: 24 * 60 - 60, closes: 24 * 60 + 75);
+        $back = $this->flight('ME204', 'CDG', 'BEY', gate: null, departs: 3 * 24 * 60, opens: 3 * 24 * 60 - 180, closes: 3 * 24 * 60 - 45);
+
+        $reservation = $this->reservation($out);
+        app(JourneyService::class)->addSegments($reservation, new Journey([$out], [$back]));
+
+        for ($i = 0; $i < 2; $i++) {
+            $passenger = $this->passenger($out, visaCountry: 'FR', reservation: $reservation);
+            $this->seat($out, $passenger);
+        }
+    }
+
+    private function reservation(Flight $flight): Reservation
+    {
+        return Reservation::create([
+            'pnr' => $this->pnr->generate(),
+            'flight_id' => $flight->id,
+            'created_by' => $this->reservationAgent->id,
+        ]);
     }
 
     /**
@@ -278,6 +345,7 @@ class FlightSeeder extends Seeder
             'destination' => $destination,
             'aircraft_id' => $this->aircraft->id,
             'departure_at' => $this->minutes($departs),
+            'arrives_at' => $this->minutes($departs + self::BLOCK_MINUTES[$origin.'-'.$destination]),
             'gate' => $gate,
             'checkin_opens_at' => $this->minutes($opens),
             'checkin_closes_at' => $this->minutes($closes),
@@ -294,12 +362,9 @@ class FlightSeeder extends Seeder
         ?Passenger $adult = null,
         ?Carbon $passportExpiry = null,
         ?string $visaCountry = null,
+        ?Reservation $reservation = null,
     ): Passenger {
-        $reservationId = $adult?->reservation_id ?? Reservation::create([
-            'pnr' => $this->pnr->generate(),
-            'flight_id' => $flight->id,
-            'created_by' => $this->reservationAgent->id,
-        ])->id;
+        $reservationId = $adult?->reservation_id ?? $reservation?->id ?? $this->reservation($flight)->id;
 
         $passenger = Passenger::create([
             'reservation_id' => $reservationId,

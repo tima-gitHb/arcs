@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\PassengerStatus;
+use App\Enums\SegmentDirection;
 use App\Exceptions\BoardingPassNotAllowed;
 use App\Exceptions\EntryReasonRequired;
 use App\Exceptions\ExcessBaggageUnpaid;
@@ -11,6 +12,7 @@ use App\Models\BoardingPass;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Picqer\Barcode\Renderers\SvgRenderer;
@@ -31,35 +33,65 @@ class BoardingPassService
         private StatusService $statuses,
         private EntryRequirementChecker $entryCheck,
         private BagService $bags,
+        private JourneyService $journeys,
     ) {}
 
     /**
-     * "Confirm check-in": StatusService::checkIn() checks every rule, then the first pass
-     * is issued. One transaction: no check-in without a pass, no pass without a check-in.
+     * "Confirm check-in": StatusService::checkIn() checks every rule, then a pass is issued for every
+     * flight of the direction (SR-66). One transaction: no check-in without passes, no pass without a
+     * check-in. Returns the first flight's pass. Direction: null = the one departing from the agent's station.
      */
-    public function completeCheckIn(Passenger $passenger, User $by, ?string $entryReason = null): BoardingPass
+    public function completeCheckIn(Passenger $passenger, User $by, ?string $entryReason = null, ?SegmentDirection $direction = null): BoardingPass
     {
-        return DB::transaction(function () use ($passenger, $by, $entryReason) {
-            $this->statuses->checkIn($passenger, $by);
-            $this->assertExcessPaid($passenger);
-            $this->acknowledgeEntryCheck($passenger, $by, $entryReason);
+        return DB::transaction(function () use ($passenger, $by, $entryReason, $direction) {
+            $direction ??= $this->journeys->directionFor($passenger, $by);
 
-            return $this->issue($passenger, $by);
+            $this->statuses->checkIn($passenger, $by, $direction);
+            $this->assertExcessPaid($passenger, $direction);
+            $this->acknowledgeEntryCheck($passenger, $by, $entryReason, $direction);
+
+            return $this->issueDirection($passenger, $by, $direction);
         });
     }
 
     /**
      * Same for a late check-in at the gate, approved by a Manager (SR-29).
      */
-    public function completeLateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?string $entryReason = null): BoardingPass
+    public function completeLateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?string $entryReason = null, ?SegmentDirection $direction = null): BoardingPass
     {
-        return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $entryReason) {
-            $this->statuses->lateCheckIn($passenger, $gateUser, $manager, $reason);
-            $this->assertExcessPaid($passenger);
-            $this->acknowledgeEntryCheck($passenger, $gateUser, $entryReason);
+        return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $entryReason, $direction) {
+            $direction ??= $this->journeys->directionFor($passenger, $gateUser);
 
-            return $this->issue($passenger, $gateUser);
+            $this->statuses->lateCheckIn($passenger, $gateUser, $manager, $reason, $direction);
+            $this->assertExcessPaid($passenger, $direction);
+            $this->acknowledgeEntryCheck($passenger, $gateUser, $entryReason, $direction);
+
+            return $this->issueDirection($passenger, $gateUser, $direction);
         });
+    }
+
+    /**
+     * The active passes of one direction, one per flight, in journey order.
+     *
+     * @return Collection<int, BoardingPass>
+     */
+    public function passesFor(Passenger $passenger, SegmentDirection $direction): Collection
+    {
+        return BoardingPass::query()
+            ->whereIn('coupon_id', $this->journeys->couponsOf($passenger, $direction)->modelKeys())
+            ->whereNull('voided_at')
+            ->orderBy('coupon_id')
+            ->get();
+    }
+
+    /**
+     * A pass for every coupon of the direction; returns the first flight's.
+     */
+    private function issueDirection(Passenger $passenger, User $by, SegmentDirection $direction): BoardingPass
+    {
+        return $this->journeys->couponsOf($passenger, $direction)
+            ->map(fn ($coupon) => $this->issue($passenger, $by, $coupon->flight))
+            ->first();
     }
 
     /**
@@ -67,16 +99,16 @@ class BoardingPassService
      * Due is quote − succeeded ExcessBaggage payments (C11). Missing fees still block.
      * Runs after status rules.
      */
-    private function assertExcessPaid(Passenger $passenger): void
+    private function assertExcessPaid(Passenger $passenger, SegmentDirection $direction): void
     {
         $passenger = $passenger->fresh();
-        $excess = $this->bags->excess($passenger);
+        $excess = $this->bags->excess($passenger, $direction);
 
         if (! $excess->hasExcess()) {
             return;
         }
 
-        if (! $excess->priceIsSet() || $this->bags->excessDueCents($passenger) > 0) {
+        if (! $excess->priceIsSet() || $this->bags->excessDueCents($passenger, $direction) > 0) {
             throw new ExcessBaggageUnpaid;
         }
     }
@@ -87,9 +119,9 @@ class BoardingPassService
      * Runs after the status rules, so their refusals keep their order and messages; the
      * exception rolls the check-in back.
      */
-    private function acknowledgeEntryCheck(Passenger $passenger, User $by, ?string $reason): void
+    private function acknowledgeEntryCheck(Passenger $passenger, User $by, ?string $reason, SegmentDirection $direction): void
     {
-        $result = $this->entryCheck->check($passenger->fresh());
+        $result = $this->entryCheck->check($passenger->fresh(), $direction);
 
         if (! $result->needsAcknowledgement()) {
             return;
@@ -113,20 +145,23 @@ class BoardingPassService
      * Issue a pass; any active pass is voided first, so a passenger has one active pass (SR-32).
      * Used for the first pass and for reprints.
      */
-    public function issue(Passenger $passenger, User $by): BoardingPass
+    public function issue(Passenger $passenger, User $by, ?Flight $flight = null): BoardingPass
     {
-        return DB::transaction(function () use ($passenger, $by) {
+        return DB::transaction(function () use ($passenger, $by, $flight) {
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($passenger->id);
+            // One pass per flight (B13b): the coupon of $flight, else the reservation's first flight.
+            $coupon = $passenger->coupons()->where('coupons.flight_id', $flight?->id ?? $passenger->reservation->flight_id)->first();
 
-            if ($passenger->status !== PassengerStatus::CheckedIn) {
+            if ($coupon?->status !== PassengerStatus::CheckedIn) {
                 throw new BoardingPassNotAllowed('A boarding pass is only issued to a checked-in passenger.');
             }
 
-            $passenger->boardingPasses()->whereNull('voided_at')->update(['voided_at' => now()]);
+            $coupon->boardingPasses()->whereNull('voided_at')->update(['voided_at' => now()]);
 
             // PNR first (SR-21), then passenger and pass number, so every pass is unique.
             $number = $passenger->boardingPasses()->count() + 1;
             $pass = $passenger->boardingPasses()->create([
+                'coupon_id' => $coupon->id,
                 'barcode' => $passenger->reservation->pnr.'-'.$passenger->id.'-'.$number,
                 'issued_at' => now(),
             ]);
@@ -152,8 +187,14 @@ class BoardingPassService
      */
     public function printData(Passenger $passenger, BoardingPass $pass): array
     {
-        $passenger->load(['reservation.flight', 'seatAssignment.seat', 'accompanyingAdult']);
-        $flight = $passenger->reservation->flight;
+        // The pass's own flight and seat (one pass per flight since B13b).
+        $passenger->load([
+            'reservation.flight',
+            'accompanyingAdult',
+            'seatAssignment' => fn ($query) => $query->where('coupon_id', $pass->coupon_id),
+            'seatAssignment.seat',
+        ]);
+        $flight = $pass->coupon?->flight ?? $passenger->reservation->flight;
 
         return [
             'passenger' => $passenger,

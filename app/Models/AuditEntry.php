@@ -18,6 +18,7 @@ class AuditEntry extends Model
     protected $fillable = [
         'passenger_id',
         'flight_id',
+        'coupon_id',
         'field',
         'old_value',
         'new_value',

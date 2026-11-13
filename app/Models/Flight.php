@@ -10,8 +10,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
 
 class Flight extends Model
@@ -30,6 +30,7 @@ class Flight extends Model
         'destination',
         'aircraft_id',
         'departure_at',
+        'arrives_at',
         'gate',
         'checkin_opens_at',
         'checkin_closes_at',
@@ -43,6 +44,7 @@ class Flight extends Model
         return [
             'status' => FlightStatus::class,
             'departure_at' => 'datetime',
+            'arrives_at' => 'datetime',
             'checkin_opens_at' => 'datetime',
             'checkin_closes_at' => 'datetime',
             'boarding_closed_at' => 'datetime',
@@ -84,7 +86,6 @@ class Flight extends Model
 
     /**
      * Departure in the origin airport's local time, for display (B13a). Comparisons use departure_at (UTC).
-     * There is no arrivalLocal() yet: flights have no arrival time (segments come in B13b).
      */
     public function departureLocal(): Carbon
     {
@@ -99,6 +100,14 @@ class Flight extends Model
     public function departureDate(): Carbon
     {
         return Carbon::parse($this->departureLocal()->toDateString(), 'UTC');
+    }
+
+    /**
+     * Arrival in the destination airport's local time, for display (B13b); null when not set.
+     */
+    public function arrivalLocal(): ?Carbon
+    {
+        return LocalTime::at($this->arrives_at, $this->destination);
     }
 
     /**
@@ -119,9 +128,18 @@ class Flight extends Model
         return $this->hasMany(SeatAssignment::class);
     }
 
-    public function passengers(): HasManyThrough
+    /**
+     * Everyone with a coupon on this flight (B13b): the passengers of its reservations and those
+     * connecting onto it from another flight.
+     */
+    public function passengers(): BelongsToMany
     {
-        return $this->hasManyThrough(Passenger::class, Reservation::class);
+        return $this->belongsToMany(Passenger::class, 'coupons');
+    }
+
+    public function coupons(): HasMany
+    {
+        return $this->hasMany(Coupon::class);
     }
 
     /**

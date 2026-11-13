@@ -15,6 +15,7 @@ class BoardingPass extends Model
      */
     protected $fillable = [
         'passenger_id',
+        'coupon_id',
         'barcode',
         'issued_at',
         'voided_at',
@@ -29,6 +30,11 @@ class BoardingPass extends Model
             'issued_at' => 'datetime',
             'voided_at' => 'datetime',
         ];
+    }
+
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     public function passenger(): BelongsTo

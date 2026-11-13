@@ -88,7 +88,7 @@ class SpecialServiceService
         return $passenger->type === PassengerType::Child
             && ! $passenger->reservation->passengers()
                 ->where('type', PassengerType::Adult)
-                ->where('status', '!=', PassengerStatus::Cancelled)
+                ->whereHas('coupons', fn ($coupon) => $coupon->where('coupons.status', '!=', PassengerStatus::Cancelled->value))
                 ->exists();
     }
 }

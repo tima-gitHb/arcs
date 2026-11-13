@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
+use App\Enums\SegmentDirection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,9 +25,33 @@ class Reservation extends Model
         'contact_phone',
     ];
 
+    protected static function booted(): void
+    {
+        // The reservation's flight is the first outbound segment (B13b). JourneyService adds the others.
+        static::created(function (Reservation $reservation) {
+            $reservation->segments()->create([
+                'flight_id' => $reservation->flight_id,
+                'sequence' => 1,
+                'direction' => SegmentDirection::Outbound,
+            ]);
+        });
+    }
+
+    /**
+     * The first flight of the journey (the first outbound segment). For a journey of several
+     * flights use segments().
+     */
     public function flight(): BelongsTo
     {
         return $this->belongsTo(Flight::class);
+    }
+
+    /**
+     * The flights of the journey, in order (B13b).
+     */
+    public function segments(): HasMany
+    {
+        return $this->hasMany(ReservationSegment::class)->orderBy('reservation_segments.sequence');
     }
 
     public function creator(): BelongsTo

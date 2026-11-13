@@ -520,6 +520,7 @@ class B12Sprint2BaseTest extends TestCase
 
     public function test_the_M5_audit_page_and_filters_work_with_a_flight_only_row(): void
     {
+        $this->travelTo(Carbon::parse('2026-11-15 10:00', 'Asia/Beirut')); // fixed clock: "today" is the Beirut day
         $flight = Flight::factory()->create(['flight_no' => 'ME777']);
         $other = Flight::factory()->create();
         $staff = User::factory()->create(['role' => Role::Gate, 'name' => 'Joe Saliba']);

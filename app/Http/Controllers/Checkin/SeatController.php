@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Checkin;
 use App\Exceptions\SeatNotAllowed;
 use App\Exceptions\SeatTaken;
 use App\Http\Controllers\Controller;
+use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Seat;
 use App\Services\SeatService;
@@ -18,12 +19,17 @@ class SeatController extends Controller
 {
     public function assign(Request $request, Passenger $passenger, SeatService $seats): RedirectResponse
     {
-        $request->validate(['seat_id' => ['required', 'integer', 'exists:seats,id']]);
+        $request->validate([
+            'seat_id' => ['required', 'integer', 'exists:seats,id'],
+            // Which flight of a connection the seat is for (B13b); none = the first flight.
+            'flight_id' => ['nullable', 'integer', 'exists:flights,id'],
+        ]);
         $seat = Seat::query()->findOrFail($request->integer('seat_id'));
-        $screen = redirect()->route('checkin.passengers.show', $passenger);
+        $flight = $request->filled('flight_id') ? Flight::query()->findOrFail($request->integer('flight_id')) : null;
+        $screen = redirect()->route('checkin.passengers.show', array_filter([$passenger, 'flight' => $flight?->id]));
 
         try {
-            $seats->assign($passenger, $seat, $request->user());
+            $seats->assign($passenger, $seat, $request->user(), $flight);
         } catch (SeatTaken|SeatNotAllowed $exception) {
             return $screen->with('error', $exception->getMessage());
         }
@@ -36,12 +42,17 @@ class SeatController extends Controller
      */
     public function change(Request $request, Passenger $passenger, SeatService $seats): RedirectResponse
     {
-        $request->validate(['seat_id' => ['required', 'integer', 'exists:seats,id']]);
+        $request->validate([
+            'seat_id' => ['required', 'integer', 'exists:seats,id'],
+            // Which flight of a connection the seat is for (B13b); none = the first flight.
+            'flight_id' => ['nullable', 'integer', 'exists:flights,id'],
+        ]);
         $seat = Seat::query()->findOrFail($request->integer('seat_id'));
-        $screen = redirect()->route('checkin.passengers.show', $passenger);
+        $flight = $request->filled('flight_id') ? Flight::query()->findOrFail($request->integer('flight_id')) : null;
+        $screen = redirect()->route('checkin.passengers.show', array_filter([$passenger, 'flight' => $flight?->id]));
 
         try {
-            $seats->change($passenger, $seat, $request->user());
+            $seats->change($passenger, $seat, $request->user(), $flight);
         } catch (SeatTaken|SeatNotAllowed $exception) {
             return $screen->with('error', $exception->getMessage());
         }

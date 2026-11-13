@@ -82,13 +82,14 @@ class SalesController extends Controller
      */
     private function sold(Collection $flights): Collection
     {
-        return DB::table('passengers')
-            ->join('reservations', 'reservations.id', '=', 'passengers.reservation_id')
-            ->whereIn('reservations.flight_id', $flights->modelKeys())
-            ->where('passengers.status', '!=', PassengerStatus::Cancelled->value)
+        // One coupon per passenger per flight (B13b): a connecting passenger is a seat sold on each flight.
+        return DB::table('coupons')
+            ->join('passengers', 'passengers.id', '=', 'coupons.passenger_id')
+            ->whereIn('coupons.flight_id', $flights->modelKeys())
+            ->where('coupons.status', '!=', PassengerStatus::Cancelled->value)
             ->where('passengers.type', '!=', PassengerType::Infant->value)
-            ->select('reservations.flight_id', 'passengers.cabin_class', DB::raw('count(*) as total'))
-            ->groupBy('reservations.flight_id', 'passengers.cabin_class')
+            ->select('coupons.flight_id', 'passengers.cabin_class', DB::raw('count(*) as total'))
+            ->groupBy('coupons.flight_id', 'passengers.cabin_class')
             ->get()
             ->groupBy('flight_id')
             ->map(fn ($rows) => $rows->mapWithKeys(fn ($row) => [(string) $row->cabin_class => (int) $row->total]));

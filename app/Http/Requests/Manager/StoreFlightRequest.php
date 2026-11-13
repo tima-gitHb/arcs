@@ -6,6 +6,7 @@ use App\Models\Airport;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreFlightRequest extends FormRequest
 {
@@ -41,6 +42,8 @@ class StoreFlightRequest extends FormRequest
             'destination' => ['required', 'regex:/^[A-Z]{3}$/', Rule::exists('airports', 'code'), 'different:origin'],
             'aircraft_id' => ['required', 'integer', Rule::exists('aircraft', 'id')],
             'departure_at' => ['required', 'date'],
+            // Optional (B13b): needed before another flight can follow this one in a journey.
+            'arrives_at' => ['nullable', 'date'],
             'checkin_opens_at' => ['required', 'date', 'before:checkin_closes_at'],
             'checkin_closes_at' => ['required', 'date', 'before:departure_at'],
             'gate' => ['nullable', 'regex:/^[A-Z]\d{1,2}$/'],
@@ -48,8 +51,28 @@ class StoreFlightRequest extends FormRequest
     }
 
     /**
-     * The validated data with the three times read as local time at the origin airport, as the
-     * Manager types them (B13a). The model stores them in UTC.
+     * The arrival is typed in the destination's local time, the departure in the origin's: compare
+     * the instants, not the text (B13b).
+     *
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [function (Validator $validator) {
+            if ($validator->errors()->isNotEmpty() || ! $this->filled('arrives_at')) {
+                return;
+            }
+
+            $data = $this->flightData();
+            if ($data['arrives_at']->lte($data['departure_at'])) {
+                $validator->errors()->add('arrives_at', 'The arrival must be after the departure.');
+            }
+        }];
+    }
+
+    /**
+     * The validated data with the times read as the Manager types them (B13a): departure and check-in
+     * in the origin airport's local time, arrival in the destination's (B13b). The model stores UTC.
      *
      * @return array<string, mixed>
      */
@@ -61,6 +84,10 @@ class StoreFlightRequest extends FormRequest
         foreach (['departure_at', 'checkin_opens_at', 'checkin_closes_at'] as $field) {
             $data[$field] = Carbon::parse($data[$field], $zone);
         }
+
+        $data['arrives_at'] = filled($data['arrives_at'] ?? null)
+            ? Carbon::parse($data['arrives_at'], Airport::timezoneOf($data['destination']))
+            : null;
 
         return $data;
     }

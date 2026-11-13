@@ -32,7 +32,8 @@ class FareSeeder extends Seeder
 
         foreach ($fares as [$cabin, $type, $cents]) {
             Fare::query()->updateOrCreate(
-                ['cabin_class' => $cabin, 'passenger_type' => $type],
+                // The default fare: no route (B13b).
+                ['origin_airport_code' => null, 'destination_airport_code' => null, 'cabin_class' => $cabin, 'passenger_type' => $type],
                 ['amount_cents' => $cents, 'currency' => 'USD'],
             );
         }

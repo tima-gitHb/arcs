@@ -58,7 +58,8 @@ class BoardingController extends Controller
         }
 
         try {
-            $statuses->board($passenger, $request->user());
+            // This flight's coupon only (B13b): a connecting passenger boards each flight at its gate.
+            $statuses->board($passenger, $request->user(), $flight);
         } catch (InvalidStatusChange $exception) {
             // After closing, "Boarding has not started" would be misleading.
             return $back->with('error', $this->boardingClosed($flight)

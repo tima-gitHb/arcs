@@ -7,12 +7,15 @@ use App\Enums\FlightStatus;
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
 use App\Enums\Role;
+use App\Enums\SegmentDirection;
 use App\Exceptions\InvalidStatusChange;
 use App\Models\AuditEntry;
 use App\Models\Bag;
+use App\Models\Coupon;
 use App\Models\Flight;
 use App\Models\GateOverride;
 use App\Models\Passenger;
+use App\Models\SeatAssignment;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -22,7 +25,9 @@ use Illuminate\Support\Str;
 
 /**
  * The ONLY code allowed to change a passenger's or a flight's status (see CLAUDE.md).
- * Every passenger change runs in a transaction and writes an audit_log row (SR-26).
+ * Since B13b a passenger's status lives on their coupons, one per flight of the journey:
+ * check-in covers every coupon of a direction, boarding one flight's coupon (SR-66).
+ * Every change runs in a transaction and writes an audit_log row per coupon (SR-26).
  */
 class StatusService
 {
@@ -38,23 +43,28 @@ class StatusService
         'Closed' => ['Departed'],
     ];
 
-    /**
-     * Booked -> CheckedIn (SR-6, SR-23, SR-25, SR-30, SR-31).
-     * A passenger other than an infant must have a seat first (C5).
-     */
-    public function checkIn(Passenger $passenger, User $by): void
-    {
-        DB::transaction(function () use ($passenger, $by) {
-            $this->lock($passenger);
-            $this->ensureBooked($passenger);
+    public function __construct(private JourneyService $journeys) {}
 
-            $flight = $passenger->reservation->flight;
+    /**
+     * Booked -> CheckedIn for every coupon of the direction, all or none (SR-6, SR-23, SR-25, SR-30,
+     * SR-31, SR-66). The window and CheckinOpen are checked on the direction's first flight; documents
+     * and seat (C5, infants excepted) on every flight. Direction: null = the one departing from the
+     * agent's station (JourneyService::directionFor).
+     */
+    public function checkIn(Passenger $passenger, User $by, ?SegmentDirection $direction = null): void
+    {
+        DB::transaction(function () use ($passenger, $by, $direction) {
+            $this->lock($passenger);
+            $coupons = $this->directionCoupons($passenger, $direction ?? $this->journeys->directionFor($passenger, $by));
+            $this->ensureBooked($coupons);
+
+            $flight = $coupons->first()->flight;
 
             if ($flight->status !== FlightStatus::CheckinOpen || ! $flight->isCheckinWindowOpen()) {
                 throw new InvalidStatusChange('Check-in closed');
             }
 
-            $this->finishCheckIn($passenger, $flight, $by);
+            $this->finishCheckIn($passenger, $coupons, $by);
         });
     }
 
@@ -62,13 +72,14 @@ class StatusService
      * Booked -> CheckedIn at the gate after check-in has closed, approved by a Manager (SR-29).
      * Skips only the check-in window / flight status rule: cancellation, documents and the
      * seat rule still apply. Boarding must not be closed. The gate agent is the actor in
-     * audit_log; the gate_overrides row records the Manager, the reason and the time.
+     * audit_log; a gate_overrides row per coupon records the Manager, the reason and the time.
      */
-    public function lateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason): void
+    public function lateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?SegmentDirection $direction = null): void
     {
-        DB::transaction(function () use ($passenger, $gateUser, $manager, $reason) {
+        DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $direction) {
             $this->lock($passenger);
-            $this->ensureBooked($passenger);
+            $coupons = $this->directionCoupons($passenger, $direction ?? $this->journeys->directionFor($passenger, $gateUser));
+            $this->ensureBooked($coupons);
 
             if ($manager->role !== Role::Manager) {
                 throw new InvalidStatusChange('A late check-in must be approved by a Manager.');
@@ -77,7 +88,7 @@ class StatusService
                 throw new InvalidStatusChange('A reason is required.');
             }
 
-            $flight = $passenger->reservation->flight;
+            $flight = $coupons->first()->flight;
 
             if ($flight->status === FlightStatus::Cancelled) {
                 throw new InvalidStatusChange('This flight is cancelled.');
@@ -89,86 +100,123 @@ class StatusService
                 throw new InvalidStatusChange("Late check-in isn't needed: check-in is still open for this flight.");
             }
 
-            $this->finishCheckIn($passenger, $flight, $gateUser);
+            $this->finishCheckIn($passenger, $coupons, $gateUser);
 
-            GateOverride::create([
-                'passenger_id' => $passenger->id,
-                'approved_by' => $manager->id,
-                'reason' => trim($reason),
-                'approved_at' => now(),
-            ]);
+            foreach ($coupons as $coupon) {
+                GateOverride::create([
+                    'passenger_id' => $passenger->id,
+                    'coupon_id' => $coupon->id,
+                    'approved_by' => $manager->id,
+                    'reason' => trim($reason),
+                    'approved_at' => now(),
+                ]);
+            }
         });
     }
 
-    private function ensureBooked(Passenger $passenger): void
+    /**
+     * @param  Collection<int, Coupon>  $coupons
+     */
+    private function ensureBooked(Collection $coupons): void
     {
-        if ($passenger->status === PassengerStatus::Cancelled) {
+        if ($coupons->contains(fn (Coupon $coupon) => $coupon->status === PassengerStatus::Cancelled)) {
             throw new InvalidStatusChange('Reservation cancelled');
         }
-        if ($passenger->status !== PassengerStatus::Booked) {
+        if ($coupons->contains(fn (Coupon $coupon) => $coupon->status !== PassengerStatus::Booked)) {
             throw new InvalidStatusChange('Already checked in');
         }
     }
 
     /**
-     * The rules shared by checkIn() and lateCheckIn(): documents and seat, then the status change.
+     * The rules shared by checkIn() and lateCheckIn(): documents and seat on every flight, then the
+     * status change of every coupon.
+     *
+     * @param  Collection<int, Coupon>  $coupons
      */
-    private function finishCheckIn(Passenger $passenger, Flight $flight, User $by): void
+    private function finishCheckIn(Passenger $passenger, Collection $coupons, User $by): void
     {
-        $this->ensureValidDocument($passenger, $flight);
-
-        if ($passenger->type !== PassengerType::Infant && $passenger->seatAssignment === null) {
-            throw new InvalidStatusChange('Seat required');
+        foreach ($coupons as $coupon) {
+            $this->ensureValidDocument($passenger, $coupon->flight);
         }
 
-        $this->changePassengerStatus($passenger, PassengerStatus::CheckedIn, $by, [
-            'checked_in_at' => now(),
-        ]);
+        if ($passenger->type !== PassengerType::Infant) {
+            $seated = SeatAssignment::query()->whereIn('coupon_id', $coupons->modelKeys())->pluck('coupon_id')->all();
+
+            foreach ($coupons as $coupon) {
+                if (! in_array($coupon->id, $seated)) {
+                    throw new InvalidStatusChange($coupons->count() === 1 ? 'Seat required' : "Seat required on {$coupon->flight->flight_no}");
+                }
+            }
+        }
+
+        foreach ($coupons as $coupon) {
+            $this->changeCouponStatus($coupon, PassengerStatus::CheckedIn, $by, ['checked_in_at' => now()]);
+        }
+
+        $passenger->unsetRelation('coupon');
     }
 
     /**
-     * Booked -> Cancelled; the seat is released (SR-5).
+     * Booked -> Cancelled for the whole journey; every seat is released (SR-5).
+     * Cancelling one direction only would be a partial refund: out of scope.
      */
     public function cancel(Passenger $passenger, User $by): void
     {
         DB::transaction(function () use ($passenger, $by) {
             $this->lock($passenger);
+            $coupons = $passenger->coupons()->with('flight')->lockForUpdate()->get();
 
-            if ($passenger->status !== PassengerStatus::Booked) {
+            if ($coupons->contains(fn (Coupon $coupon) => $coupon->status !== PassengerStatus::Booked)) {
                 throw new InvalidStatusChange('Only a booked passenger can be cancelled');
             }
 
-            $passenger->seatAssignment()->delete();
+            SeatAssignment::query()->where('passenger_id', $passenger->id)->delete();
 
-            $this->changePassengerStatus($passenger, PassengerStatus::Cancelled, $by);
+            foreach ($coupons as $coupon) {
+                $this->changeCouponStatus($coupon, PassengerStatus::Cancelled, $by);
+            }
+
+            $passenger->unsetRelation('coupon');
         });
     }
 
     /**
-     * CheckedIn -> Boarded (SR-10).
+     * CheckedIn -> Boarded on one flight (SR-10, SR-66): the coupon of $flight only. Null = the
+     * reservation's first flight, as before B13b. Gate pages pass the flight being boarded.
      */
-    public function board(Passenger $passenger, User $by): void
+    public function board(Passenger $passenger, User $by, ?Flight $flight = null): void
     {
-        DB::transaction(function () use ($passenger, $by) {
+        DB::transaction(function () use ($passenger, $by, $flight) {
             $this->lock($passenger);
 
-            if ($passenger->status !== PassengerStatus::CheckedIn) {
+            $coupon = Coupon::query()
+                ->where('passenger_id', $passenger->id)
+                ->where('flight_id', $flight?->id ?? $passenger->reservation->flight_id)
+                ->with('flight')
+                ->lockForUpdate()
+                ->first();
+
+            if ($coupon === null) {
+                throw new InvalidStatusChange('Passenger is not booked on this flight');
+            }
+            if ($coupon->status !== PassengerStatus::CheckedIn) {
                 throw new InvalidStatusChange('Passenger not checked in');
             }
-            if ($passenger->reservation->flight->status !== FlightStatus::Boarding) {
+            if ($coupon->flight->status !== FlightStatus::Boarding) {
                 throw new InvalidStatusChange('Boarding has not started');
             }
 
-            $this->changePassengerStatus($passenger, PassengerStatus::Boarded, $by, [
-                'boarded_at' => now(),
-            ]);
+            $this->changeCouponStatus($coupon, PassengerStatus::Boarded, $by, ['boarded_at' => now()]);
+
+            $passenger->unsetRelation('coupon');
         });
     }
 
     /**
-     * Boarding -> Closed. Every CheckedIn passenger becomes NoShow (SR-12).
+     * Boarding -> Closed. Every CheckedIn coupon of this flight becomes NoShow (SR-12).
+     * Later flights of a no-show's journey are left alone (card G7 will use cancelLaterCoupons()).
      * The Closed step writes a flight audit row before those passenger rows (SR-55).
-     * Returns the bags of those passengers, to be offloaded (SR-9).
+     * Returns the bags of those passengers in that direction, to be offloaded (SR-9).
      *
      * @return Collection<int, Bag>
      */
@@ -190,18 +238,52 @@ class StatusService
 
             AuditEntry::forFlight($flight, 'flight_status', $old, FlightStatus::Closed->value, $by);
 
-            $noShows = $flight->passengers()
-                ->where('passengers.status', PassengerStatus::CheckedIn)
+            $noShows = Coupon::query()
+                ->where('flight_id', $flight->id)
+                ->where('status', PassengerStatus::CheckedIn)
+                ->orderBy('passenger_id')
                 ->lockForUpdate()
                 ->get();
 
-            foreach ($noShows as $passenger) {
-                $this->changePassengerStatus($passenger, PassengerStatus::NoShow, $by);
+            foreach ($noShows as $coupon) {
+                $coupon->setRelation('flight', $flight);
+                $this->changeCouponStatus($coupon, PassengerStatus::NoShow, $by);
             }
 
-            return Bag::whereIn('passenger_id', $noShows->pluck('id'))
-                ->whereNull('offloaded_at')
+            return Bag::query()->noShowOn($flight)->whereNull('offloaded_at')->get();
+        });
+    }
+
+    /**
+     * For card G7 (no-show on a connection): the Booked or CheckedIn coupons after $coupon in the same
+     * direction become Cancelled, their seats are released and their passes voided. One audit row each.
+     * Not called in B13b.
+     *
+     * @return Collection<int, Coupon> the coupons cancelled
+     */
+    public function cancelLaterCoupons(Coupon $coupon, User $by): Collection
+    {
+        return DB::transaction(function () use ($coupon, $by) {
+            $segment = $coupon->segment;
+
+            $later = Coupon::query()
+                ->select('coupons.*')
+                ->join('reservation_segments', 'reservation_segments.id', '=', 'coupons.reservation_segment_id')
+                ->where('coupons.passenger_id', $coupon->passenger_id)
+                ->where('reservation_segments.direction', $segment->direction)
+                ->where('reservation_segments.sequence', '>', $segment->sequence)
+                ->whereIn('coupons.status', [PassengerStatus::Booked, PassengerStatus::CheckedIn])
+                ->with('flight')
+                ->lockForUpdate()
                 ->get();
+
+            foreach ($later as $next) {
+                SeatAssignment::query()->where('coupon_id', $next->id)->delete();
+                $next->boardingPasses()->whereNull('voided_at')->update(['voided_at' => now()]);
+                $this->changeCouponStatus($next, PassengerStatus::Cancelled, $by);
+            }
+
+            return $later;
         });
     }
 
@@ -239,12 +321,7 @@ class StatusService
      */
     private function ensureBagsOffloaded(Flight $flight): void
     {
-        $left = Bag::query()
-            ->whereNull('offloaded_at')
-            ->whereHas('passenger', fn ($passenger) => $passenger
-                ->where('status', PassengerStatus::NoShow)
-                ->whereHas('reservation', fn ($reservation) => $reservation->where('flight_id', $flight->id)))
-            ->count();
+        $left = Bag::query()->noShowOn($flight)->whereNull('offloaded_at')->count();
 
         if ($left > 0) {
             throw new InvalidStatusChange($left.' '.Str::plural('bag', $left).' still to offload');
@@ -263,6 +340,24 @@ class StatusService
             fn (string $status) => FlightStatus::from($status),
             self::FLIGHT_MOVES[$flight->status->value] ?? [],
         );
+    }
+
+    /**
+     * The passenger's coupons in one direction, locked for the transaction, flights loaded.
+     *
+     * @return Collection<int, Coupon>
+     */
+    private function directionCoupons(Passenger $passenger, SegmentDirection $direction): Collection
+    {
+        $coupons = $this->journeys->couponsOf($passenger, $direction);
+
+        if ($coupons->isEmpty()) {
+            throw new InvalidStatusChange("Passenger has no {$direction->label()} flight");
+        }
+
+        Coupon::query()->whereIn('id', $coupons->modelKeys())->lockForUpdate()->get();
+
+        return $coupons;
     }
 
     /**
@@ -288,18 +383,20 @@ class StatusService
     }
 
     /**
-     * Save the new status and write the audit_log row (SR-26).
+     * Save the coupon's new status and write the audit_log row (SR-26): passenger, flight and coupon.
      *
      * @param  array<string, mixed>  $extra  other columns to set, e.g. checked_in_at
      */
-    private function changePassengerStatus(Passenger $passenger, PassengerStatus $new, User $by, array $extra = []): void
+    private function changeCouponStatus(Coupon $coupon, PassengerStatus $new, User $by, array $extra = []): void
     {
-        $old = $passenger->status;
+        $old = $coupon->status;
 
-        $passenger->forceFill(['status' => $new] + $extra)->save();
+        $coupon->forceFill(['status' => $new] + $extra)->save();
 
         AuditEntry::create([
-            'passenger_id' => $passenger->id,
+            'passenger_id' => $coupon->passenger_id,
+            'flight_id' => $coupon->flight_id,
+            'coupon_id' => $coupon->id,
             'field' => 'status',
             'old_value' => $old?->value,
             'new_value' => $new->value,

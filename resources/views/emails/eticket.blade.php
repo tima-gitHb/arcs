@@ -23,6 +23,4 @@ Booking confirmed. Give this PNR to the passenger for check-in.
 @endphp
 - {{ $passenger->first_name }} {{ $passenger->last_name }} ({{ implode(', ', $parts) }})
 @endforeach
-
-{{ config('app.name') }}
 </x-mail::message>

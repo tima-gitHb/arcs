@@ -152,6 +152,11 @@ class CabinUpgradeService
 
     private function assertUpgradeAllowed(Passenger $passenger, CabinClass $to, bool $preview = false): void
     {
+        // One seat per flight on a connection: the upgrade screen handles one flight only (B13b).
+        if (app(JourneyService::class)->hasConnection($passenger->reservation)) {
+            throw new UpgradeNotAllowed('Upgrade is not available for connecting journeys yet');
+        }
+
         if (! in_array($passenger->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
             throw new UpgradeNotAllowed('Upgrade is only for a booked or checked-in passenger.');
         }

@@ -91,7 +91,8 @@ class ReservationController extends Controller
             ],
         );
 
-        $fares = Fare::query()->get()->map(
+        // Default fares; per-route prices come with the journey builder (card R11).
+        $fares = Fare::query()->defaults()->get()->map(
             fn (Fare $fare) => [
                 'cabin' => $fare->cabin_class->value,
                 'type' => $fare->passenger_type->value,
@@ -137,7 +138,7 @@ class ReservationController extends Controller
      */
     private function ensurePublishedPrices(): void
     {
-        $needsFares = Fare::query()
+        $needsFares = Fare::query()->defaults()
             ->where('cabin_class', CabinClass::Economy)
             ->where('passenger_type', PassengerType::Adult)
             ->doesntExist();
