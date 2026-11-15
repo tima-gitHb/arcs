@@ -75,7 +75,7 @@ class CabinUpgradeService
             throw new SeatTaken;
         }
 
-        // Charge first; on decline nothing else runs.
+        // Charge first; on decline nothing else runs. Audit the charge against this flight (C16).
         $payment = $this->payments->charge(
             $card,
             $amount,
@@ -83,6 +83,7 @@ class CabinUpgradeService
             $by,
             $passenger->reservation,
             $passenger,
+            $flight,
         );
 
         if ($payment->status !== PaymentStatus::Succeeded) {
@@ -101,6 +102,7 @@ class CabinUpgradeService
 
             AuditEntry::create([
                 'passenger_id' => $passenger->id,
+                'flight_id' => $flight->id,
                 'field' => 'cabin_class',
                 'old_value' => $from->value,
                 'new_value' => $to->value,
@@ -109,10 +111,11 @@ class CabinUpgradeService
             ]);
 
             // Infants on this adult follow the new class (no seat).
-            $passenger->infants()->each(function (Passenger $infant) use ($to, $by, $from) {
+            $passenger->infants()->each(function (Passenger $infant) use ($to, $by, $from, $flight) {
                 $infant->update(['cabin_class' => $to]);
                 AuditEntry::create([
                     'passenger_id' => $infant->id,
+                    'flight_id' => $flight->id,
                     'field' => 'cabin_class',
                     'old_value' => $from->value,
                     'new_value' => $to->value,
@@ -131,6 +134,7 @@ class CabinUpgradeService
 
             AuditEntry::create([
                 'passenger_id' => $passenger->id,
+                'flight_id' => $flight->id,
                 'field' => 'upgrade',
                 'old_value' => $from->value.($oldSeatNo ? " {$oldSeatNo}" : ''),
                 'new_value' => $to->value.' '.$seat->seat_no.' '.Money::format($amount),
