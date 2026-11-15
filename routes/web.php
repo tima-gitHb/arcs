@@ -5,6 +5,7 @@ use App\Http\Controllers\Checkin\BoardingPassController;
 use App\Http\Controllers\Checkin\CabinUpgradeController;
 use App\Http\Controllers\Checkin\CheckinController;
 use App\Http\Controllers\Checkin\ExcessPaymentController;
+use App\Http\Controllers\Checkin\FlightCheckinController;
 use App\Http\Controllers\Checkin\GroupCheckInController;
 use App\Http\Controllers\Checkin\SeatController;
 use App\Http\Controllers\Checkin\SpecialServiceController;
@@ -62,6 +63,7 @@ Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('re
 // Check-in staff, at their station: only flights departing from it (B13a).
 Route::middleware(['auth', 'role:checkin', 'station'])->prefix('checkin')->name('checkin.')->group(function () {
     Route::get('/', [CheckinController::class, 'home'])->name('home');
+    Route::get('/flights/{flight}', [FlightCheckinController::class, 'show'])->name('flights.show');
     Route::get('/passengers/{passenger}', [CheckinController::class, 'show'])->name('passengers.show');
     Route::post('/passengers/{passenger}/confirm', [CheckinController::class, 'confirm'])->name('passengers.confirm');
     Route::post('/passengers/{passenger}/documents', [TravelDocumentController::class, 'store'])->name('documents.store');

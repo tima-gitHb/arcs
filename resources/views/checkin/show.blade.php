@@ -54,21 +54,31 @@
             </dl>
 
             @if (isset($journeyFlights) && $journeyFlights->count() > 1)
-                {{-- A connection (B13b): check-in covers every flight below; each needs a seat. --}}
+                {{-- Through check-in (C14 / SR-66): whole direction, local times, connection gap. --}}
                 <div class="mt-4 border-t border-gray-100 pt-4" data-journey>
                     <p class="text-sm text-gray-500">
                         Connection to {{ $journeyFlights->last()->destination }}: check-in covers every flight, bags go to {{ $journeyFlights->last()->destination }}.
                     </p>
-                    <ul class="mt-2 space-y-1 text-sm">
-                        @foreach ($journeyFlights as $leg)
+                    <ul class="mt-2 space-y-2 text-sm">
+                        @foreach ($journeyFlights as $index => $leg)
                             <li @class(['font-medium text-navy' => $leg->is($flight)])>
-                                {{ $leg->flight_no }} · {{ $leg->origin }} → {{ $leg->destination }},
-                                <x-local-time :at="$leg->departure_at" :airport="$leg->origin" format="d M H:i" />
+                                {{ $leg->flight_no }} · {{ $leg->origin }} → {{ $leg->destination }}
+                                · dep <x-local-time :at="$leg->departure_at" :airport="$leg->origin" format="d M H:i" />
+                                @if ($leg->arrives_at)
+                                    · arr <x-local-time :at="$leg->arrives_at" :airport="$leg->destination" format="d M H:i" />
+                                @endif
                                 · Seat {{ $seatsByFlight->get($leg->id)?->seat?->seat_no ?? 'none' }}
                                 @unless ($leg->is($flight))
                                     <a href="{{ route('checkin.passengers.show', [$passenger, 'flight' => $leg->id]) }}" class="ml-1 text-navy hover:underline">Seat on {{ $leg->flight_no }}</a>
                                 @endunless
                             </li>
+                            @if ($index < $journeyFlights->count() - 1 && $leg->arrives_at)
+                                @php
+                                    $next = $journeyFlights[$index + 1];
+                                    $gap = (int) $leg->arrives_at->diffInMinutes($next->departure_at, false);
+                                @endphp
+                                <li class="pl-4 text-xs text-gray-500">Connection at {{ $leg->destination }}: {{ $gap }} min</li>
+                            @endif
                         @endforeach
                     </ul>
                 </div>
@@ -170,11 +180,11 @@
             && $passenger->type !== \App\Enums\PassengerType::Infant
             && ! $flight->isBoardingClosed())
             <div class="rounded-lg bg-white p-4 shadow-sm">
-                <a href="{{ route('checkin.passengers.upgrade', $passenger) }}"
+                <a href="{{ route('checkin.passengers.upgrade', [$passenger, 'flight' => $flight->id]) }}"
                    class="inline-block rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy hover:text-white">
                     Upgrade
                 </a>
-                <p class="mt-1 text-xs text-gray-500">Paid cabin upgrade to a higher class.</p>
+                <p class="mt-1 text-xs text-gray-500">Paid cabin upgrade to a higher class{{ ($journeyFlights ?? collect())->count() > 1 ? ' on '.$flight->flight_no : '' }}.</p>
             </div>
         @endif
 

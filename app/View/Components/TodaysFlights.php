@@ -46,13 +46,14 @@ class TodaysFlights extends Component
     {
         return match ($this->role) {
             Role::Gate => ['label' => 'Manifest', 'url' => route('gate.flights.show', $flight)],
+            Role::Checkin => ['label' => 'Check-in list', 'url' => route('checkin.flights.show', $flight)],
             default => null,
         };
     }
 
     public function hasActions(): bool
     {
-        return $this->role === Role::Gate;
+        return in_array($this->role, [Role::Gate, Role::Checkin], true);
     }
 
     public function render(): View

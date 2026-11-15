@@ -27,34 +27,41 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 /**
- * Group check-in for every passenger on one PNR (C12 / SR-61).
+ * Group check-in for every passenger on one PNR (C12 / C14 / SR-61 / SR-66).
+ * Connecting journeys are supported: check-in covers the agent's direction.
  */
 class GroupCheckInController extends Controller
 {
     public function show(
+        Request $request,
         Reservation $reservation,
         SeatService $seats,
         EntryRequirementChecker $entryCheck,
         BagService $bags,
-    ): View|RedirectResponse {
-        if ($refused = $this->refuseConnection($reservation)) {
-            return $refused;
-        }
-
+        JourneyService $journeys,
+    ): View {
         $reservation->load([
             'flight',
+            'segments.flight',
             'passengers.seatAssignment.seat',
             'passengers.travelDocuments',
             'passengers.bags',
             'passengers.activeBoardingPass',
             'passengers.accompanyingAdult',
+            'passengers.coupons',
         ]);
 
-        $flight = $reservation->flight;
+        $lead = $reservation->passengers->first();
+        $flight = $lead !== null
+            ? $journeys->firstFlightFor($lead, $request->user())
+            : $reservation->flight;
+        $direction = $lead !== null
+            ? $journeys->directionFor($lead, $request->user())
+            : null;
         $minMonths = (int) (Setting::find('passport_min_months')?->value ?? 0);
         $validUntil = $flight->departureDate()->addMonthsNoOverflow($minMonths);
 
-        $rows = $reservation->passengers->map(function (Passenger $passenger) use ($entryCheck, $bags, $validUntil) {
+        $rows = $reservation->passengers->map(function (Passenger $passenger) use ($entryCheck, $bags, $validUntil, $direction) {
             $docs = $passenger->travelDocuments->whereIn('type', [DocumentType::Passport, DocumentType::IdCard]);
             if ($docs->isEmpty()) {
                 $documentStatus = 'No travel document';
@@ -64,18 +71,28 @@ class GroupCheckInController extends Controller
                 $documentStatus = 'OK';
             }
 
-            $excess = $bags->excess($passenger);
+            $excess = $direction
+                ? $bags->excess($passenger, $direction)
+                : $bags->excess($passenger);
 
             return [
                 'passenger' => $passenger,
                 'documentStatus' => $documentStatus,
-                'entryResult' => $entryCheck->check($passenger),
+                'entryResult' => $entryCheck->check($passenger, $direction),
                 'excess' => $excess,
-                'excessDueCents' => $bags->excessDueCents($passenger),
+                'excessDueCents' => $direction
+                    ? $bags->excessDueCents($passenger, $direction)
+                    : $bags->excessDueCents($passenger),
             ];
         });
 
-        $booked = $reservation->passengers->where('status', PassengerStatus::Booked);
+        $booked = $reservation->passengers->filter(function (Passenger $passenger) use ($journeys, $direction) {
+            $status = $direction
+                ? $journeys->statusOf($passenger, $direction)
+                : $passenger->status;
+
+            return $status === PassengerStatus::Booked;
+        });
         $hasPasses = $reservation->passengers->contains(fn (Passenger $p) => $p->activeBoardingPass !== null);
 
         return view('checkin.group', [
@@ -89,14 +106,14 @@ class GroupCheckInController extends Controller
         ]);
     }
 
-    public function assignSeats(Request $request, Reservation $reservation, SeatService $seats): RedirectResponse
+    public function assignSeats(Request $request, Reservation $reservation, SeatService $seats, JourneyService $journeys): RedirectResponse
     {
-        if ($refused = $this->refuseConnection($reservation)) {
-            return $refused;
-        }
-
-        $reservation->load(['flight', 'passengers']);
+        $reservation->load(['flight', 'passengers', 'segments.flight']);
         $screen = redirect()->route('checkin.reservations.group', $reservation);
+        $lead = $reservation->passengers->first();
+        $flight = $lead !== null
+            ? $journeys->firstFlightFor($lead, $request->user())
+            : $reservation->flight;
 
         $data = $request->validate([
             'seats' => ['required', 'array'],
@@ -111,7 +128,7 @@ class GroupCheckInController extends Controller
         $passengers = $reservation->passengers->keyBy('id');
 
         try {
-            DB::transaction(function () use ($seatIds, $passengers, $seats, $request, $reservation) {
+            DB::transaction(function () use ($seatIds, $passengers, $seats, $request, $reservation, $flight) {
                 foreach ($seatIds as $passengerId => $seatId) {
                     $passenger = $passengers->get((int) $passengerId);
                     if ($passenger === null || $passenger->reservation_id !== $reservation->id) {
@@ -120,7 +137,7 @@ class GroupCheckInController extends Controller
                     if ($passenger->type === PassengerType::Infant) {
                         throw new SeatNotAllowed('An infant has no seat.');
                     }
-                    if ($passenger->status !== PassengerStatus::Booked) {
+                    if ($passenger->couponOn($flight)?->status !== PassengerStatus::Booked) {
                         throw new SeatNotAllowed('Seats can only be assigned for booked passengers.');
                     }
 
@@ -130,7 +147,7 @@ class GroupCheckInController extends Controller
                         throw new SeatNotAllowed('Seat must be in the booked cabin class ('.$bookedCabin->label().').');
                     }
 
-                    $seats->assign($passenger, $seat, $request->user());
+                    $seats->assign($passenger, $seat, $request->user(), $flight);
                 }
             });
         } catch (SeatNotAllowed|SeatTaken $exception) {
@@ -142,10 +159,6 @@ class GroupCheckInController extends Controller
 
     public function confirmAll(Request $request, Reservation $reservation, BoardingPassService $passes): RedirectResponse
     {
-        if ($refused = $this->refuseConnection($reservation)) {
-            return $refused;
-        }
-
         $reservation->load(['passengers']);
         $request->validate([
             'entry_reasons' => ['nullable', 'array'],
@@ -155,7 +168,11 @@ class GroupCheckInController extends Controller
         $reasons = $request->input('entry_reasons', []);
         $results = [];
 
-        foreach ($reservation->passengers->where('status', PassengerStatus::Booked) as $passenger) {
+        foreach ($reservation->passengers as $passenger) {
+            if ($passenger->status !== PassengerStatus::Booked) {
+                continue;
+            }
+
             $reason = $reasons[$passenger->id] ?? null;
 
             try {
@@ -181,40 +198,39 @@ class GroupCheckInController extends Controller
             ->with('group_results', $results);
     }
 
-    public function boardingPasses(Reservation $reservation, BoardingPassService $passes): View
+    public function boardingPasses(Reservation $reservation, BoardingPassService $passes, JourneyService $journeys, Request $request): View
     {
         $reservation->load([
             'flight',
+            'segments.flight',
             'passengers.seatAssignment.seat',
-            'passengers.activeBoardingPass',
+            'passengers.boardingPasses',
             'passengers.accompanyingAdult',
             'passengers.reservation',
+            'passengers.coupons',
         ]);
 
-        $cards = $reservation->passengers
-            ->filter(fn (Passenger $passenger) => $passenger->activeBoardingPass !== null)
-            ->map(fn (Passenger $passenger) => $passes->printData($passenger, $passenger->activeBoardingPass))
-            ->values();
+        $lead = $reservation->passengers->first();
+        $direction = $lead !== null
+            ? $journeys->directionFor($lead, $request->user())
+            : null;
+
+        $cards = collect();
+        foreach ($reservation->passengers as $passenger) {
+            $directionPasses = $direction
+                ? $passes->passesFor($passenger, $direction)
+                : $passenger->boardingPasses()->whereNull('voided_at')->get();
+
+            foreach ($directionPasses as $pass) {
+                $cards->push($passes->printData($passenger, $pass));
+            }
+        }
 
         abort_if($cards->isEmpty(), 404);
 
         return view('checkin.boarding-passes', [
             'reservation' => $reservation,
-            'cards' => $cards,
+            'cards' => $cards->values(),
         ]);
-    }
-
-    /**
-     * Group check-in handles one flight per passenger: a reservation with a connection is checked in
-     * passenger by passenger (B13b). Null when the group screen can be used.
-     */
-    private function refuseConnection(Reservation $reservation): ?RedirectResponse
-    {
-        if (! app(JourneyService::class)->hasConnection($reservation)) {
-            return null;
-        }
-
-        return redirect()->route('checkin.home', ['q' => $reservation->pnr])
-            ->with('error', 'Connecting passenger: use single check-in');
     }
 }

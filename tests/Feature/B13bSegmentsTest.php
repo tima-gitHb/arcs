@@ -133,9 +133,18 @@ class B13bSegmentsTest extends TestCase
 
     private function seatCoupon(Coupon $coupon, CabinClass $cabin = CabinClass::Economy): void
     {
+        // seat_no is string(4): never derive from auto-increment ids (MySQL AI keeps growing across tests).
+        $row = 1;
+        while (Seat::query()
+            ->where('aircraft_id', $coupon->flight->aircraft_id)
+            ->where('seat_no', $row.'A')
+            ->exists()) {
+            $row++;
+        }
+
         $seat = Seat::factory()->create([
             'aircraft_id' => $coupon->flight->aircraft_id,
-            'seat_no' => (10 + $coupon->id).'A',
+            'seat_no' => $row.'A',
             'cabin_class' => $cabin,
         ]);
         SeatAssignment::create([
@@ -432,32 +441,41 @@ class B13bSegmentsTest extends TestCase
         $this->assertSame(4, $connection->lines[0]['quantity']);
     }
 
-    // --- Not for connections yet ----------------------------------------------------------------
+    // --- Through check-in (C14) -----------------------------------------------------------------
 
-    public function test_SR66_group_check_in_refuses_a_connecting_passenger(): void
+    public function test_SR66_group_check_in_checks_in_every_flight_of_a_connecting_passenger(): void
     {
         $passenger = $this->book(new Journey($this->connection(gap: 90)));
         $reservation = $passenger->reservation;
         $this->actingAs($this->agent);
 
         $this->get(route('checkin.reservations.group', $reservation))
-            ->assertRedirect(route('checkin.home', ['q' => $reservation->pnr]))
-            ->assertSessionHas('error', 'Connecting passenger: use single check-in');
-        $this->post(route('checkin.reservations.confirm-all', $reservation))
-            ->assertSessionHas('error', 'Connecting passenger: use single check-in');
+            ->assertOk()
+            ->assertSee($passenger->last_name);
 
-        $this->assertSame(['Booked', 'Booked'], $this->statuses($passenger));
+        $this->post(route('checkin.reservations.confirm-all', $reservation))
+            ->assertRedirect(route('checkin.reservations.group', $reservation))
+            ->assertSessionHas('group_results');
+
+        $this->assertSame(['CheckedIn', 'CheckedIn'], $this->statuses($passenger->fresh()));
+        $this->assertSame(2, $passenger->boardingPasses()->whereNull('voided_at')->count());
     }
 
-    public function test_SR66_the_upgrade_is_refused_for_a_connecting_journey(): void
+    public function test_SR66_the_upgrade_is_available_per_flight_for_a_connecting_journey(): void
     {
         $this->seedBookingPrices();
-        $passenger = $this->book(new Journey($this->connection(gap: 90)));
+        [$first, $second] = $this->connection(gap: 90);
+        $passenger = $this->book(new Journey([$first, $second]));
         $this->actingAs($this->agent);
 
         $this->get(route('checkin.passengers.upgrade', $passenger))
-            ->assertRedirect(route('checkin.passengers.show', $passenger))
-            ->assertSessionHas('error', 'Upgrade is not available for connecting journeys yet');
+            ->assertOk()
+            ->assertSee('ME264')
+            ->assertSee('ME216');
+
+        $this->get(route('checkin.passengers.upgrade', [$passenger, 'flight' => $second->id]))
+            ->assertOk()
+            ->assertSee('ME216');
     }
 
     public function test_SR65_segments_added_explicitly_give_no_duplicate_from_the_model_events(): void

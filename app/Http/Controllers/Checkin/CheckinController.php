@@ -84,6 +84,9 @@ class CheckinController extends Controller
         ]);
         $passenger->setRelation('checkedInBy', $passenger->coupon?->checkedInBy);
 
+        $boardingPasses = app(BoardingPassService::class)->passesFor($passenger, $direction)
+            ->load(['coupon.flight']);
+
         return view('checkin.show', [
             'passenger' => $passenger,
             'flight' => $flight,
@@ -95,10 +98,11 @@ class CheckinController extends Controller
                 ->with('seat')
                 ->get()
                 ->keyBy('flight_id'),
+            'boardingPasses' => $boardingPasses,
             // ?edit=<document id> opens the edit form for that document.
             'editing' => $passenger->travelDocuments->firstWhere('id', $request->integer('edit')),
             // Advisory entry check (SR-49): read only. ?check_entry=1 shows the full result.
-            'entryResult' => $entryCheck->check($passenger),
+            'entryResult' => $entryCheck->check($passenger, $direction),
             'showEntryCheck' => $request->boolean('check_entry'),
             // ?change_seat=1 opens the seat map for a checked-in passenger (C6).
             'changingSeat' => $request->boolean('change_seat'),
