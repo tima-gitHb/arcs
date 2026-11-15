@@ -9,18 +9,39 @@
                     · {{ $flight->flight_no }}
                 </p>
             </div>
-            <a href="{{ route('checkin.passengers.show', $passenger) }}" class="text-sm font-medium text-navy hover:underline">← Back</a>
+            <a href="{{ route('checkin.passengers.show', [$passenger, 'flight' => $flight->id]) }}" class="text-sm font-medium text-navy hover:underline">← Back</a>
         </div>
     </x-slot>
 
     <form method="POST" action="{{ route('checkin.passengers.upgrade.store', $passenger) }}" autocomplete="off" id="upgrade-form"
           class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
         @csrf
+        <input type="hidden" name="flight_id" value="{{ $flight->id }}">
 
         <div class="space-y-4">
+            @if (($journeyFlights ?? collect())->count() > 1)
+                <div class="rounded-lg bg-white p-4 shadow-sm">
+                    <p class="text-sm font-medium text-navy">Flight to upgrade</p>
+                    <ul class="mt-2 flex flex-wrap gap-2 text-sm">
+                        @foreach ($journeyFlights as $leg)
+                            <li>
+                                <a href="{{ route('checkin.passengers.upgrade', [$passenger, 'flight' => $leg->id]) }}"
+                                   @class([
+                                       'rounded border px-3 py-1.5',
+                                       'border-navy bg-navy text-white' => $leg->is($flight),
+                                       'border-gray-300 text-navy hover:border-navy' => ! $leg->is($flight),
+                                   ])>
+                                    {{ $leg->flight_no }}
+                                </a>
+                            </li>
+                        @endforeach
+                    </ul>
+                </div>
+            @endif
+
             <div class="rounded-lg bg-white p-6 shadow-sm">
                 <h2 class="text-lg font-semibold text-navy">New class</h2>
-                <p class="mt-1 text-sm text-gray-600">Only a higher class. Price is the fare difference.</p>
+                <p class="mt-1 text-sm text-gray-600">Only a higher class. Price is the fare difference on {{ $flight->flight_no }}.</p>
                 <div class="mt-4 space-y-2">
                     @foreach ($options as $cabin)
                         <label class="flex cursor-pointer items-center justify-between gap-3 rounded border border-gray-200 px-4 py-3 hover:border-navy">

@@ -11,6 +11,7 @@ use App\Enums\PaymentStatus;
 use App\Exceptions\SeatTaken;
 use App\Exceptions\UpgradeNotAllowed;
 use App\Models\AuditEntry;
+use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Payment;
 use App\Models\Seat;
@@ -22,6 +23,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Paid cabin upgrade at check-in: Economy → Premium → Business only.
+ * On a connection the agent picks which flight to upgrade (C14 / SR-66).
  */
 class CabinUpgradeService
 {
@@ -34,12 +36,13 @@ class CabinUpgradeService
         private SeatService $seats,
         private BoardingPassService $passes,
         private BagService $bags,
+        private JourneyService $journeys,
     ) {}
 
-    public function priceCents(Passenger $passenger, CabinClass $to): int
+    public function priceCents(Passenger $passenger, CabinClass $to, ?Flight $flight = null): int
     {
         $from = $passenger->cabin_class ?? CabinClass::Economy;
-        $this->assertUpgradeAllowed($passenger, $to, preview: true);
+        $this->assertUpgradeAllowed($passenger, $to, $flight, preview: true);
 
         $new = $this->fares->quote([['cabin_class' => $to, 'type' => $passenger->type]])->totalCents;
         $old = $this->fares->quote([['cabin_class' => $from, 'type' => $passenger->type]])->totalCents;
@@ -48,11 +51,12 @@ class CabinUpgradeService
     }
 
     /**
-     * Charge, then in one transaction: cabin_class, seat, infant class, bags, boarding pass.
+     * Charge, then in one transaction: cabin_class, seat on $flight, infant class, bags, boarding pass.
      */
-    public function upgrade(Passenger $passenger, CabinClass $to, Seat $seat, CardDetails $card, User $by): Payment
+    public function upgrade(Passenger $passenger, CabinClass $to, Seat $seat, CardDetails $card, User $by, ?Flight $flight = null): Payment
     {
-        $amount = $this->priceCents($passenger, $to);
+        $flight ??= $this->journeys->firstFlightFor($passenger, $by);
+        $amount = $this->priceCents($passenger, $to, $flight);
 
         if ($seat->cabin_class !== $to) {
             throw new UpgradeNotAllowed('Pick a free seat in '.$to->label().'.');
@@ -64,7 +68,7 @@ class CabinUpgradeService
 
         // Refuse a taken seat before charging so a declined/failed path leaves nothing behind.
         if (SeatAssignment::query()
-            ->where('flight_id', $passenger->reservation->flight_id)
+            ->where('flight_id', $flight->id)
             ->where('seat_id', $seat->id)
             ->where('passenger_id', '!=', $passenger->id)
             ->exists()) {
@@ -85,12 +89,13 @@ class CabinUpgradeService
             return $payment;
         }
 
-        DB::transaction(function () use ($passenger, $to, $seat, $by, $amount) {
+        DB::transaction(function () use ($passenger, $to, $seat, $by, $amount, $flight) {
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($passenger->id);
-            $this->assertUpgradeAllowed($passenger, $to);
+            $this->assertUpgradeAllowed($passenger, $to, $flight);
 
             $from = $passenger->cabin_class ?? CabinClass::Economy;
-            $oldSeatNo = $passenger->seatAssignment?->seat?->seat_no;
+            $coupon = $passenger->couponOn($flight);
+            $oldSeatNo = $coupon?->seatAssignment?->seat?->seat_no;
 
             $passenger->update(['cabin_class' => $to]);
 
@@ -116,10 +121,10 @@ class CabinUpgradeService
                 ]);
             });
 
-            $this->seats->assignForUpgrade($passenger->fresh(), $seat, $by);
+            $this->seats->assignForUpgrade($passenger->fresh(), $seat, $by, $flight);
 
-            if ($passenger->status === PassengerStatus::CheckedIn) {
-                $this->passes->issue($passenger->fresh(), $by);
+            if ($coupon?->status === PassengerStatus::CheckedIn) {
+                $this->passes->issue($passenger->fresh(), $by, $flight);
             }
 
             $this->bags->recalculate($passenger->fresh());
@@ -150,18 +155,19 @@ class CabinUpgradeService
         return array_values(array_slice(self::RANK, $rank + 1));
     }
 
-    private function assertUpgradeAllowed(Passenger $passenger, CabinClass $to, bool $preview = false): void
+    private function assertUpgradeAllowed(Passenger $passenger, CabinClass $to, ?Flight $flight = null, bool $preview = false): void
     {
-        // One seat per flight on a connection: the upgrade screen handles one flight only (B13b).
-        if (app(JourneyService::class)->hasConnection($passenger->reservation)) {
-            throw new UpgradeNotAllowed('Upgrade is not available for connecting journeys yet');
+        $flight ??= $passenger->reservation->flight;
+        $coupon = $passenger->couponOn($flight);
+
+        if ($coupon === null) {
+            throw new UpgradeNotAllowed('The passenger is not booked on this flight.');
         }
 
-        if (! in_array($passenger->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
+        if (! in_array($coupon->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
             throw new UpgradeNotAllowed('Upgrade is only for a booked or checked-in passenger.');
         }
 
-        $flight = $passenger->reservation->flight;
         if ($flight->isBoardingClosed() || $flight->status === FlightStatus::Cancelled) {
             throw new UpgradeNotAllowed('Upgrade is not available after boarding is closed.');
         }
