@@ -9,7 +9,13 @@
 @endphp
 
 <div class="rounded-lg bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-semibold text-navy">Bags</h2>
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <h2 class="text-lg font-semibold text-navy">Bags</h2>
+        @if ($passenger->bags->isNotEmpty())
+            <a href="{{ route('checkin.passengers.bag-tags', $passenger) }}" target="_blank"
+               class="text-sm font-medium text-navy hover:underline">Print all tags</a>
+        @endif
+    </div>
 
     @if ($allowance->isSet)
         <p class="mt-2 text-sm text-navy">
@@ -112,13 +118,21 @@
                         </td>
                         <td class="py-2">{{ $bag->handling->label() }}</td>
                         <td class="py-2 text-right">
-                            @if ($canRemove)
-                                <form method="POST" action="{{ route('checkin.bags.destroy', $bag) }}">
+                            <div class="flex flex-wrap items-center justify-end gap-3">
+                                <a href="{{ route('checkin.bags.tag', $bag) }}" target="_blank"
+                                   class="text-xs font-medium text-navy hover:underline">Print tag</a>
+                                <form method="POST" action="{{ route('checkin.bags.tag.reprint', $bag) }}" target="_blank">
                                     @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="text-xs font-medium text-red-700 hover:underline">Remove</button>
+                                    <button type="submit" class="text-xs font-medium text-navy hover:underline">Reprint</button>
                                 </form>
-                            @endif
+                                @if ($canRemove)
+                                    <form method="POST" action="{{ route('checkin.bags.destroy', $bag) }}">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="text-xs font-medium text-red-700 hover:underline">Remove</button>
+                                    </form>
+                                @endif
+                            </div>
                         </td>
                     </tr>
                 @endforeach
