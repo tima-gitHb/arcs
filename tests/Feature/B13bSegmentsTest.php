@@ -133,9 +133,18 @@ class B13bSegmentsTest extends TestCase
 
     private function seatCoupon(Coupon $coupon, CabinClass $cabin = CabinClass::Economy): void
     {
+        // seat_no is string(4): never derive from auto-increment ids (MySQL AI keeps growing across tests).
+        $row = 1;
+        while (Seat::query()
+            ->where('aircraft_id', $coupon->flight->aircraft_id)
+            ->where('seat_no', $row.'A')
+            ->exists()) {
+            $row++;
+        }
+
         $seat = Seat::factory()->create([
             'aircraft_id' => $coupon->flight->aircraft_id,
-            'seat_no' => (10 + $coupon->id).'A',
+            'seat_no' => $row.'A',
             'cabin_class' => $cabin,
         ]);
         SeatAssignment::create([

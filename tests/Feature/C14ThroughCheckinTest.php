@@ -119,9 +119,21 @@ class C14ThroughCheckinTest extends TestCase
 
     private function seatCoupon(Coupon $coupon, CabinClass $cabin = CabinClass::Economy, ?string $seatNo = null): Seat
     {
+        // seat_no is string(4): never derive from auto-increment ids (MySQL AI keeps growing across tests).
+        if ($seatNo === null) {
+            $row = 1;
+            while (Seat::query()
+                ->where('aircraft_id', $coupon->flight->aircraft_id)
+                ->where('seat_no', $row.'A')
+                ->exists()) {
+                $row++;
+            }
+            $seatNo = $row.'A';
+        }
+
         $seat = Seat::factory()->create([
             'aircraft_id' => $coupon->flight->aircraft_id,
-            'seat_no' => $seatNo ?? (10 + $coupon->id).'A',
+            'seat_no' => $seatNo,
             'cabin_class' => $cabin,
         ]);
         SeatAssignment::create([
