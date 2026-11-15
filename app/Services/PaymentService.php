@@ -6,6 +6,7 @@ use App\Contracts\PaymentGateway;
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
 use App\Models\AuditEntry;
+use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Payment;
 use App\Models\Reservation;
@@ -28,6 +29,8 @@ class PaymentService
     /**
      * A declined card is not an error: it is saved as Failed, and the returned payment has
      * the reason in failureMessage.
+     *
+     * @param  Flight|null  $flight  Flight this charge is for (e.g. per-flight upgrade); defaults to the reservation's first flight.
      */
     public function charge(
         Payments\CardDetails $card,
@@ -36,6 +39,7 @@ class PaymentService
         User $takenBy,
         ?Reservation $reservation = null,
         ?Passenger $passenger = null,
+        ?Flight $flight = null,
     ): Payment {
         if ($amountCents <= 0) {
             throw new InvalidArgumentException('A payment must be more than zero.');
@@ -44,7 +48,7 @@ class PaymentService
             throw new InvalidArgumentException('A payment needs a reservation or a passenger.');
         }
 
-        return DB::transaction(function () use ($card, $amountCents, $kind, $takenBy, $reservation, $passenger) {
+        return DB::transaction(function () use ($card, $amountCents, $kind, $takenBy, $reservation, $passenger, $flight) {
             $result = $this->gateway->charge($card, $amountCents, self::CURRENCY);
 
             $payment = Payment::create([
@@ -65,7 +69,9 @@ class PaymentService
 
             AuditEntry::create([
                 'passenger_id' => $passenger?->id,
-                'flight_id' => $reservation?->flight_id ?? $passenger?->reservation->flight_id,
+                'flight_id' => $flight?->id
+                    ?? $reservation?->flight_id
+                    ?? $passenger?->reservation->flight_id,
                 'field' => 'payment',
                 'old_value' => null,
                 'new_value' => "{$payment->status->label()}: {$kind->label()} ".Money::format($amountCents)

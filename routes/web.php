@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Checkin\BagController;
+use App\Http\Controllers\Checkin\BagTagController;
 use App\Http\Controllers\Checkin\BoardingPassController;
 use App\Http\Controllers\Checkin\CabinUpgradeController;
 use App\Http\Controllers\Checkin\CheckinController;
@@ -73,6 +74,10 @@ Route::middleware(['auth', 'role:checkin', 'station'])->prefix('checkin')->name(
     Route::post('/passengers/{passenger}/seat/change', [SeatController::class, 'change'])->name('seats.change');
     Route::post('/passengers/{passenger}/bags', [BagController::class, 'store'])->name('bags.store');
     Route::delete('/bags/{bag}', [BagController::class, 'destroy'])->name('bags.destroy');
+    // Paths are /bag-tags/... (not /bags/{bag}/...) so they do not substring-match bags.destroy in tests.
+    Route::get('/bag-tags/{bag}', [BagTagController::class, 'show'])->name('bags.tag');
+    Route::post('/bag-tags/{bag}', [BagTagController::class, 'reprint'])->name('bags.tag.reprint');
+    Route::get('/passengers/{passenger}/bag-tags', [BagTagController::class, 'index'])->name('passengers.bag-tags');
     Route::post('/passengers/{passenger}/excess-payment', [ExcessPaymentController::class, 'store'])->name('excess.pay');
     Route::get('/passengers/{passenger}/upgrade', [CabinUpgradeController::class, 'create'])->name('passengers.upgrade');
     Route::post('/passengers/{passenger}/upgrade', [CabinUpgradeController::class, 'store'])->name('passengers.upgrade.store');

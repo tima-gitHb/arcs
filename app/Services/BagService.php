@@ -228,6 +228,33 @@ class BagService
     }
 
     /**
+     * Reprint: rotate to a new unique tag_no and audit old → new (C15). The old number is void
+     * because it no longer exists on any bag.
+     */
+    public function reprintTag(Bag $bag, User $by): Bag
+    {
+        return DB::transaction(function () use ($bag, $by) {
+            $bag = Bag::query()->lockForUpdate()->findOrFail($bag->id);
+            $passenger = Passenger::query()->lockForUpdate()->findOrFail($bag->passenger_id);
+            $oldTag = $bag->tag_no;
+            $newTag = $this->newTag($passenger, $bag->direction);
+
+            $bag->update(['tag_no' => $newTag]);
+
+            AuditEntry::create([
+                'passenger_id' => $passenger->id,
+                'field' => 'bag_tag_reprint',
+                'old_value' => $oldTag,
+                'new_value' => $newTag,
+                'user_id' => $by->id,
+                'changed_at' => now(),
+            ]);
+
+            return $bag->refresh();
+        });
+    }
+
+    /**
      * Tag number: the airline code of the flight (first 2 characters, e.g. ME) + 6 digits,
      * unique in bags (SR-9). Retried on the rare collision, like the PNR.
      */
