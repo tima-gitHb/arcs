@@ -68,8 +68,9 @@
                         <tr class="border-b border-gray-100 last:border-0">
                             <td class="px-4 py-2 whitespace-nowrap"><x-station-time :at="$entry->changed_at" format="d M Y H:i" /></td>
                             @php
-                                // A price change (fare or fee) belongs to no passenger and no flight. It is told
-                                // by its field ("fare Business Adult", "fee ExtraBag"), not by what is missing.
+                                // A price change (fare or fee) and an airport change belong to no passenger and no flight.
+                                // They are told by the field ("fare Business Adult", "airport CDG minutes"), not by what is missing.
+                                $isAirport = str_starts_with($entry->field, 'airport ');
                                 $isPrice = str_starts_with($entry->field, 'fare ') || str_starts_with($entry->field, 'fee ');
 
                                 // An empty gate is stored as ''. A flight status is stored as its enum value.
@@ -85,10 +86,12 @@
                                     return $value;
                                 };
                             @endphp
-                            {{-- data-audit-subject says what the row is about: fares, passenger or flight. --}}
-                            <td class="px-4 py-2" data-audit-subject="{{ $isPrice ? 'fares' : ($entry->passenger ? 'passenger' : 'flight') }}">
+                            {{-- data-audit-subject says what the row is about: airports, fares, passenger or flight. --}}
+                            <td class="px-4 py-2" data-audit-subject="{{ $isAirport ? 'airports' : ($isPrice ? 'fares' : ($entry->passenger ? 'passenger' : 'flight')) }}">
                                 {{-- A row about a flight has no passenger. --}}
-                                @if ($isPrice)
+                                @if ($isAirport)
+                                    Airports
+                                @elseif ($isPrice)
                                     Fares and fees
                                 @elseif ($entry->passenger)
                                     {{ $entry->passenger->first_name }} {{ $entry->passenger->last_name }}

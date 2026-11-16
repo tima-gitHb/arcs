@@ -6,6 +6,8 @@ use App\Enums\Role;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Manager\SetAccountActiveRequest;
 use App\Http\Requests\Manager\StoreAccountRequest;
+use App\Http\Requests\Manager\UpdateAccountStationRequest;
+use App\Models\Airport;
 use App\Models\User;
 use App\Services\AccountService;
 use DomainException;
@@ -19,8 +21,9 @@ class AccountController extends Controller
     public function index(): View
     {
         return view('manager.accounts', [
-            'users' => User::orderBy('name')->get(),
+            'users' => User::with('airport')->orderBy('name')->get(),
             'roles' => Role::cases(),
+            'airports' => Airport::query()->orderBy('code')->get(),
         ]);
     }
 
@@ -30,6 +33,16 @@ class AccountController extends Controller
 
         return redirect()->route('manager.accounts')
             ->with('success', "Account created. A welcome email was sent to {$user->email}.");
+    }
+
+    /**
+     * Set or clear the station on an existing account. A blank choice stores null.
+     */
+    public function updateStation(UpdateAccountStationRequest $request, User $user): RedirectResponse
+    {
+        $user->update(['airport_code' => $request->validated('airport_code')]);
+
+        return redirect()->route('manager.accounts')->with('success', 'Station saved.');
     }
 
     public function setActive(SetAccountActiveRequest $request, User $user): RedirectResponse

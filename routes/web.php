@@ -19,6 +19,7 @@ use App\Http\Controllers\Gate\ManifestController;
 use App\Http\Controllers\Gate\OffloadController;
 use App\Http\Controllers\Manager\AccountController;
 use App\Http\Controllers\Manager\AircraftController;
+use App\Http\Controllers\Manager\AirportController;
 use App\Http\Controllers\Manager\AuditController;
 use App\Http\Controllers\Manager\DashboardController;
 use App\Http\Controllers\Manager\FareController;
@@ -123,6 +124,10 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::patch('/accounts/{user}/active', [AccountController::class, 'setActive'])->name('accounts.active');
     Route::patch('/accounts/{user}/unlock', [AccountController::class, 'unlock'])->name('accounts.unlock');
     Route::post('/accounts/{user}/reset-link', [AccountController::class, 'sendResetLink'])->name('accounts.reset-link');
+    Route::patch('/accounts/{user}/station', [AccountController::class, 'updateStation'])->name('accounts.station');
+    Route::get('/airports', [AirportController::class, 'index'])->name('airports');
+    Route::post('/airports', [AirportController::class, 'store'])->name('airports.store');
+    Route::put('/airports/{airport}', [AirportController::class, 'update'])->name('airports.update');
     Route::get('/rules', [RuleController::class, 'index'])->name('rules');
     Route::put('/rules', [RuleController::class, 'update'])->name('rules.update');
     Route::get('/fares', [FareController::class, 'index'])->name('fares');

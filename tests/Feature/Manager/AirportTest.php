@@ -142,7 +142,9 @@ class AirportTest extends TestCase
         $this->assertSame('IT', $airport->country);
         $this->assertSame('Europe/Rome', $airport->timezone);
         $this->assertSame(45, $airport->min_connection_minutes);
-        $this->assertNull(Airport::find('mxp'));
+        // The stored code is uppercase. MySQL compares the primary key without case, so find('mxp') is this same row.
+        $this->assertSame('MXP', $airport->code);
+        $this->assertSame(20, Airport::count());
 
         $entry = AuditEntry::sole();
         $this->assertSame('airport MXP added', $entry->field);

@@ -22,3 +22,15 @@
 - Status: Fixed
 - Fix: route lists turned into plain collections before merging, commit on feature/M14-fares-per-route; covered by B13bRouteFaresTest and FareRouteTest
 - Retested: 16 Nov 2026 · Yasmina — Fares page with BEY→IST loads on dev
+
+## BUG-002 · Saving MXP makes find('mxp') return that airport on MySQL
+- Date / who: 16 Nov 2026 · Yasmina
+- Card / branch: M13 · feature/M13-airports-stations
+- Where: tests/Feature/Manager/AirportTest (adding an airport uppercases the code), composer test:mysql
+- Steps: 1. Post a new airport with code mxp 2. The row is stored as MXP 3. Call Airport::find('mxp')
+- Expected: the lowercase lookup misses, because the saved code is MXP
+- Actual: Failed asserting that an Airport with code MXP is null. SQLite's lookup is case-sensitive, so the same assertion passed there. MySQL compares airports.code without case, so find('mxp') returns the MXP row.
+- Screenshot: none — found by an automated test (AirportTest on MySQL), not in the browser; full error message above.
+- Status: Fixed
+- Fix: the test asserts the stored code is MXP and that the network grew by one row, instead of a case-sensitive miss. The page already uppercases the code before saving.
+- Retested: 16 Nov 2026 · Yasmina — adding MXP stores code MXP; the test passes on MySQL

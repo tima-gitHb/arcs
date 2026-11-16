@@ -54,6 +54,7 @@ enum Role: string
                 'Flight lists' => 'manager.home',
                 'Dashboard' => 'manager.dashboard',
                 'Flights and aircraft' => 'manager.flights',
+                'Airports' => 'manager.airports',
                 'Staff accounts' => 'manager.accounts',
                 'Rules and allowances' => 'manager.rules',
                 'Fares and fees' => 'manager.fares',
