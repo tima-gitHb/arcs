@@ -277,6 +277,25 @@ class FareRouteTest extends TestCase
         $this->assertSame(0, AuditEntry::count());
     }
 
+    public function test_an_invalid_route_is_refused_and_writes_nothing(): void
+    {
+        $this->flight('ME201', 'BEY', 'CDG');
+
+        foreach (['XXX-YYY', 'BEY-BEY', 'BEY', 'BEYCDG'] as $route) {
+            $this->save($route, ['economy' => ['adult' => '300.00']])
+                ->assertSessionHasErrors('route');
+        }
+
+        $this->assertSame(0, Fare::query()->whereNotNull('origin_airport_code')->count());
+        $this->assertSame(9, Fare::query()->defaults()->count());
+        $this->assertSame(25000, $this->quote(CabinClass::Economy, PassengerType::Adult));
+        $this->assertSame(0, AuditEntry::count());
+
+        // Lower case is the same route once it is uppercased.
+        $this->save('bey-cdg', ['economy' => ['adult' => '300.00']])->assertSessionHasNoErrors();
+        $this->assertSame(30000, Fare::query()->forRoute('BEY', 'CDG')->sole()->amount_cents);
+    }
+
     public function test_a_non_manager_cannot_open_or_save_a_route(): void
     {
         $this->flight('ME201', 'BEY', 'CDG');

@@ -18,6 +18,20 @@
                 <h2 class="text-lg font-semibold text-navy">Fares</h2>
                 <p class="text-sm text-gray-600">Ticket price in US dollars, per cabin class and passenger type.</p>
 
+                <div>
+                    <x-input-label for="route" value="Route" />
+                    <select id="route" name="route" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" onchange="window.location = '{{ route('manager.fares') }}' + (this.value ? '?route=' + this.value : '')">
+                        <option value="" @selected($route === '')>Default prices</option>
+                        @foreach ($routes as $option)
+                            <option value="{{ $option['value'] }}" @selected($route === $option['value'])>{{ $option['label'] }}</option>
+                        @endforeach
+                    </select>
+                    <x-input-error :messages="$errors->get('route')" class="mt-2" />
+                    @if ($route !== '')
+                        <p class="mt-2 text-sm text-gray-600">An empty cell keeps the default price. Clearing a price returns that cell to the default.</p>
+                    @endif
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm">
                         <thead class="text-left text-gray-500 border-b border-gray-200">
@@ -43,7 +57,9 @@
                                             <div class="flex items-center gap-1">
                                                 <span class="text-gray-600">$</span>
                                                 <x-text-input id="fare_{{ $cabinKey }}_{{ $typeKey }}" name="fares[{{ $cabinKey }}][{{ $typeKey }}]" type="number" min="0" max="99999.99" step="0.01" class="w-28"
-                                                    :value="old($field, $fares[$cabinKey.'.'.$typeKey] ?? '')" required
+                                                    :value="old($field, $fares[$cabinKey.'.'.$typeKey] ?? '')"
+                                                    :placeholder="$route !== '' ? ($defaults[$cabinKey.'.'.$typeKey] ?? '') : null"
+                                                    :required="$route === ''"
                                                     aria-label="{{ $cabin->label() }} {{ $type->label() }} fare in dollars" />
                                             </div>
                                             <x-input-error :messages="$errors->get($field)" class="mt-2" />
