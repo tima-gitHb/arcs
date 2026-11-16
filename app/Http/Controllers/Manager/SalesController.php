@@ -8,34 +8,48 @@ use App\Enums\PassengerType;
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Manager\SalesFilterRequest;
 use App\Models\Flight;
-use Illuminate\Http\Request;
+use App\Models\User;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
 
 class SalesController extends Controller
 {
     /**
-     * Sales per flight (SR-64). Read only: nothing is changed here.
-     * Today's flights by default, or the one flight chosen with ?flight=<id>.
-     * A fixed number of queries, however many flights, passengers or payments there are:
-     * all flights (picker), today's flights, seats per class, seats sold, payments.
+     * Sales per flight (SR-64) plus the revenue dashboard (M15). Read only: nothing is changed here.
+     * No filters: today's flights, today at the viewer's station (UTC with no station).
+     * ?flight= alone still shows that one flight on any day. from/to replace today.
+     * route and station always narrow the set. The dashboard is summed from the payments
+     * query below, so filters do not add a query.
      */
-    public function index(Request $request): View
+    public function index(SalesFilterRequest $request): View
     {
-        $request->validate(['flight' => ['nullable', 'integer', 'exists:flights,id']]);
+        $filters = [
+            'from' => $request->validated('from'),
+            'to' => $request->validated('to'),
+            'route' => $request->validated('route'),
+            'station' => $request->validated('station'),
+            'flight' => $request->validated('flight'),
+        ];
 
-        // The picker lists every flight, newest departure first.
+        // The picker lists every flight, newest departure first. Routes and stations come from this list.
         $flights = Flight::orderByDesc('departure_at')->get();
 
-        $selected = $request->filled('flight') ? $flights->firstWhere('id', (int) $request->query('flight')) : null;
+        if ($filters['route'] !== null && ! $this->routeIsFlown($flights, $filters['route'])) {
+            throw ValidationException::withMessages([
+                'route' => 'Choose a route a flight uses.',
+            ]);
+        }
 
-        // Same definition of "today" as the <x-todays-flights> component (SR-41) and the dashboard:
-        // today at the Manager's station, every station's flights (B13a).
-        $reported = $selected
-            ? $flights->where('id', $selected->id)->values()
-            : Flight::departingToday($request->user())->orderBy('departure_at')->get();
+        $selected = $filters['flight'] !== null
+            ? $flights->firstWhere('id', (int) $filters['flight'])
+            : null;
+
+        $reported = $this->reportedFlights($flights, $request->user(), $selected, $filters);
 
         $capacity = $this->capacity($reported);
         $sold = $this->sold($reported);
@@ -52,7 +66,118 @@ class SalesController extends Controller
             'reports' => $reports,
             'flights' => $flights,
             'selected' => $selected,
+            'filters' => $filters,
+            'routes' => $this->routes($flights),
+            'stations' => $flights->pluck('origin')->unique()->sort()->values(),
+            'timezone' => $request->user()->timezone(),
+            'dashboard' => $this->dashboard($revenue),
+            // The "today" list is the page with nothing chosen. A flight, a date, a route or a station replaces it.
+            'defaultPage' => $selected === null
+                && $filters['from'] === null
+                && $filters['to'] === null
+                && $filters['route'] === null
+                && $filters['station'] === null,
         ]);
+    }
+
+    /**
+     * The flights the report and the dashboard cover, earliest departure first.
+     * Dates are calendar days in the viewer's station time, compared to departure_at (UTC).
+     * A station keeps departures from that airport, the same rule as Flight::departingFrom().
+     *
+     * @param  Collection<int, Flight>  $flights
+     * @param  array{from: ?string, to: ?string, route: ?string, station: ?string, flight: mixed}  $filters
+     * @return Collection<int, Flight>
+     */
+    private function reportedFlights(Collection $flights, User $user, ?Flight $selected, array $filters): Collection
+    {
+        $reported = $selected !== null ? $flights->where('id', $selected->id) : $flights;
+
+        if ($filters['from'] !== null || $filters['to'] !== null) {
+            $start = $filters['from'] === null ? null : $user->stationDay($filters['from'])[0];
+            $end = $filters['to'] === null ? null : $user->stationDay($filters['to'])[1];
+            $reported = $reported->filter(fn (Flight $flight) => $this->departsBetween($flight, $start, $end));
+        } elseif ($selected === null) {
+            [$start, $end] = $user->stationDay();
+            $reported = $reported->filter(fn (Flight $flight) => $this->departsBetween($flight, $start, $end));
+        }
+
+        if ($filters['route'] !== null) {
+            [$origin, $destination] = explode('-', $filters['route'], 2);
+            $reported = $reported->where('origin', $origin)->where('destination', $destination);
+        }
+
+        if ($filters['station'] !== null) {
+            $reported = $reported->where('origin', $filters['station']);
+        }
+
+        return $reported->sortBy(fn (Flight $flight) => $flight->departure_at->getTimestamp())->values();
+    }
+
+    /**
+     * True when departure_at falls inside the UTC instants of the viewer's dates. Either end may be open.
+     */
+    private function departsBetween(Flight $flight, ?Carbon $start, ?Carbon $end): bool
+    {
+        if ($start !== null && $flight->departure_at->lt($start)) {
+            return false;
+        }
+
+        return $end === null || $flight->departure_at->lte($end);
+    }
+
+    /**
+     * @param  Collection<int, Flight>  $flights
+     */
+    private function routeIsFlown(Collection $flights, string $route): bool
+    {
+        return $flights->contains(fn (Flight $flight) => $flight->origin.'-'.$flight->destination === $route);
+    }
+
+    /**
+     * One "BEY-CDG" per directed pair that a flight uses. A plain list: the flight collection
+     * must not be asked to merge these strings.
+     *
+     * @param  Collection<int, Flight>  $flights
+     * @return Collection<int, string>
+     */
+    private function routes(Collection $flights): Collection
+    {
+        return collect($flights->map(fn (Flight $flight) => $flight->origin.'-'.$flight->destination)->all())
+            ->unique()
+            ->sort()
+            ->values();
+    }
+
+    /**
+     * Ticket revenue is Fare. The four other kinds are extras, each on its own and as a sum.
+     * Grand total is the ticket plus the extras. Failed payments are already excluded by revenue().
+     *
+     * @param  Collection<int, Collection<string, int>>  $revenue  cents per kind, per flight
+     * @return array<string, int>
+     */
+    private function dashboard(Collection $revenue): array
+    {
+        $totals = [];
+        foreach (PaymentKind::cases() as $kind) {
+            $totals[$kind->value] = 0;
+        }
+
+        foreach ($revenue as $kinds) {
+            foreach ($kinds as $kind => $cents) {
+                $totals[$kind] = ($totals[$kind] ?? 0) + $cents;
+            }
+        }
+
+        $extras = $totals[PaymentKind::ExtraBag->value]
+            + $totals[PaymentKind::ExcessBaggage->value]
+            + $totals[PaymentKind::Fee->value]
+            + $totals[PaymentKind::Upgrade->value];
+
+        $totals['extras'] = $extras;
+        $totals['grand'] = $totals[PaymentKind::Fare->value] + $extras;
+
+        return $totals;
     }
 
     /**
