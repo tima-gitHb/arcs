@@ -38,6 +38,7 @@
                 <div>
                     <x-input-label for="timezone" value="Time zone" />
                     <select id="timezone" name="timezone" required class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                        <option value="" disabled @selected(old('timezone') === null)>Choose a time zone</option>
                         @foreach ($timezones as $zone)
                             <option value="{{ $zone }}" @selected(old('timezone') === $zone)>{{ $zone }}</option>
                         @endforeach
@@ -47,7 +48,7 @@
 
                 <div>
                     <x-input-label for="min_connection_minutes" value="Minimum connection (minutes)" />
-                    <x-text-input id="min_connection_minutes" name="min_connection_minutes" type="number" min="0" max="1440" class="mt-1 block w-full" :value="old('min_connection_minutes')" required />
+                    <x-text-input id="min_connection_minutes" name="min_connection_minutes" type="number" min="0" max="1440" class="mt-1 block w-full" :value="old('min_connection_minutes', 60)" required />
                     <x-input-error :messages="$errors->get('min_connection_minutes')" class="mt-2" />
                 </div>
 

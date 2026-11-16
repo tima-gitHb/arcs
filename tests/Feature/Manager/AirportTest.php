@@ -104,6 +104,17 @@ class AirportTest extends TestCase
             ->assertDontSee('Delete');
     }
 
+    public function test_the_new_airport_form_has_no_time_zone_preselected(): void
+    {
+        $html = $this->get('/manager/airports')->assertOk()->getContent();
+
+        $this->assertSame(1, preg_match('/<select id="timezone" name="timezone".*?<\/select>/s', $html, $match));
+
+        $this->assertStringContainsString('<option value="" disabled selected>Choose a time zone</option>', $match[0]);
+        $this->assertDoesNotMatchRegularExpression('/<option value="[^"]+"[^>]*\bselected\b/', $match[0]);
+        $this->assertMatchesRegularExpression('/id="min_connection_minutes"[^>]*value="60"/', $html);
+    }
+
     public function test_the_airport_routes_are_get_post_and_put_with_no_delete(): void
     {
         $this->assertTrue(Route::has('manager.airports'));
