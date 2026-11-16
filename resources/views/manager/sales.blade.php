@@ -4,9 +4,43 @@
     </x-slot>
 
     <div class="space-y-6">
-        {{-- Picker: any flight. A GET form, so the chosen flight is in the URL (?flight=<id>). --}}
+        {{-- Filters. A GET form, so the choice is in the URL. Empty fields leave today's page as it is. --}}
         <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
             <form method="GET" action="{{ route('manager.sales') }}" class="flex flex-wrap items-end gap-4">
+                <div>
+                    <x-input-label for="from" value="From" />
+                    <input type="date" id="from" name="from" value="{{ $filters['from'] }}" class="mt-1 block border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                    <x-input-error :messages="$errors->get('from')" class="mt-2" />
+                </div>
+
+                <div>
+                    <x-input-label for="to" value="To" />
+                    <input type="date" id="to" name="to" value="{{ $filters['to'] }}" class="mt-1 block border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                    <x-input-error :messages="$errors->get('to')" class="mt-2" />
+                </div>
+
+                <div>
+                    <x-input-label for="route" value="Route" />
+                    <select id="route" name="route" class="mt-1 block w-40 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                        <option value="">All routes</option>
+                        @foreach ($routes as $route)
+                            <option value="{{ $route }}" @selected($filters['route'] === $route)>{{ str_replace('-', ' → ', $route) }}</option>
+                        @endforeach
+                    </select>
+                    <x-input-error :messages="$errors->get('route')" class="mt-2" />
+                </div>
+
+                <div>
+                    <x-input-label for="station" value="Station" />
+                    <select id="station" name="station" class="mt-1 block w-36 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                        <option value="">All stations</option>
+                        @foreach ($stations as $code)
+                            <option value="{{ $code }}" @selected($filters['station'] === $code)>{{ $code }}</option>
+                        @endforeach
+                    </select>
+                    <x-input-error :messages="$errors->get('station')" class="mt-2" />
+                </div>
+
                 <div>
                     <x-input-label for="flight" value="Flight" />
                     <select id="flight" name="flight" class="mt-1 block w-72 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
@@ -26,10 +60,75 @@
                     <a data-back-to-today href="{{ route('manager.sales') }}" class="text-sm text-indigo-600 hover:underline">Back to today</a>
                 @endif
             </form>
+
+            <p data-dates-in class="mt-4 text-sm text-gray-600">Dates in {{ $timezone }}</p>
         </div>
 
+        {{-- Ticket revenue against extras, summed from the payments already loaded for the flights above. --}}
+        <section data-dashboard class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
+            <h2 class="text-lg font-semibold text-navy">Revenue</h2>
+
+            @php
+                $lines = [
+                    'Fare' => 'Ticket revenue',
+                    'ExtraBag' => 'Extra bag',
+                    'ExcessBaggage' => 'Excess baggage',
+                    'Fee' => 'Fee',
+                    'Upgrade' => 'Cabin upgrade',
+                    'extras' => 'Extras total',
+                    'grand' => 'Grand total',
+                ];
+                $ticket = $dashboard['Fare'];
+                $extrasTotal = $dashboard['extras'];
+                $ticketScale = max($ticket, $extrasTotal, 1);
+                $kinds = [
+                    'Extra bag' => $dashboard['ExtraBag'],
+                    'Excess baggage' => $dashboard['ExcessBaggage'],
+                    'Fee' => $dashboard['Fee'],
+                    'Cabin upgrade' => $dashboard['Upgrade'],
+                ];
+                $kindScale = max(max($kinds), 1);
+            @endphp
+
+            <dl class="mt-4 grid gap-4 sm:grid-cols-4">
+                @foreach ($lines as $key => $label)
+                    <div>
+                        <dt class="text-sm text-gray-600">{{ $label }}</dt>
+                        <dd class="text-lg font-semibold" data-total="{{ $key }}">{{ \App\Support\Money::format($dashboard[$key]) }}</dd>
+                    </div>
+                @endforeach
+            </dl>
+
+            <div class="mt-6 grid gap-6 lg:grid-cols-2">
+                <figure>
+                    <figcaption class="text-sm font-medium text-navy">Ticket revenue and extras</figcaption>
+                    {{-- Width matches the viewBox, so font-size 14 is 14px and the chart does not grow with the card. --}}
+                    <svg data-chart="ticket-extras" viewBox="0 0 360 88" width="360" height="88" class="mt-2" style="max-width: 100%; height: auto" role="img">
+                        <title>Ticket revenue and extras</title>
+                        <text x="0" y="16" font-size="14" fill="#334155">Ticket {{ \App\Support\Money::format($ticket) }}</text>
+                        <rect x="0" y="24" height="12" width="{{ intdiv($ticket * 220, $ticketScale) }}" fill="#1e3a5f"></rect>
+                        <text x="0" y="60" font-size="14" fill="#334155">Extras {{ \App\Support\Money::format($extrasTotal) }}</text>
+                        <rect x="0" y="68" height="12" width="{{ intdiv($extrasTotal * 220, $ticketScale) }}" fill="#64748b"></rect>
+                    </svg>
+                </figure>
+
+                <figure>
+                    <figcaption class="text-sm font-medium text-navy">Extras by kind</figcaption>
+                    <svg data-chart="extras-by-kind" viewBox="0 0 360 148" width="360" height="148" class="mt-2" style="max-width: 100%; height: auto" role="img">
+                        <title>Extras by kind</title>
+                        @foreach ($kinds as $label => $cents)
+                            <text x="0" y="{{ $loop->iteration * 36 - 16 }}" font-size="14" fill="#334155">{{ $label }} {{ \App\Support\Money::format($cents) }}</text>
+                            <rect x="0" y="{{ $loop->iteration * 36 - 10 }}" height="12" width="{{ intdiv($cents * 220, $kindScale) }}" fill="#1e3a5f"></rect>
+                        @endforeach
+                    </svg>
+                </figure>
+            </div>
+
+            <p class="mt-4 text-sm text-gray-600">Sports equipment and pets are included in the payment they were charged with.</p>
+        </section>
+
         {{-- Today's flights, one link each. Only on the default page: a chosen flight is shown alone. --}}
-        @unless ($selected)
+        @if ($defaultPage)
             <div class="bg-white rounded-lg shadow-sm overflow-x-auto">
                 <h2 class="px-4 pt-4 text-lg font-semibold text-navy">Today's flights</h2>
 
@@ -63,7 +162,7 @@
                     </table>
                 @endif
             </div>
-        @endunless
+        @endif
 
         {{-- One block per flight. --}}
         @foreach ($reports as $report)
