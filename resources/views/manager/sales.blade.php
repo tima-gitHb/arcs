@@ -102,7 +102,8 @@
             <div class="mt-6 grid gap-6 lg:grid-cols-2">
                 <figure>
                     <figcaption class="text-sm font-medium text-navy">Ticket revenue and extras</figcaption>
-                    <svg data-chart="ticket-extras" viewBox="0 0 360 88" class="mt-2 w-full" role="img">
+                    {{-- Width matches the viewBox, so font-size 14 is 14px and the chart does not grow with the card. --}}
+                    <svg data-chart="ticket-extras" viewBox="0 0 360 88" width="360" height="88" class="mt-2" style="max-width: 100%; height: auto" role="img">
                         <title>Ticket revenue and extras</title>
                         <text x="0" y="16" font-size="14" fill="#334155">Ticket {{ \App\Support\Money::format($ticket) }}</text>
                         <rect x="0" y="24" height="12" width="{{ intdiv($ticket * 220, $ticketScale) }}" fill="#1e3a5f"></rect>
@@ -113,7 +114,7 @@
 
                 <figure>
                     <figcaption class="text-sm font-medium text-navy">Extras by kind</figcaption>
-                    <svg data-chart="extras-by-kind" viewBox="0 0 360 148" class="mt-2 w-full" role="img">
+                    <svg data-chart="extras-by-kind" viewBox="0 0 360 148" width="360" height="148" class="mt-2" style="max-width: 100%; height: auto" role="img">
                         <title>Extras by kind</title>
                         @foreach ($kinds as $label => $cents)
                             <text x="0" y="{{ $loop->iteration * 36 - 16 }}" font-size="14" fill="#334155">{{ $label }} {{ \App\Support\Money::format($cents) }}</text>
