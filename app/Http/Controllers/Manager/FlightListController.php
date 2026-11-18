@@ -7,6 +7,7 @@ use App\Models\Bag;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\SpecialService;
+use App\Support\ManagerStation;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -26,16 +27,25 @@ class FlightListController extends Controller
     {
         // find() gives null for a missing or unknown id (and for "abc", which integer() turns into 0):
         // the page then shows only the picker, it does not fail.
+        $station = ManagerStation::apply($request);
         $flight = Flight::find($request->integer('flight'));
+        // A bookmarked flight from another station is not this station's list.
+        if ($flight !== null && $station !== null && $flight->origin !== $station) {
+            $flight = null;
+        }
 
         // An unknown tab falls back to the first one.
         $tab = in_array($request->query('tab'), self::TABS, true) ? $request->query('tab') : self::TABS[0];
 
         $data = [
-            'flights' => Flight::orderByDesc('departure_at')->get(),
+            'flights' => Flight::query()
+                ->when($station, fn ($query) => $query->departingFrom($station))
+                ->orderByDesc('departure_at')
+                ->get(),
             'flight' => $flight,
             'tab' => $tab,
             'tabs' => self::TABS,
+            'station' => $station,
         ];
 
         if ($flight === null) {

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Manager;
 use App\Enums\PassengerStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Flight;
+use App\Support\ManagerStation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -13,13 +14,16 @@ class DashboardController extends Controller
 {
     /**
      * Figures for each of today's flights (SR-47). Read only: nothing is changed here.
-     * Always 3 queries, however many passengers there are: flights, passenger counts, bag counts.
+     * The figures stay three queries however many passengers there are: flights, passenger
+     * counts, bag counts. The station list is the one airport query shared with the filter.
      */
     public function index(Request $request): View
     {
         // Same definition of "today" as the <x-todays-flights> component (SR-41): today at the
-        // Manager's station (UTC without one), flights from every station (B13a).
+        // Manager's station (UTC without one). A saved station keeps that airport's departures.
+        $station = ManagerStation::apply($request);
         $flights = Flight::departingToday($request->user())
+            ->when($station, fn ($query) => $query->departingFrom($station))
             ->orderBy('departure_at')
             ->get();
 
@@ -64,6 +68,6 @@ class DashboardController extends Controller
             ];
         });
 
-        return view('manager.dashboard', ['rows' => $rows]);
+        return view('manager.dashboard', ['rows' => $rows, 'station' => $station]);
     }
 }

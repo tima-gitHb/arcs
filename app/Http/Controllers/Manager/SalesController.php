@@ -11,6 +11,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Manager\SalesFilterRequest;
 use App\Models\Flight;
 use App\Models\User;
+use App\Support\ManagerStation;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -32,11 +33,11 @@ class SalesController extends Controller
             'from' => $request->validated('from'),
             'to' => $request->validated('to'),
             'route' => $request->validated('route'),
-            'station' => $request->validated('station'),
+            'station' => ManagerStation::apply($request),
             'flight' => $request->validated('flight'),
         ];
 
-        // The picker lists every flight, newest departure first. Routes and stations come from this list.
+        // Every flight, for the route check. The picker below keeps only the station's departures.
         $flights = Flight::orderByDesc('departure_at')->get();
 
         if ($filters['route'] !== null && ! $this->routeIsFlown($flights, $filters['route'])) {
@@ -64,11 +65,13 @@ class SalesController extends Controller
 
         return view('manager.sales', [
             'reports' => $reports,
-            'flights' => $flights,
+            'flights' => $filters['station'] === null
+                ? $flights
+                : $flights->where('origin', $filters['station'])->values(),
             'selected' => $selected,
             'filters' => $filters,
             'routes' => $this->routes($flights),
-            'stations' => $flights->pluck('origin')->unique()->sort()->values(),
+            'stations' => ManagerStation::airports($request)->pluck('code'),
             'timezone' => $request->user()->timezone(),
             'dashboard' => $this->dashboard($revenue),
             // The "today" list is the page with nothing chosen. A flight, a date, a route or a station replaces it.

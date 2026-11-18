@@ -4,6 +4,8 @@
     </x-slot>
 
     <div class="space-y-6">
+        <x-manager-station :station="$station" />
+
         {{-- A refused status move (StatusService said no) comes back under the 'status' key. --}}
         @if ($errors->has('status'))
             <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">

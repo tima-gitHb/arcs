@@ -158,7 +158,9 @@ class StationFilterTest extends TestCase
             ->assertRedirect(route('manager.flights'))
             ->assertSessionHas('success', 'Flight ME900 created. It departs from BEY, not CDG, so this list does not show it.');
 
-        $this->get(route('manager.flights'))->assertOk()->assertDontSee('ME900');
+        $hidden = $this->get(route('manager.flights'))->assertOk();
+        // The success message names the flight. The list itself does not.
+        $this->assertSame(0, $this->countNodes($hidden, '//table//td[contains(., "ME900")]'));
 
         $this->post(route('manager.flights.store'), $this->flightForm($aircraft, 'ME901', 'CDG', 'LHR'))
             ->assertRedirect(route('manager.flights'))

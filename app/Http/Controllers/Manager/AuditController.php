@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\AuditEntry;
 use App\Models\Flight;
 use App\Models\User;
+use App\Support\ManagerStation;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
@@ -24,6 +26,8 @@ class AuditController extends Controller
             'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
+        $station = ManagerStation::apply($request);
+
         $entries = AuditEntry::query()
             // Eager loading: a few extra queries for the whole page instead of several per row.
             ->with(['passenger.reservation.flight', 'flight', 'user'])
@@ -39,6 +43,7 @@ class AuditController extends Controller
             ->when($filters['user_id'] ?? null, fn ($query, $userId) => $query->where('user_id', $userId))
             // A day at the Manager's station (UTC without one), B13a.
             ->when($filters['date'] ?? null, fn ($query, $date) => $query->whereBetween('changed_at', $request->user()->stationDay($date)))
+            ->when($station, fn ($query) => $query->where(fn ($entry) => $this->fromStation($entry, $station)))
             // Same second? Highest id (the latest written) first, so the order is stable.
             ->orderByDesc('changed_at')
             ->orderByDesc('id')
@@ -47,8 +52,31 @@ class AuditController extends Controller
 
         return view('manager.audit', [
             'entries' => $entries,
-            'flights' => Flight::orderByDesc('departure_at')->get(),
+            'flights' => Flight::query()
+                ->when($station, fn ($query) => $query->departingFrom($station))
+                ->orderByDesc('departure_at')
+                ->get(),
             'staff' => User::orderBy('name')->get(),
+            'station' => $station,
         ]);
+    }
+
+    /**
+     * A row belongs to this station through its flight, or through the passenger's reservation
+     * flight when it has no flight of its own. An airport row matches "airport {CODE} ".
+     * Fare, fee and any other row with neither id do not match.
+     *
+     * @param  Builder<AuditEntry>  $entry
+     */
+    private function fromStation($entry, string $station): void
+    {
+        $entry->whereHas('flight', fn ($flight) => $flight->where('origin', $station))
+            ->orWhere(fn ($row) => $row
+                ->whereNull('flight_id')
+                ->whereHas('passenger.reservation.flight', fn ($flight) => $flight->where('origin', $station)))
+            ->orWhere(fn ($row) => $row
+                ->whereNull('flight_id')
+                ->whereNull('passenger_id')
+                ->where('field', 'like', "airport {$station} %"));
     }
 }

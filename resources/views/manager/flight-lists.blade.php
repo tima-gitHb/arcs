@@ -14,6 +14,8 @@
     </style>
 
     <div class="space-y-6">
+        <x-manager-station :station="$station" />
+
         {{-- Flight picker: a GET form, so the chosen flight (and tab) is in the URL. --}}
         <form method="GET" action="{{ route('manager.home') }}" class="no-print bg-white rounded-lg shadow-sm p-6 flex flex-wrap items-end gap-4">
             <div>

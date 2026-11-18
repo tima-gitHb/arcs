@@ -4,6 +4,8 @@
     </x-slot>
 
     <div class="space-y-6">
+        <x-manager-station :station="$filters['station']" />
+
         {{-- Filters. A GET form, so the choice is in the URL. Empty fields leave today's page as it is. --}}
         <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
             <form method="GET" action="{{ route('manager.sales') }}" class="flex flex-wrap items-end gap-4">

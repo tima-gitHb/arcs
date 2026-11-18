@@ -9,10 +9,10 @@ use App\Http\Requests\Manager\StoreFlightRequest;
 use App\Http\Requests\Manager\UpdateFlightGateRequest;
 use App\Http\Requests\Manager\UpdateFlightStatusRequest;
 use App\Models\Aircraft;
-use App\Models\Airport;
 use App\Models\AuditEntry;
 use App\Models\Flight;
 use App\Services\StatusService;
+use App\Support\ManagerStation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -21,12 +21,17 @@ class FlightController extends Controller
 {
     public function index(StatusService $statusService): View
     {
-        $flights = Flight::with('aircraft')->orderByDesc('departure_at')->get();
+        $station = ManagerStation::apply(request());
+        $flights = Flight::with('aircraft')
+            ->when($station, fn ($query) => $query->departingFrom($station))
+            ->orderByDesc('departure_at')
+            ->get();
 
         return view('manager.flights', [
             'flights' => $flights,
             'aircraft' => Aircraft::withCount('seats')->orderBy('registration')->get(),
-            'airports' => Airport::orderBy('code')->get(),
+            'airports' => ManagerStation::airports(request()),
+            'station' => $station,
             // flight id => the statuses StatusService would accept: one button each.
             'moves' => $flights->mapWithKeys(fn (Flight $flight) => [
                 $flight->id => $statusService->allowedFlightMoves($flight),
@@ -38,8 +43,14 @@ class FlightController extends Controller
     {
         $flight = Flight::create($request->flightData());
 
+        $message = "Flight {$flight->flight_no} created.";
+        $station = ManagerStation::apply($request);
+        if ($station !== null && $flight->origin !== $station) {
+            $message .= " It departs from {$flight->origin}, not {$station}, so this list does not show it.";
+        }
+
         return redirect()->route('manager.flights')
-            ->with('success', "Flight {$flight->flight_no} created.");
+            ->with('success', $message);
     }
 
     /**
