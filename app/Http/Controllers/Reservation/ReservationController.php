@@ -227,8 +227,11 @@ class ReservationController extends Controller
     {
         $reservation->load([
             'flight',
+            'segments.flight',
             'passengers.accompanyingAdult',
             'passengers.seatAssignment.seat',
+            'passengers.coupons.flight',
+            'passengers.coupons.seatAssignment.seat',
             'payments',
         ]);
 
