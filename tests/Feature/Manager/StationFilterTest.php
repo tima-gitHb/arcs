@@ -128,6 +128,33 @@ class StationFilterTest extends TestCase
         $this->assertSame(2, $this->countNodes($this->get(route('manager.payments'))->assertOk(), '//tr[@data-payment]'));
     }
 
+    public function test_each_page_has_a_station_select_preselected_from_the_session(): void
+    {
+        $this->open('manager.dashboard', 'CDG');
+
+        foreach (['manager.dashboard', 'manager.flights', 'manager.home', 'manager.audit', 'manager.payments'] as $name) {
+            $page = $this->get(route($name))->assertOk();
+
+            $this->assertSame(1, $this->countNodes($page, '//select[@name="station"]'));
+            $this->assertSame(1, $this->countNodes($page, '//select[@name="station"]/option[@value="" and normalize-space()="All stations"]'));
+            $this->assertSame(1, $this->countNodes($page, '//select[@name="station"]/option[@value="CDG" and @selected]'));
+            $this->assertSame(1, $this->countNodes($page, '//select[@name="station"]/option[@value="BEY" and not(@selected)]'));
+            $this->assertSame(1, $this->countNodes($page, '//select[@name="station"][contains(@onchange, "submit")]'));
+        }
+    }
+
+    public function test_the_dashboard_lists_every_stations_flights_when_none_is_saved(): void
+    {
+        $this->pair();
+        $this->assertNull(session('manager_station'));
+
+        $page = $this->get(route('manager.dashboard'))->assertOk();
+
+        // The manager works at BEY. With nothing saved, today's CDG departure is still listed.
+        $this->assertSame(1, $this->countNodes($page, '//*[@data-role="manager"]//td[contains(., "ME801")]'));
+        $this->assertSame(1, $this->countNodes($page, '//*[@data-role="manager"]//td[contains(., "ME802")]'));
+    }
+
     public function test_the_choice_is_remembered_and_show_all_stations_clears_it(): void
     {
         $this->pair();
