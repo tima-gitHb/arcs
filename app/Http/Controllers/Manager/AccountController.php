@@ -65,6 +65,11 @@ class AccountController extends Controller
         return $this->run(fn () => $this->accounts->sendResetLink($user), 'Password reset link sent.');
     }
 
+    public function resendWelcome(User $user): RedirectResponse
+    {
+        return $this->run(fn () => $this->accounts->resendWelcome($user), 'Welcome email sent.');
+    }
+
     /**
      * Run a service action. If the service refuses, show its message as an error.
      */

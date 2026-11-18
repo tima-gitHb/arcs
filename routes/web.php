@@ -124,6 +124,7 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::patch('/accounts/{user}/active', [AccountController::class, 'setActive'])->name('accounts.active');
     Route::patch('/accounts/{user}/unlock', [AccountController::class, 'unlock'])->name('accounts.unlock');
     Route::post('/accounts/{user}/reset-link', [AccountController::class, 'sendResetLink'])->name('accounts.reset-link');
+    Route::post('/accounts/{user}/resend-welcome', [AccountController::class, 'resendWelcome'])->name('accounts.resend-welcome');
     Route::patch('/accounts/{user}/station', [AccountController::class, 'updateStation'])->name('accounts.station');
     Route::get('/airports', [AirportController::class, 'index'])->name('airports');
     Route::post('/airports', [AirportController::class, 'store'])->name('airports.store');

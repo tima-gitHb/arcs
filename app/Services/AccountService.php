@@ -70,4 +70,29 @@ class AccountService
             throw new DomainException(trans($status));
         }
     }
+
+    /**
+     * Send the welcome email again, with a new set-password link (M18).
+     * Locked or deactivated accounts are refused first (SR-37). An account that has
+     * already logged in uses "Send reset link" instead. The broker applies the 60-second
+     * throttle and replaces the previous token, so the old link stops working.
+     */
+    public function resendWelcome(User $user): void
+    {
+        if ($user->locked || ! $user->active) {
+            throw new DomainException('Unlock or activate the account first.');
+        }
+
+        if ($user->last_login_at !== null) {
+            throw new DomainException('This account has already logged in. Use Send reset link instead.');
+        }
+
+        $status = Password::sendResetLink(['email' => $user->email], function (User $user, string $token) {
+            $user->notify(new WelcomeAccount($token));
+        });
+
+        if ($status !== Password::RESET_LINK_SENT) {
+            throw new DomainException(trans($status));
+        }
+    }
 }

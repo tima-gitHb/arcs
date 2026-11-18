@@ -132,6 +132,14 @@
                                         @csrf
                                         <button type="submit" class="text-indigo-600 hover:underline">Send reset link</button>
                                     </form>
+
+                                    {{-- A welcome email is for someone who has never signed in. After that, use the reset link. --}}
+                                    @if ($user->last_login_at === null)
+                                        <form method="POST" action="{{ route('manager.accounts.resend-welcome', $user) }}">
+                                            @csrf
+                                            <button type="submit" class="text-indigo-600 hover:underline">Resend welcome email</button>
+                                        </form>
+                                    @endif
                                 </div>
                             </td>
                         </tr>
