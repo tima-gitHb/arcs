@@ -31,6 +31,14 @@ class ETicketMail extends Mailable
 
     public function content(): Content
     {
+        $this->reservation->loadMissing([
+            'flight',
+            'segments.flight',
+            'passengers.seatAssignment.seat',
+            'passengers.coupons.flight',
+            'passengers.coupons.seatAssignment.seat',
+        ]);
+
         return new Content(
             markdown: 'emails.eticket',
             with: [
