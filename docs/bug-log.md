@@ -45,4 +45,4 @@
 - Screenshot: none — found by an automated test, not in the browser; full error message above.
 - Status: Fixed
 - Fix: R3 test now seeds fares (fix/BUG-003-r3-test-fares). Note: the confirmation page still returns 500 when no fare exists at all; follow-up for Serge (show 'price unavailable' instead).
-- Retested:
+- Retested: 18 Nov 2026 · Yasmina — R3CancelPassengerTest green on dev after the fix
