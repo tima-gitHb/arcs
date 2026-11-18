@@ -2,6 +2,7 @@
     use App\Services\AllowanceService;
 
     $allowances = app(AllowanceService::class);
+    $multiFlight = $reservation->segments->count() > 1;
 @endphp
 
 <div class="eticket print:shadow-none">
@@ -18,37 +19,29 @@
         </div>
     </div>
 
-    <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
-        <div class="sm:col-span-2">
-            <dt class="text-gray-500">{{ $reservation->segments->count() > 1 ? 'Itinerary' : 'Flight' }}</dt>
-            <dd class="mt-1 space-y-2">
-                @foreach ($reservation->segments as $segment)
-                    <div class="text-base font-semibold text-navy">
-                        {{ $segment->flight->flight_no }}
-                        <span class="font-medium text-gray-700">· {{ $segment->flight->origin }} → {{ $segment->flight->destination }}</span>
-                        <span class="mt-0.5 block text-sm font-normal text-gray-600">
-                            <x-local-time :at="$segment->flight->departure_at" :airport="$segment->flight->origin" format="D d M Y · H:i" />
-                            @if ($reservation->segments->count() > 1)
-                                · {{ $segment->direction->label() }}
-                            @endif
-                        </span>
-                    </div>
-                @endforeach
-            </dd>
+    <div class="mt-6">
+        <h2 class="text-lg font-semibold text-navy">{{ $multiFlight ? 'Itinerary' : 'Flight' }}</h2>
+        <div class="mt-3">
+            @include('reservation.partials.itinerary', ['reservation' => $reservation])
         </div>
-        @if ($reservation->contact_email)
-            <div>
-                <dt class="text-gray-500">Contact email</dt>
-                <dd class="mt-1 font-medium">{{ $reservation->contact_email }}</dd>
-            </div>
-        @endif
-        @if ($reservation->contact_phone)
-            <div>
-                <dt class="text-gray-500">Contact phone</dt>
-                <dd class="mt-1 font-medium">{{ $reservation->contact_phone }}</dd>
-            </div>
-        @endif
-    </dl>
+    </div>
+
+    @if ($reservation->contact_email || $reservation->contact_phone)
+        <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
+            @if ($reservation->contact_email)
+                <div>
+                    <dt class="text-gray-500">Contact email</dt>
+                    <dd class="mt-1 font-medium">{{ $reservation->contact_email }}</dd>
+                </div>
+            @endif
+            @if ($reservation->contact_phone)
+                <div>
+                    <dt class="text-gray-500">Contact phone</dt>
+                    <dd class="mt-1 font-medium">{{ $reservation->contact_phone }}</dd>
+                </div>
+            @endif
+        </dl>
+    @endif
 
     <h2 class="mt-8 text-lg font-semibold text-navy">Passengers</h2>
 
@@ -60,7 +53,7 @@
                     <th class="py-2 font-medium">Type</th>
                     <th class="py-2 font-medium">Status</th>
                     <th class="py-2 font-medium">Class</th>
-                    <th class="py-2 font-medium">Seat</th>
+                    <th class="py-2 font-medium">Seat{{ $multiFlight ? 's' : '' }}</th>
                     <th class="py-2 font-medium">Baggage allowance</th>
                 </tr>
             </thead>
@@ -96,6 +89,15 @@
                         <td class="py-3">
                             @if ($passenger->type === App\Enums\PassengerType::Infant)
                                 No seat
+                            @elseif ($multiFlight)
+                                <ul class="space-y-0.5">
+                                    @foreach ($passenger->coupons as $coupon)
+                                        <li>
+                                            {{ $coupon->flight->flight_no }}:
+                                            {{ $coupon->seatAssignment?->seat?->seat_no ?? 'Not assigned' }}
+                                        </li>
+                                    @endforeach
+                                </ul>
                             @elseif ($passenger->seatAssignment)
                                 {{ $passenger->seatAssignment->seat->seat_no }}
                             @else
