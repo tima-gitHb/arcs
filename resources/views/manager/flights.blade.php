@@ -13,6 +13,13 @@
             </div>
         @endif
 
+        {{-- A delay time that is not later than the current departure. --}}
+        @if ($errors->has('departure_at'))
+            <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+                {{ $errors->first('departure_at') }}
+            </div>
+        @endif
+
         <div class="grid gap-6 lg:grid-cols-2">
             {{-- New aircraft: saving it also generates its seats (SR-14). --}}
             <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
@@ -189,6 +196,15 @@
                                             <form method="POST" action="{{ route('manager.flights.status', $flight) }}">
                                                 @csrf
                                                 @method('PATCH')
+                                                @if ($move->value === 'Delayed')
+                                                    <label class="block text-xs text-gray-600">
+                                                        New departure time
+                                                        <input type="datetime-local" name="departure_at"
+                                                               aria-label="New departure time for {{ $flight->flight_no }}"
+                                                               title="Local time at the origin"
+                                                               class="mt-1 block border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm">
+                                                    </label>
+                                                @endif
                                                 <button type="submit" name="status" value="{{ $move->value }}"
                                                         class="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">
                                                     {{ $move->label() }}
