@@ -18,8 +18,6 @@ use Illuminate\Validation\Validator;
 class StoreReservationRequest extends FormRequest
 {
     /**
-     * Never flash the card back into the form.
-     *
      * @var list<string>
      */
     protected $dontFlash = [
@@ -35,28 +33,51 @@ class StoreReservationRequest extends FormRequest
     {
         $merge = [];
 
+        if (! $this->filled('outbound_flight_ids') && $this->filled('flight_id')) {
+            $merge['outbound_flight_ids'] = [$this->integer('flight_id')];
+        }
+
+        if (! $this->filled('journey_type')) {
+            $outbound = $this->input('outbound_flight_ids', $merge['outbound_flight_ids'] ?? []);
+            $return = $this->input('return_flight_ids', []);
+            $merge['journey_type'] = match (true) {
+                is_array($return) && $return !== [] => 'round_trip',
+                is_array($outbound) && count($outbound) > 1 => 'connection',
+                default => 'one_way',
+            };
+        }
+
         $passengers = $this->input('passengers');
 
         if (is_array($passengers)) {
+            $firstFlightId = (int) (($merge['outbound_flight_ids'] ?? $this->input('outbound_flight_ids', [null]))[0] ?? 0);
+
             foreach ($passengers as $index => $passenger) {
-                if (! is_array($passenger) || ! is_array($passenger['passport'] ?? null)) {
+                if (! is_array($passenger)) {
                     continue;
                 }
 
-                $passengers[$index]['passport']['number'] = strtoupper(str_replace(
-                    ' ',
-                    '',
-                    (string) ($passenger['passport']['number'] ?? ''),
-                ));
-                $passengers[$index]['passport']['issuing_country'] = strtoupper(trim(
-                    (string) ($passenger['passport']['issuing_country'] ?? ''),
-                ));
+                if (is_array($passenger['passport'] ?? null)) {
+                    $passengers[$index]['passport']['number'] = strtoupper(str_replace(
+                        ' ',
+                        '',
+                        (string) ($passenger['passport']['number'] ?? ''),
+                    ));
+                    $passengers[$index]['passport']['issuing_country'] = strtoupper(trim(
+                        (string) ($passenger['passport']['issuing_country'] ?? ''),
+                    ));
+                }
+
+                $seats = is_array($passenger['seats'] ?? null) ? $passenger['seats'] : [];
+                if ($firstFlightId > 0 && ($passenger['seat_id'] ?? null) && empty($seats[$firstFlightId])) {
+                    $seats[$firstFlightId] = $passenger['seat_id'];
+                    $passengers[$index]['seats'] = $seats;
+                }
             }
 
             $merge['passengers'] = $passengers;
         }
 
-        // Accept 1226 / 12-26 / 12 / 26 → 12/26 for the gateway.
         $expiryDigits = preg_replace('/\D/', '', (string) $this->input('card_expiry', ''));
         if (is_string($expiryDigits) && strlen($expiryDigits) === 4) {
             $merge['card_expiry'] = substr($expiryDigits, 0, 2).'/'.substr($expiryDigits, 2, 2);
@@ -73,23 +94,23 @@ class StoreReservationRequest extends FormRequest
     }
 
     /**
-     * Passport fields use the same rules as check-in's document form (number, country, expiry).
-     *
      * @return array<string, mixed>
      */
     public function rules(): array
     {
+        $bookable = fn ($query) => $query->whereNotIn('status', [
+            FlightStatus::Departed->value,
+            FlightStatus::Cancelled->value,
+            FlightStatus::Closed->value,
+        ]);
+
         return [
-            'flight_id' => [
-                'required',
-                'integer',
-                Rule::exists('flights', 'id')->where(
-                    fn ($query) => $query->whereNotIn('status', [
-                        FlightStatus::Departed->value,
-                        FlightStatus::Cancelled->value,
-                    ]),
-                ),
-            ],
+            'journey_type' => ['required', Rule::in(['one_way', 'connection', 'round_trip'])],
+            'outbound_flight_ids' => ['required', 'array', 'min:1', 'max:3'],
+            'outbound_flight_ids.*' => ['integer', Rule::exists('flights', 'id')->where($bookable)],
+            'return_flight_ids' => ['nullable', 'array', 'max:3'],
+            'return_flight_ids.*' => ['integer', Rule::exists('flights', 'id')->where($bookable)],
+            'flight_id' => ['nullable', 'integer'],
             'passengers' => ['required', 'array', 'min:1'],
             'passengers.*.first_name' => ['required', 'string', 'max:255'],
             'passengers.*.last_name' => ['required', 'string', 'max:255'],
@@ -98,6 +119,8 @@ class StoreReservationRequest extends FormRequest
             'passengers.*.date_of_birth' => ['required', 'date', 'before_or_equal:today'],
             'passengers.*.accompanying_adult' => ['nullable', 'integer', 'min:0'],
             'passengers.*.seat_id' => ['nullable', 'integer'],
+            'passengers.*.seats' => ['nullable', 'array'],
+            'passengers.*.seats.*' => ['nullable', 'integer'],
             'passengers.*.extra_bags' => ['nullable', 'integer', 'min:0', 'max:10'],
             'passengers.*.extra_kg' => ['nullable', 'integer', 'min:0', 'max:100'],
             'passengers.*.passport' => ['required', 'array'],
@@ -117,8 +140,9 @@ class StoreReservationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'flight_id.required' => 'Choose a flight.',
-            'flight_id.exists' => 'That flight is not open for reservations.',
+            'journey_type.required' => 'Choose one-way, connection or round trip.',
+            'outbound_flight_ids.required' => 'Choose the outbound flight(s).',
+            'outbound_flight_ids.min' => 'Choose the outbound flight(s).',
             'passengers.required' => 'Add at least one passenger.',
             'passengers.min' => 'Add at least one passenger.',
             'passengers.*.first_name.required' => 'Enter a first name.',
@@ -141,8 +165,6 @@ class StoreReservationRequest extends FormRequest
     }
 
     /**
-     * An infant has to point at an Adult row on this same booking (SR-24).
-     *
      * @return array<int, \Closure(Validator): void>
      */
     public function after(): array
@@ -162,25 +184,41 @@ class StoreReservationRequest extends FormRequest
                     }
                 }
 
-                $passengers = $this->input('passengers', []);
+                $type = $this->input('journey_type');
+                $outboundIds = array_values(array_map('intval', (array) $this->input('outbound_flight_ids', [])));
+                $returnIds = array_values(array_map('intval', (array) $this->input('return_flight_ids', [])));
 
+                if ($type === 'one_way' && count($outboundIds) !== 1) {
+                    $validator->errors()->add('outbound_flight_ids', 'One-way needs exactly one outbound flight.');
+                }
+                if ($type === 'connection' && count($outboundIds) < 2) {
+                    $validator->errors()->add('outbound_flight_ids', 'A connection needs at least two outbound flights.');
+                }
+                if ($type === 'round_trip' && $returnIds === []) {
+                    $validator->errors()->add('return_flight_ids', 'Round trip needs at least one return flight.');
+                }
+                if ($type !== 'round_trip' && $returnIds !== []) {
+                    $validator->errors()->add('return_flight_ids', 'Return flights are only for round trip.');
+                }
+
+                $passengers = $this->input('passengers', []);
                 if (! is_array($passengers)) {
                     return;
                 }
 
-                $flight = Flight::query()->find($this->integer('flight_id'));
-                $chosenSeats = [];
+                $flightIds = array_values(array_unique([...$outboundIds, ...$returnIds]));
+                $flights = Flight::query()->whereIn('id', $flightIds)->get()->keyBy('id');
 
                 foreach ($passengers as $index => $passenger) {
                     if (! is_array($passenger)) {
                         continue;
                     }
 
-                    $type = $passenger['type'] ?? null;
-                    $seatId = $passenger['seat_id'] ?? null;
-                    $hasSeat = $seatId !== null && $seatId !== '';
+                    $pType = $passenger['type'] ?? null;
+                    $seats = is_array($passenger['seats'] ?? null) ? $passenger['seats'] : [];
+                    $legacySeat = $passenger['seat_id'] ?? null;
 
-                    if ($type === PassengerType::Infant->value) {
+                    if ($pType === PassengerType::Infant->value) {
                         $adultIndex = $passenger['accompanying_adult'] ?? null;
                         $adult = is_numeric($adultIndex) ? ($passengers[(int) $adultIndex] ?? null) : null;
                         $linkedToAdult = is_array($adult)
@@ -194,66 +232,99 @@ class StoreReservationRequest extends FormRequest
                             );
                         }
 
-                        if ($hasSeat) {
-                            $validator->errors()->add(
-                                "passengers.$index.seat_id",
-                                'An infant does not get a seat.',
-                            );
+                        foreach ([...array_values($seats), $legacySeat] as $seatId) {
+                            if ($seatId !== null && $seatId !== '') {
+                                $validator->errors()->add(
+                                    "passengers.$index.seat_id",
+                                    'An infant does not get a seat.',
+                                );
+                                break;
+                            }
                         }
 
                         continue;
                     }
 
                     $cabin = $passenger['cabin_class'] ?? null;
-
                     if ($cabin === null || $cabin === '') {
                         $validator->errors()->add("passengers.$index.cabin_class", 'Choose a cabin class.');
                     }
 
-                    if (! $hasSeat) {
-                        $validator->errors()->add("passengers.$index.seat_id", 'Choose a seat.');
+                    foreach ($flightIds as $flightId) {
+                        $seatId = $seats[$flightId] ?? $seats[(string) $flightId] ?? null;
+                        if (($seatId === null || $seatId === '') && count($flightIds) === 1 && $legacySeat) {
+                            $seatId = $legacySeat;
+                        }
 
-                        continue;
+                        if ($seatId === null || $seatId === '') {
+                            $validator->errors()->add(
+                                count($flightIds) === 1 ? "passengers.$index.seat_id" : "passengers.$index.seats.$flightId",
+                                'Choose a seat on each flight.',
+                            );
+
+                            continue;
+                        }
+
+                        $flight = $flights->get($flightId);
+                        $seat = $flight
+                            ? Seat::query()->where('aircraft_id', $flight->aircraft_id)->find((int) $seatId)
+                            : null;
+
+                        $errorKey = count($flightIds) === 1
+                            ? "passengers.$index.seat_id"
+                            : "passengers.$index.seats.$flightId";
+
+                        if ($seat === null) {
+                            $validator->errors()->add($errorKey, 'Choose a seat on this aircraft.');
+                        } elseif ($cabin && $seat->cabin_class->value !== $cabin) {
+                            $validator->errors()->add($errorKey, 'Choose a seat in that cabin class.');
+                        } elseif (SeatAssignment::query()->where('flight_id', $flightId)->where('seat_id', (int) $seatId)->exists()) {
+                            $validator->errors()->add($errorKey, 'Seat taken');
+                        }
                     }
-
-                    if (isset($chosenSeats[(int) $seatId])) {
-                        $validator->errors()->add("passengers.$index.seat_id", 'Seat taken');
-
-                        continue;
-                    }
-
-                    $chosenSeats[(int) $seatId] = $index;
                 }
 
-                if ($flight === null || $chosenSeats === []) {
-                    return;
-                }
-
-                $seats = Seat::query()
-                    ->where('aircraft_id', $flight->aircraft_id)
-                    ->whereIn('id', array_keys($chosenSeats))
-                    ->get()
-                    ->keyBy(fn (Seat $seat): int => (int) $seat->id);
-
-                $taken = array_map('intval', SeatAssignment::query()
-                    ->where('flight_id', $flight->id)
-                    ->whereIn('seat_id', array_keys($chosenSeats))
-                    ->pluck('seat_id')
-                    ->all());
-
-                foreach ($chosenSeats as $seatId => $index) {
-                    $seat = $seats->get($seatId);
-                    $cabin = $passengers[$index]['cabin_class'] ?? null;
-
-                    if ($seat === null) {
-                        $validator->errors()->add("passengers.$index.seat_id", 'Choose a seat on this aircraft.');
-                    } elseif ($cabin !== null && $cabin !== '' && $seat->cabin_class->value !== $cabin) {
-                        $validator->errors()->add("passengers.$index.seat_id", 'Choose a seat in that cabin class.');
-                    } elseif (in_array($seatId, $taken, true)) {
-                        $validator->errors()->add("passengers.$index.seat_id", 'Seat taken');
+                foreach ($flightIds as $flightId) {
+                    $taken = [];
+                    foreach ($passengers as $index => $passenger) {
+                        if (! is_array($passenger) || ($passenger['type'] ?? null) === PassengerType::Infant->value) {
+                            continue;
+                        }
+                        $seats = is_array($passenger['seats'] ?? null) ? $passenger['seats'] : [];
+                        $seatId = $seats[$flightId] ?? $seats[(string) $flightId] ?? null;
+                        if (($seatId === null || $seatId === '') && count($flightIds) === 1) {
+                            $seatId = $passenger['seat_id'] ?? null;
+                        }
+                        if ($seatId === null || $seatId === '') {
+                            continue;
+                        }
+                        $seatId = (int) $seatId;
+                        if (isset($taken[$seatId])) {
+                            $key = count($flightIds) === 1
+                                ? "passengers.$index.seat_id"
+                                : "passengers.$index.seats.$flightId";
+                            $validator->errors()->add($key, 'Seat taken');
+                        }
+                        $taken[$seatId] = $index;
                     }
                 }
             },
         ];
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function outboundFlightIds(): array
+    {
+        return array_values(array_map('intval', (array) $this->validated('outbound_flight_ids')));
+    }
+
+    /**
+     * @return list<int>
+     */
+    public function returnFlightIds(): array
+    {
+        return array_values(array_map('intval', (array) ($this->validated('return_flight_ids') ?? [])));
     }
 }

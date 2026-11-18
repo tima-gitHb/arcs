@@ -219,10 +219,40 @@
     </div>
 
     <div class="seat-field mt-4 {{ $type === 'Infant' ? 'hidden' : '' }}">
-        <p class="text-sm font-medium text-gray-700">Seat</p>
-        <p class="seat-label mt-1 text-sm font-semibold text-navy">Not chosen</p>
-        <input type="hidden" class="passenger-seat" name="passengers[{{ $index }}][seat_id]" value="{{ $passenger['seat_id'] ?? '' }}">
-        <button type="button" class="pick-seat mt-1 text-sm font-medium text-navy hover:underline">Assign on map</button>
+        <p class="text-sm font-medium text-gray-700">Seats</p>
+        <div class="seat-assignments mt-2 space-y-2">
+            @php
+                $seatMap = is_array($passenger['seats'] ?? null) ? $passenger['seats'] : [];
+                if (($passenger['seat_id'] ?? null) && $seatMap === []) {
+                    $seatMap['legacy'] = $passenger['seat_id'];
+                }
+            @endphp
+            @forelse ($seatMap as $flightId => $seatId)
+                @if ($flightId === 'legacy')
+                    <div class="seat-leg flex flex-wrap items-center gap-2" data-flight-id="">
+                        <span class="seat-leg-label text-sm text-gray-600">Seat</span>
+                        <span class="seat-label text-sm font-semibold text-navy">Chosen</span>
+                        <input type="hidden" class="passenger-seat" name="passengers[{{ $index }}][seat_id]" value="{{ $seatId }}">
+                        <button type="button" class="pick-seat text-sm font-medium text-navy hover:underline">Assign on map</button>
+                    </div>
+                @else
+                    <div class="seat-leg flex flex-wrap items-center gap-2" data-flight-id="{{ $flightId }}">
+                        <span class="seat-leg-label text-sm text-gray-600">Flight {{ $flightId }}</span>
+                        <span class="seat-label text-sm font-semibold text-navy">Chosen</span>
+                        <input type="hidden" class="passenger-seat" name="passengers[{{ $index }}][seats][{{ $flightId }}]" value="{{ $seatId }}">
+                        <button type="button" class="pick-seat text-sm font-medium text-navy hover:underline">Assign on map</button>
+                        <x-input-error :messages="$errors->get('passengers.'.$index.'.seats.'.$flightId)" class="w-full" />
+                    </div>
+                @endif
+            @empty
+                <div class="seat-leg flex flex-wrap items-center gap-2" data-flight-id="">
+                    <span class="seat-leg-label text-sm text-gray-600">Seat</span>
+                    <span class="seat-label text-sm font-semibold text-navy">Not chosen</span>
+                    <input type="hidden" class="passenger-seat" name="passengers[{{ $index }}][seat_id]" value="{{ $passenger['seat_id'] ?? '' }}">
+                    <button type="button" class="pick-seat text-sm font-medium text-navy hover:underline">Assign on map</button>
+                </div>
+            @endforelse
+        </div>
         <x-input-error :messages="$errors->get('passengers.'.$index.'.seat_id')" class="mt-2" />
     </div>
 </div>

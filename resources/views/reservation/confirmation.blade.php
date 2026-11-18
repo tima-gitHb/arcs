@@ -15,6 +15,7 @@
             @include('reservation.partials.eticket', [
                 'reservation' => $reservation,
                 'payment' => $payment,
+                'journeyQuote' => $journeyQuote,
             ])
         </div>
 

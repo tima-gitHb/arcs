@@ -7,6 +7,7 @@ use App\Enums\FeeCode;
 use App\Enums\FlightStatus;
 use App\Enums\PassengerType;
 use App\Exceptions\FareNotFound;
+use App\Exceptions\InvalidJourney;
 use App\Exceptions\InvalidStatusChange;
 use App\Exceptions\PaymentDeclined;
 use App\Exceptions\SeatNotAllowed;
@@ -15,6 +16,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Reservation\StoreReservationRequest;
 use App\Http\Requests\Reservation\UpdatePassengerRequest;
 use App\Mail\ETicketMail;
+use App\Models\Airport;
 use App\Models\BaggageAllowance;
 use App\Models\Fare;
 use App\Models\Fee;
@@ -22,11 +24,13 @@ use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Services\CorrectionService;
+use App\Services\FareService;
 use App\Services\Payments\CardDetails;
 use App\Services\PnrGenerator;
 use App\Services\ReservationService;
 use App\Services\SeatService;
 use App\Services\StatusService;
+use App\Support\Journey;
 use App\Support\Money;
 use Database\Seeders\FareSeeder;
 use Database\Seeders\SettingSeeder;
@@ -40,11 +44,23 @@ class ReservationController extends Controller
 {
     public function create(): View
     {
+        // Hide past Scheduled flights left over from an old seed; keep Check-in open / Boarding / Delayed.
         $flights = Flight::query()
             ->whereNotIn('status', [
                 FlightStatus::Departed->value,
                 FlightStatus::Cancelled->value,
+                FlightStatus::Closed->value,
             ])
+            ->where(function ($query) {
+                $query->whereIn('status', [
+                    FlightStatus::CheckinOpen->value,
+                    FlightStatus::Boarding->value,
+                    FlightStatus::Delayed->value,
+                ])->orWhere(function ($scheduled) {
+                    $scheduled->where('status', FlightStatus::Scheduled->value)
+                        ->where('departure_at', '>=', now());
+                });
+            })
             ->orderBy('departure_at')
             ->orderBy('flight_no')
             ->get();
@@ -52,7 +68,6 @@ class ReservationController extends Controller
         $flightGroups = collect([
             FlightStatus::CheckinOpen,
             FlightStatus::Boarding,
-            FlightStatus::Closed,
             FlightStatus::Delayed,
             FlightStatus::Scheduled,
         ])->mapWithKeys(fn (FlightStatus $status) => [
@@ -91,13 +106,18 @@ class ReservationController extends Controller
             ],
         );
 
-        // Default fares; per-route prices come with the journey builder (card R11).
-        $fares = Fare::query()->defaults()->get()->map(
+        $fares = Fare::query()->get()->map(
             fn (Fare $fare) => [
                 'cabin' => $fare->cabin_class->value,
                 'type' => $fare->passenger_type->value,
                 'cents' => $fare->amount_cents,
+                'origin' => $fare->origin_airport_code,
+                'destination' => $fare->destination_airport_code,
             ],
+        )->values();
+
+        $defaultFares = $fares->filter(
+            fn (array $fare) => $fare['origin'] === null && $fare['destination'] === null,
         )->values();
 
         $fees = [
@@ -105,8 +125,8 @@ class ReservationController extends Controller
             'extra_kg' => (int) Fee::query()->where('code', FeeCode::ExcessKg)->value('amount_cents'),
         ];
 
-        $cabinOptions = collect(CabinClass::cases())->map(function (CabinClass $cabin) use ($allowances, $fares) {
-            $adultFare = $fares->first(
+        $cabinOptions = collect(CabinClass::cases())->map(function (CabinClass $cabin) use ($allowances, $defaultFares) {
+            $adultFare = $defaultFares->first(
                 fn (array $fare) => $fare['cabin'] === $cabin->value && $fare['type'] === PassengerType::Adult->value,
             );
             $allowance = $allowances[$cabin->value] ?? null;
@@ -120,15 +140,35 @@ class ReservationController extends Controller
             ];
         });
 
+        $flightPayload = $flights->map(fn (Flight $flight) => [
+            'id' => $flight->id,
+            'flight_no' => $flight->flight_no,
+            'origin' => $flight->origin,
+            'destination' => $flight->destination,
+            'status' => $flight->status->value,
+            'status_label' => $flight->status->label(),
+            'departure_at' => $flight->departure_at?->toIso8601String(),
+            'arrives_at' => $flight->arrives_at?->toIso8601String(),
+            'label' => $flight->flight_no.' · '.$flight->origin.' → '.$flight->destination.' · '.
+                $flight->departureLocal()->format('D d M Y H:i').' · '.$flight->status->label(),
+        ])->values();
+
+        $connectionMinutes = Airport::query()->pluck('min_connection_minutes', 'code')->all();
+
         return view('reservation.create', [
             'flights' => $flights,
             'flightGroups' => $flightGroups,
+            'flightPayload' => $flightPayload,
+            'connectionMinutes' => $connectionMinutes,
             'passengers' => $passengers,
             'allowances' => $allowances,
             'fares' => $fares,
             'fees' => $fees,
             'cabinOptions' => $cabinOptions,
-            'pricesReady' => $fares->isNotEmpty() && ($fees['extra_bag'] > 0),
+            'pricesReady' => $defaultFares->isNotEmpty() && ($fees['extra_bag'] > 0),
+            'journeyType' => old('journey_type', 'one_way'),
+            'outboundFlightIds' => array_map('intval', (array) old('outbound_flight_ids', old('flight_id') ? [old('flight_id')] : [])),
+            'returnFlightIds' => array_map('intval', (array) old('return_flight_ids', [])),
         ]);
     }
 
@@ -159,8 +199,19 @@ class ReservationController extends Controller
         $safeInput = fn () => $request->except(['card_number', 'card_cvc', 'card_expiry']);
 
         try {
+            $outboundIds = $request->outboundFlightIds();
+            $returnIds = $request->returnFlightIds();
+            $outbound = Flight::query()->whereIn('id', $outboundIds)->get()
+                ->sortBy(fn (Flight $flight) => array_search($flight->id, $outboundIds, true))
+                ->values()
+                ->all();
+            $return = Flight::query()->whereIn('id', $returnIds)->get()
+                ->sortBy(fn (Flight $flight) => array_search($flight->id, $returnIds, true))
+                ->values()
+                ->all();
+
             $reservation = $reservations->create(
-                Flight::query()->findOrFail($request->integer('flight_id')),
+                new Journey($outbound, $return),
                 $request->user(),
                 $request->validated('passengers'),
                 [
@@ -173,6 +224,10 @@ class ReservationController extends Controller
                     $request->validated('card_cvc'),
                 ),
             );
+        } catch (InvalidJourney $exception) {
+            return back()->withInput($safeInput())->withErrors([
+                'outbound_flight_ids' => $exception->getMessage(),
+            ]);
         } catch (SeatTaken|SeatNotAllowed $exception) {
             return back()->withInput($safeInput())->withErrors([
                 'seat' => $exception->getMessage(),
@@ -190,11 +245,11 @@ class ReservationController extends Controller
             ]);
         } catch (FareNotFound $exception) {
             return back()->withInput($safeInput())->withErrors([
-                'flight_id' => $exception->getMessage(),
+                'outbound_flight_ids' => $exception->getMessage(),
             ]);
         }
 
-        $reservation->load(['flight', 'passengers.seatAssignment.seat', 'payments']);
+        $reservation->load(['flight', 'segments.flight', 'passengers.seatAssignment.seat', 'payments']);
         $payment = $reservation->farePayment();
 
         $mailNote = '';
@@ -223,7 +278,7 @@ class ReservationController extends Controller
         return response()->json(['seats' => $seatService->seatMap($flight)]);
     }
 
-    public function confirmation(Reservation $reservation): View
+    public function confirmation(Reservation $reservation, FareService $fares): View
     {
         $reservation->load([
             'flight',
@@ -238,6 +293,7 @@ class ReservationController extends Controller
         return view('reservation.confirmation', [
             'reservation' => $reservation,
             'payment' => $reservation->farePayment(),
+            'journeyQuote' => $fares->journeyQuote($reservation),
         ]);
     }
 
