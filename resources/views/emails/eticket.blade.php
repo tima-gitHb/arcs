@@ -3,9 +3,7 @@
 
 Booking confirmed. Give this PNR to the passenger for check-in.
 
-**Flight:** {{ $reservation->flight->flight_no }} · {{ $reservation->flight->origin }} → {{ $reservation->flight->destination }}
-
-**Departure ({{ $reservation->flight->origin }} local time):** {{ $reservation->flight->departureLocal()->format('d M Y H:i') }}
+@include('emails.partials.itinerary', ['reservation' => $reservation])
 
 <x-receipt :payment="$payment" class="my-4" />
 
@@ -17,7 +15,16 @@ Booking confirmed. Give this PNR to the passenger for check-in.
     if ($passenger->cabin_class) {
         $parts[] = $passenger->cabin_class->label();
     }
-    if ($passenger->seatAssignment?->seat) {
+    if ($reservation->segments->count() > 1) {
+        $seats = $passenger->coupons->map(function ($coupon) {
+            $seat = $coupon->seatAssignment?->seat?->seat_no;
+
+            return $coupon->flight->flight_no.': '.($seat ?? 'not assigned');
+        })->implode(', ');
+        if ($seats !== '') {
+            $parts[] = $seats;
+        }
+    } elseif ($passenger->seatAssignment?->seat) {
         $parts[] = 'seat '.$passenger->seatAssignment->seat->seat_no;
     }
 @endphp

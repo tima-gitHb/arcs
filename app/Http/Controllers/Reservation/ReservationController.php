@@ -284,6 +284,7 @@ class ReservationController extends Controller
             'segments.flight',
             'passengers.accompanyingAdult',
             'passengers.seatAssignment.seat',
+            'passengers.coupons.flight',
             'passengers.coupons.seatAssignment.seat',
             'payments',
         ]);
