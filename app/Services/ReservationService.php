@@ -4,12 +4,14 @@ namespace App\Services;
 
 use App\Enums\CabinClass;
 use App\Enums\DocumentType;
+use App\Enums\FeeCode;
 use App\Enums\PassengerType;
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
 use App\Exceptions\PaymentDeclined;
 use App\Exceptions\SeatNotAllowed;
 use App\Exceptions\SeatTaken;
+use App\Models\Fee;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Payment;
@@ -18,15 +20,15 @@ use App\Models\Seat;
 use App\Models\SeatAssignment;
 use App\Models\User;
 use App\Services\Payments\CardDetails;
+use App\Support\Journey;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
  * Creates a reservation and its passengers together (SR-1, SR-4, SR-24).
- * Each passenger's passport is saved through CorrectionService so check-in
- * can see it and the change is audited (R6). When a card is given, the fare
- * (and extras) are charged first: a declined card rolls the booking back (R9).
+ * Accepts one flight or a Journey (one-way / connection / round trip) — R11, SR-65.
+ * Passports via CorrectionService (R6). Card charge before keep (R9); fare via journeyQuote (SR-69).
  */
 class ReservationService
 {
@@ -35,28 +37,33 @@ class ReservationService
         private CorrectionService $corrections,
         private FareService $fares,
         private PaymentService $payments,
+        private JourneyService $journeys,
     ) {}
 
     /**
-     * Passenger status is left to the database default (Booked). Infants are
-     * linked to an adult and are not given a seat.
-     *
-     * @param  array<int, array{first_name: string, last_name: string, type: string, date_of_birth: string, cabin_class?: string|null, accompanying_adult?: int|string|null, passport: array{number: string, issuing_country: string, expiry_date: string}, seat_id?: int|string|null, extra_bags?: int|string|null, extra_kg?: int|string|null}>  $passengers
+     * @param  array<int, array{first_name: string, last_name: string, type: string, date_of_birth: string, cabin_class?: string|null, accompanying_adult?: int|string|null, passport: array{number: string, issuing_country: string, expiry_date: string}, seat_id?: int|string|null, seats?: array<int|string, int|string|null>, extra_bags?: int|string|null, extra_kg?: int|string|null}>  $passengers
      * @param  array{contact_email?: string|null, contact_phone?: string|null}  $contact
      */
     public function create(
-        Flight $flight,
+        Flight|Journey $journeyOrFlight,
         User $agent,
         array $passengers,
         array $contact = [],
         ?CardDetails $card = null,
     ): Reservation {
+        $journey = $journeyOrFlight instanceof Journey
+            ? $journeyOrFlight
+            : Journey::oneWay($journeyOrFlight);
+
+        $this->journeys->validate($journey);
         $this->guardInfants($passengers);
 
-        return DB::transaction(function () use ($flight, $agent, $passengers, $contact, $card) {
+        return DB::transaction(function () use ($journey, $agent, $passengers, $contact, $card) {
+            $first = $journey->outbound[0];
+
             $reservation = Reservation::create([
                 'pnr' => $this->pnrs->generate(),
-                'flight_id' => $flight->id,
+                'flight_id' => $first->id,
                 'created_by' => $agent->id,
                 'contact_email' => $contact['contact_email'] ?? null,
                 'contact_phone' => $contact['contact_phone'] ?? null,
@@ -95,7 +102,10 @@ class ReservationService
                 ]);
             }
 
-            $this->assignSeats($flight, $passengers, $created);
+            $this->journeys->addSegments($reservation, $journey);
+
+            $flights = array_map(fn (array $leg) => $leg[0], $journey->legs());
+            $this->assignSeats($flights, $passengers, $created);
 
             foreach ($passengers as $index => $row) {
                 $this->corrections->addDocument($created[$index], [
@@ -107,58 +117,38 @@ class ReservationService
             }
 
             if ($card !== null) {
-                $this->chargeFare($reservation, $passengers, $created, $card, $agent);
+                $this->chargeFare($reservation, $created, $card, $agent);
             }
 
-            return $reservation->load(['passengers', 'payments']);
+            return $reservation->load(['passengers', 'payments', 'segments.flight']);
         });
     }
 
     /**
-     * @param  array<int, array<string, mixed>>  $passengers
      * @param  array<int, Passenger>  $created
      */
     private function chargeFare(
         Reservation $reservation,
-        array $passengers,
         array $created,
         CardDetails $card,
         User $agent,
     ): Payment {
-        $quotePassengers = [];
-
-        foreach ($passengers as $index => $row) {
-            $type = $row['type'] instanceof PassengerType
-                ? $row['type']
-                : PassengerType::from($row['type']);
-            $cabin = $type === PassengerType::Infant
-                ? $created[(int) $row['accompanying_adult']]->cabin_class
-                : ($row['cabin_class'] instanceof CabinClass
-                    ? $row['cabin_class']
-                    : CabinClass::from($row['cabin_class']));
-
-            $quotePassengers[] = [
-                'cabin_class' => $cabin,
-                'type' => $type,
-            ];
-        }
+        $quote = $this->fares->journeyQuote($reservation);
 
         $extraBags = 0;
         $extraKg = 0;
-
         foreach ($created as $passenger) {
             $extraBags += $passenger->extra_bags;
             $extraKg += $passenger->extra_kg;
         }
 
-        $quote = $this->fares->quote($quotePassengers, [
-            'extra_bags' => $extraBags,
-            'extra_kg' => $extraKg,
-        ]);
+        $amount = $quote->totalCents
+            + $extraBags * (int) (Fee::query()->where('code', FeeCode::ExtraBag)->value('amount_cents') ?? 0)
+            + $extraKg * (int) (Fee::query()->where('code', FeeCode::ExcessKg)->value('amount_cents') ?? 0);
 
         $payment = $this->payments->charge(
             $card,
-            $quote->totalCents,
+            $amount,
             PaymentKind::Fare,
             $agent,
             reservation: $reservation,
@@ -172,14 +162,22 @@ class ReservationService
     }
 
     /**
-     * Adults and children get the seat they picked. Infants never do.
-     * The unique key on (flight_id, seat_id) is the backstop if two staff
-     * choose the same seat at the same moment (SR-7).
-     *
+     * @param  list<Flight>  $flights
      * @param  array<int, array<string, mixed>>  $passengers
      * @param  array<int, Passenger>  $created
      */
-    private function assignSeats(Flight $flight, array $passengers, array $created): void
+    private function assignSeats(array $flights, array $passengers, array $created): void
+    {
+        foreach ($flights as $legIndex => $flight) {
+            $this->assignSeatsOnFlight($flight, $passengers, $created, $legIndex === 0);
+        }
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $passengers
+     * @param  array<int, Passenger>  $created
+     */
+    private function assignSeatsOnFlight(Flight $flight, array $passengers, array $created, bool $isFirst): void
     {
         $wanted = [];
 
@@ -188,13 +186,11 @@ class ReservationService
                 continue;
             }
 
-            $seatId = $row['seat_id'] ?? null;
+            $seatId = $this->seatIdFor($row, $flight, $isFirst);
 
-            if ($seatId === null || $seatId === '') {
+            if ($seatId === null) {
                 continue;
             }
-
-            $seatId = (int) $seatId;
 
             if (isset($wanted[$seatId])) {
                 throw new SeatTaken;
@@ -225,13 +221,11 @@ class ReservationService
             }
         }
 
-        $alreadyTaken = SeatAssignment::query()
+        if (SeatAssignment::query()
             ->where('flight_id', $flight->id)
             ->whereIn('seat_id', array_keys($wanted))
             ->lockForUpdate()
-            ->exists();
-
-        if ($alreadyTaken) {
+            ->exists()) {
             throw new SeatTaken;
         }
 
@@ -246,6 +240,30 @@ class ReservationService
         } catch (UniqueConstraintViolationException) {
             throw new SeatTaken;
         }
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     */
+    private function seatIdFor(array $row, Flight $flight, bool $isFirst): ?int
+    {
+        $seats = $row['seats'] ?? null;
+
+        if (is_array($seats)) {
+            $value = $seats[$flight->id] ?? $seats[(string) $flight->id] ?? null;
+            if ($value !== null && $value !== '') {
+                return (int) $value;
+            }
+        }
+
+        if ($isFirst) {
+            $legacy = $row['seat_id'] ?? null;
+            if ($legacy !== null && $legacy !== '') {
+                return (int) $legacy;
+            }
+        }
+
+        return null;
     }
 
     /**

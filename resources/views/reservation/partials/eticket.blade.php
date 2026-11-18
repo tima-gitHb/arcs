@@ -19,17 +19,21 @@
     </div>
 
     <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
-        <div>
-            <dt class="text-gray-500">Flight</dt>
-            <dd class="mt-1 text-base font-semibold text-navy">
-                {{ $reservation->flight->flight_no }}
-                <span class="font-medium text-gray-700">· {{ $reservation->flight->origin }} → {{ $reservation->flight->destination }}</span>
-            </dd>
-        </div>
-        <div>
-            <dt class="text-gray-500">Departure (Beirut time)</dt>
-            <dd class="mt-1 font-medium">
-                <x-local-time :at="$reservation->flight->departure_at" :airport="$reservation->flight->origin" format="D d M Y · H:i" />
+        <div class="sm:col-span-2">
+            <dt class="text-gray-500">{{ $reservation->segments->count() > 1 ? 'Itinerary' : 'Flight' }}</dt>
+            <dd class="mt-1 space-y-2">
+                @foreach ($reservation->segments as $segment)
+                    <div class="text-base font-semibold text-navy">
+                        {{ $segment->flight->flight_no }}
+                        <span class="font-medium text-gray-700">· {{ $segment->flight->origin }} → {{ $segment->flight->destination }}</span>
+                        <span class="mt-0.5 block text-sm font-normal text-gray-600">
+                            <x-local-time :at="$segment->flight->departure_at" :airport="$segment->flight->origin" format="D d M Y · H:i" />
+                            @if ($reservation->segments->count() > 1)
+                                · {{ $segment->direction->label() }}
+                            @endif
+                        </span>
+                    </div>
+                @endforeach
             </dd>
         </div>
         @if ($reservation->contact_email)

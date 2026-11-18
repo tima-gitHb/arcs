@@ -136,7 +136,7 @@ class R1CreateReservationTest extends TestCase
         $this->assertSame(2, $reservation->passengers()->count());
     }
 
-    public function test_closed_checkin_open_and_boarding_flights_can_be_reserved(): void
+    public function test_checkin_open_and_boarding_flights_can_be_reserved(): void
     {
         $this->actingAsRole('reservation');
 
@@ -149,23 +149,21 @@ class R1CreateReservationTest extends TestCase
         $page = $this->get(route('reservation.create'));
 
         $page->assertOk()
-            ->assertSee('ME701')
             ->assertSee('ME702')
             ->assertSee('ME703')
-            ->assertSee('Closed')
             ->assertSee('Check-in open')
             ->assertSee('Boarding');
 
-        preg_match('/<select[^>]*id="flight_id"[\s\S]*?<\/select>/', $page->getContent(), $bookingList);
+        preg_match('/const allFlights = (\[.*?\]);/s', $page->getContent(), $bookingList);
 
-        $this->assertArrayHasKey(0, $bookingList);
-        $this->assertStringContainsString('ME701', $bookingList[0]);
-        $this->assertStringContainsString('ME702', $bookingList[0]);
-        $this->assertStringContainsString('ME703', $bookingList[0]);
-        $this->assertStringNotContainsString('ME704', $bookingList[0]);
-        $this->assertStringNotContainsString('ME705', $bookingList[0]);
+        $this->assertArrayHasKey(1, $bookingList);
+        $this->assertStringContainsString('ME702', $bookingList[1]);
+        $this->assertStringContainsString('ME703', $bookingList[1]);
+        $this->assertStringNotContainsString('ME701', $bookingList[1]);
+        $this->assertStringNotContainsString('ME704', $bookingList[1]);
+        $this->assertStringNotContainsString('ME705', $bookingList[1]);
 
-        foreach ([$closed, $checkin, $boarding] as $flight) {
+        foreach ([$checkin, $boarding] as $flight) {
             $seatIds = $this->seatsFor($flight, 1);
 
             $this->post(route('reservation.store'), [
@@ -181,15 +179,29 @@ class R1CreateReservationTest extends TestCase
             );
         }
 
+        $closedSeat = $this->seatsFor($closed, 1)[0];
+        $this->from(route('reservation.create'))
+            ->post(route('reservation.store'), [
+                'flight_id' => $closed->id,
+                'passengers' => [
+                    $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12', seatId: $closedSeat),
+                ],
+                ...$this->paidBookingFields(),
+            ])
+            ->assertRedirect(route('reservation.create'))
+            ->assertSessionHasErrors('outbound_flight_ids.0');
+
         $this->post(route('reservation.store'), [
             'flight_id' => $departed->id,
             'passengers' => [
                 $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12'),
             ],
             ...$this->paidBookingFields(),
-        ])->assertSessionHasErrors('flight_id');
+        ])->assertSessionHasErrors('outbound_flight_ids.0');
 
-        $this->assertSame(3, Reservation::count());
+        $this->assertSame(2, Reservation::count());
+        $this->assertFalse(Reservation::query()->where('flight_id', $closed->id)->exists());
+        $this->assertFalse(Reservation::query()->where('flight_id', $cancelled->id)->exists());
     }
 
     /**
