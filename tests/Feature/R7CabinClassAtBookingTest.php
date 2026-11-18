@@ -10,7 +10,7 @@ use App\Models\Seat;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class R6CabinClassAtBookingTest extends TestCase
+class R7CabinClassAtBookingTest extends TestCase
 {
     use RefreshDatabase;
 
