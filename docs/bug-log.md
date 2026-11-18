@@ -34,3 +34,15 @@
 - Status: Fixed
 - Fix: the test asserts the stored code is MXP and that the network grew by one row, instead of a case-sensitive miss. The page already uppercases the code before saving.
 - Retested: 16 Nov 2026 · Yasmina — adding MXP stores code MXP; the test passes on MySQL
+
+## BUG-003 · Confirmation page crashes when no fare exists
+- Date / who: 18 Nov 2026 · Serge (found on dev); Yasmina (test fix)
+- Card / branch: R3 · fix/BUG-003-r3-test-fares
+- Where: tests/Feature/R3CancelPassengerTest::test_SR5_cancelling_a_booked_passenger_frees_the_seat, the reservation confirmation page
+- Steps: 1. Create a reservation and an Economy adult with no fares seeded 2. Open the confirmation page
+- Expected: the page loads (200) and shows Cancel
+- Actual: Expected response status code [200] but received 500. App\Exceptions\FareNotFound: No published fare for Economy Adult. Ask a manager to set prices (card M7), then try again. The page calls FareService::journeyQuote() and the test had created no fares.
+- Screenshot: none — found by an automated test, not in the browser; full error message above.
+- Status: Fixed
+- Fix: R3 test now seeds fares (fix/BUG-003-r3-test-fares). Note: the confirmation page still returns 500 when no fare exists at all; follow-up for Serge (show 'price unavailable' instead).
+- Retested:

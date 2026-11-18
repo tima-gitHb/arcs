@@ -7,6 +7,7 @@ use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Models\Seat;
 use App\Models\SeatAssignment;
+use Database\Seeders\FareSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -32,6 +33,10 @@ class R3CancelPassengerTest extends TestCase
             'seat_id' => $seat->id,
             'passenger_id' => $passenger->id,
         ]);
+
+        // The confirmation page prices the journey. The factory passenger is an Economy adult
+        // and has no route fare, so the page needs the default fare (FareSeeder).
+        $this->seed(FareSeeder::class);
 
         $this->get(route('reservation.confirmation', $reservation))
             ->assertOk()
