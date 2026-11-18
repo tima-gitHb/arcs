@@ -2,6 +2,7 @@
 
 namespace App\Notifications;
 
+use App\Enums\Role;
 use App\Models\User;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
@@ -30,10 +31,25 @@ class WelcomeAccount extends Notification
         $url = route('password.reset', ['token' => $this->token, 'email' => $notifiable->email]);
         $minutes = config('auth.passwords.'.config('auth.defaults.passwords').'.expire');
 
-        return (new MailMessage)
+        // The station is the user's airport. loadMissing so a caller that did not
+        // eager-load it still gets the city, and a missing station stays null.
+        $notifiable->loadMissing('airport');
+        $role = "Your role: {$notifiable->role->label()}";
+        if ($notifiable->airport !== null) {
+            $role .= " · {$notifiable->airport->city} ({$notifiable->airport->code})";
+        }
+
+        $message = (new MailMessage)
             ->subject('Welcome to ARCS')
             ->greeting("Hello {$notifiable->name},")
-            ->line("An ARCS account has been created for you as {$notifiable->role->label()}.")
+            ->line($role);
+
+        // Check-in and gate staff work a station. A manager or reservation agent may have none.
+        if ($notifiable->airport === null && in_array($notifiable->role, [Role::Checkin, Role::Gate], true)) {
+            $message->line("Your station hasn't been set yet. Ask your manager before your first shift.");
+        }
+
+        return $message
             ->line('Click the button below to choose your password.')
             ->action('Set your password', $url)
             ->line("This link expires in {$minutes} minutes. If it has expired, ask the Manager to send you a new link.")

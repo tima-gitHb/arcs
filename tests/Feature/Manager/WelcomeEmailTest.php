@@ -27,9 +27,9 @@ use Tests\TestCase;
  *   POST /manager/accounts/{user}/resend-welcome    manager.accounts.resend-welcome
  * The button "Resend welcome email" is on a row only when last_login_at is null.
  * The server refuses a locked or deactivated account first ("Unlock or activate the account first."),
- * then an account that has logged in ("This account has already logged in.").
+ * then an account that has logged in ("This account has already logged in. Use Send reset link instead.").
  * Otherwise Password::sendResetLink sends WelcomeAccount. Within 60 seconds the throttle
- * text is the green success flash, not the red error flash, and the existing token is kept.
+ * text is the red error flash, the same as "Send reset link", and the existing token is kept.
  */
 class WelcomeEmailTest extends TestCase
 {
@@ -88,7 +88,8 @@ class WelcomeEmailTest extends TestCase
         $html = $this->mailHtml(Notification::sent($user, WelcomeAccount::class)->sole(), $user);
 
         $this->assertStringContainsString('Your role: Manager', $html);
-        $this->assertStringNotContainsString(' · ', $html);
+        // The ARCS footer also uses a middle dot, so only the role line is checked.
+        $this->assertStringNotContainsString('Your role: Manager ·', $html);
         $this->assertStringNotContainsString(self::WARNING, $html);
     }
 
@@ -112,7 +113,7 @@ class WelcomeEmailTest extends TestCase
 
         $checkinHtml = $this->mailHtml(Notification::sent($checkin, WelcomeAccount::class)->sole(), $checkin);
         $this->assertStringContainsString('Your role: Check-in staff', $checkinHtml);
-        $this->assertStringNotContainsString(' · ', $checkinHtml);
+        $this->assertStringNotContainsString('Your role: Check-in staff ·', $checkinHtml);
         $this->assertStringContainsString(self::WARNING, $checkinHtml);
 
         $gateHtml = $this->mailHtml(Notification::sent($gate, WelcomeAccount::class)->sole(), $gate);
@@ -160,8 +161,7 @@ class WelcomeEmailTest extends TestCase
 
         $this->post("/manager/accounts/{$user->id}/resend-welcome")
             ->assertRedirect()
-            ->assertSessionHas('success', trans('passwords.throttled'))
-            ->assertSessionMissing('error');
+            ->assertSessionHas('error', trans('passwords.throttled'));
 
         Notification::assertSentToTimes($user, WelcomeAccount::class, 1);
         $this->assertTrue(Password::broker()->tokenExists($user, $token));
@@ -192,7 +192,7 @@ class WelcomeEmailTest extends TestCase
 
         $this->post("/manager/accounts/{$user->id}/resend-welcome")
             ->assertRedirect()
-            ->assertSessionHas('error', 'This account has already logged in.');
+            ->assertSessionHas('error', 'This account has already logged in. Use Send reset link instead.');
 
         Notification::assertNothingSent();
     }
