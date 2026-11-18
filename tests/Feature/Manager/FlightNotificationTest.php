@@ -281,6 +281,17 @@ class FlightNotificationTest extends TestCase
         $this->assertTrue($messages->contains(fn (string $message) => str_contains($message, 'ME202')));
     }
 
+    public function test_a_flight_change_email_is_retried_when_the_queue_fails(): void
+    {
+        $flight = $this->parisDeparture();
+        $reservation = $this->book($flight, 'delay@example.com');
+
+        $mail = new FlightChangeMail($reservation, $flight, 'delay');
+
+        $this->assertSame(3, $mail->tries);
+        $this->assertSame([10, 30], $mail->backoff);
+    }
+
     public function test_a_non_manager_cannot_change_the_gate_or_delay_a_flight(): void
     {
         Mail::fake();

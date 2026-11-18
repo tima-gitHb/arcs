@@ -21,6 +21,18 @@ class FlightChangeMail extends Mailable implements ShouldQueue
     use Queueable, SerializesModels;
 
     /**
+     * Mailtrap can refuse a second message in the same second (BUG-004: 550 5.7.0
+     * Too many emails per second). A queued send that fails is not repeated unless
+     * this mail says so: three tries, then 10 seconds, then 30.
+     */
+    public int $tries = 3;
+
+    /**
+     * @var list<int>
+     */
+    public array $backoff = [10, 30];
+
+    /**
      * @param  string  $kind  'gate' or 'delay'
      */
     public function __construct(
