@@ -214,7 +214,7 @@ class StatusService
 
     /**
      * Boarding -> Closed. Every CheckedIn coupon of this flight becomes NoShow (SR-12).
-     * Later flights of a no-show's journey are left alone (card G7 will use cancelLaterCoupons()).
+     * Each no-show cancels later coupons on the same reservation (G7 / SR-81), including a return.
      * The Closed step writes a flight audit row before those passenger rows (SR-55).
      * Returns the bags of those passengers in that direction, to be offloaded (SR-9).
      *
@@ -248,6 +248,7 @@ class StatusService
             foreach ($noShows as $coupon) {
                 $coupon->setRelation('flight', $flight);
                 $this->changeCouponStatus($coupon, PassengerStatus::NoShow, $by);
+                $this->cancelLaterCoupons($coupon, $by);
             }
 
             return Bag::query()->noShowOn($flight)->whereNull('offloaded_at')->get();
@@ -255,9 +256,8 @@ class StatusService
     }
 
     /**
-     * For card G7 (no-show on a connection): the Booked or CheckedIn coupons after $coupon in the same
-     * direction become Cancelled, their seats are released and their passes voided. One audit row each.
-     * Not called in B13b.
+     * G7 / SR-81: Booked or CheckedIn coupons after $coupon (higher journey sequence) become Cancelled,
+     * seats released and passes voided. Covers onward connection legs and the return. One audit row each.
      *
      * @return Collection<int, Coupon> the coupons cancelled
      */
@@ -270,9 +270,9 @@ class StatusService
                 ->select('coupons.*')
                 ->join('reservation_segments', 'reservation_segments.id', '=', 'coupons.reservation_segment_id')
                 ->where('coupons.passenger_id', $coupon->passenger_id)
-                ->where('reservation_segments.direction', $segment->direction)
                 ->where('reservation_segments.sequence', '>', $segment->sequence)
                 ->whereIn('coupons.status', [PassengerStatus::Booked, PassengerStatus::CheckedIn])
+                ->orderBy('reservation_segments.sequence')
                 ->with('flight')
                 ->lockForUpdate()
                 ->get();

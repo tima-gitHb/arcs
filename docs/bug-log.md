@@ -58,3 +58,27 @@
 - Status: Fixed
 - Fix: FlightChangeMail retries ($tries = 3, backoff [10, 30]) on feature/M16-flight-notifications, plus a test that the mailable defines tries and backoff.
 - Retested: 18 Nov 2026 · Yasmina — FlightNotificationTest asserts tries is 3 and backoff is 10 then 30
+
+## BUG-005 · E-ticket email shows raw HTML for the payment line
+- Date / who: 18 Nov 2026 · Tima
+- Card / branch: R15 · found during Sprint 3 manual test on feature/C17-G7-checkin-email-gate
+- Where: Mailtrap, "ARCS e-ticket JBGNWJ" email, Amount paid section
+- Steps: 1. Book BEY→IST→CDG (ME264 + ME216) and pay with Visa 4242 2. Open the e-ticket email in Mailtrap
+- Expected: "Visa ••••4242 · reference fake_… · 18 Nov 2026 22:49" shown as normal text
+- Actual: raw code is shown in a grey code block: <p class="mt-3 text-sm font-medium text-gray-800"> Visa ••••4242 · reference <span class="font-mono">fake_…</span> · 18 Nov 2026 22:49 </p></div>
+- Screenshot: Mailtrap screenshot taken 18 Nov 2026 22:52 (manual test)
+- Status: Open
+- Fix:
+- Retested:
+
+## BUG-006 · Today's flights hides a flight after midnight while its check-in is open
+- Date / who: 18 Nov 2026 · Tima
+- Card / branch: Check-in page "Today's flights" (TodaysFlights component) · found during Sprint 3 manual test
+- Where: /checkin, Today's flights panel, logged in as checkin@arcs.test (BEY)
+- Steps: 1. At 22:56 local, open the check-in page 2. ME264 BEY→IST departs 19 Nov 00:28, check-in window 21:28–23:43 3. Find PNR JBGNWJ works and shows "Check-in open"
+- Expected: ME264 is listed in Today's flights because its check-in window is open now
+- Actual: only ME110 (Closed) and ME305 (Boarding) are listed; ME264 is missing because it departs after midnight
+- Screenshot: check-in page screenshot taken 18 Nov 2026 22:59 (manual test)
+- Status: Open
+- Fix:
+- Retested:

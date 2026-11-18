@@ -48,6 +48,18 @@ class BagTagService
     }
 
     /**
+     * PDF bytes for one bag tag (email attachment, C17). Same view as download().
+     */
+    public function pdfBytes(Bag $bag): string
+    {
+        $bag->loadMissing(['passenger.reservation']);
+
+        return Pdf::raw('checkin.pdf.bag-tag', [
+            'tags' => collect([$this->tagData($bag)]),
+        ]);
+    }
+
+    /**
      * One PDF with a tag page (section) for every bag of the passenger.
      */
     public function downloadAll(Passenger $passenger): Response
