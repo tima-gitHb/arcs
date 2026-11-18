@@ -11,6 +11,7 @@ use App\Http\Requests\Manager\UpdateFlightStatusRequest;
 use App\Models\Aircraft;
 use App\Models\AuditEntry;
 use App\Models\Flight;
+use App\Services\FlightNotifier;
 use App\Services\StatusService;
 use App\Support\ManagerStation;
 use Illuminate\Http\RedirectResponse;
@@ -55,15 +56,39 @@ class FlightController extends Controller
 
     /**
      * Every flight status change goes through StatusService (SR-25). If it refuses, show its message.
+     * A Delayed move may also carry a new departure. That time is saved in the same transaction
+     * as the status, with its own flight audit row. The email is sent only after the commit.
      */
-    public function updateStatus(UpdateFlightStatusRequest $request, Flight $flight, StatusService $statusService): RedirectResponse
+    public function updateStatus(UpdateFlightStatusRequest $request, Flight $flight, StatusService $statusService, FlightNotifier $notifier): RedirectResponse
     {
         $new = FlightStatus::from($request->validated('status'));
+        $departure = $request->newDeparture();
 
         try {
-            $statusService->setFlightStatus($flight, $new, $request->user());
+            if ($departure !== null) {
+                DB::transaction(function () use ($flight, $new, $request, $statusService, $departure) {
+                    $statusService->setFlightStatus($flight, $new, $request->user());
+
+                    $old = $flight->departureLocal()->format('d M Y H:i');
+                    $flight->update(['departure_at' => $departure]);
+
+                    AuditEntry::forFlight(
+                        $flight,
+                        'departure_at',
+                        $old,
+                        $flight->departureLocal()->format('d M Y H:i'),
+                        $request->user(),
+                    );
+                });
+            } else {
+                $statusService->setFlightStatus($flight, $new, $request->user());
+            }
         } catch (InvalidStatusChange $e) {
             return redirect()->route('manager.flights')->withErrors(['status' => $e->getMessage()]);
+        }
+
+        if ($departure !== null) {
+            $notifier->delayed($flight);
         }
 
         return redirect()->route('manager.flights')
@@ -72,12 +97,14 @@ class FlightController extends Controller
 
     /**
      * An empty gate clears it (SR-42). A real change is recorded on the flight (SR-55).
+     * Only a new non-empty gate is emailed, and only after this transaction commits.
      */
-    public function updateGate(UpdateFlightGateRequest $request, Flight $flight): RedirectResponse
+    public function updateGate(UpdateFlightGateRequest $request, Flight $flight, FlightNotifier $notifier): RedirectResponse
     {
         $new = $request->validated('gate');
+        $emailNewGate = false;
 
-        DB::transaction(function () use ($flight, $new, $request) {
+        DB::transaction(function () use ($flight, $new, $request, &$emailNewGate) {
             $old = $flight->gate;
 
             if ($old === $new) {
@@ -88,7 +115,13 @@ class FlightController extends Controller
 
             // The audit column cannot store null. A cleared gate is an empty string, shown as a dash.
             AuditEntry::forFlight($flight, 'gate', $old, $new ?? '', $request->user());
+
+            $emailNewGate = filled($new);
         });
+
+        if ($emailNewGate) {
+            $notifier->gateChanged($flight);
+        }
 
         return redirect()->route('manager.flights')
             ->with('success', "Gate for {$flight->flight_no} saved.");

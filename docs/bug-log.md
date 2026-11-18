@@ -46,3 +46,15 @@
 - Status: Fixed
 - Fix: R3 test now seeds fares (fix/BUG-003-r3-test-fares). Note: the confirmation page still returns 500 when no fare exists at all; follow-up for Serge (show 'price unavailable' instead).
 - Retested: 18 Nov 2026 · Yasmina — R3CancelPassengerTest green on dev after the fix
+
+## BUG-004 · A failed flight-change email is not retried
+- Date / who: 18 Nov 2026 · Yasmina
+- Card / branch: M16 · feature/M16-flight-notifications
+- Where: M16 manual Mailtrap check, the delay email for ME203
+- Steps: 1. Change ME203's gate to B7, which sends one email 2. Immediately set ME203 to Delayed with a new departure, which sends a second email
+- Expected: both emails are delivered. A temporary refusal is tried again.
+- Actual: Mailtrap rejected a flight-change email with 550 5.7.0 Too many emails per second during the M16 manual check (delay email for ME203); a queued job that fails is not retried, so the passenger would never get it.
+- Screenshot: none (found in the terminal during the manual check).
+- Status: Fixed
+- Fix: FlightChangeMail retries ($tries = 3, backoff [10, 30]) on feature/M16-flight-notifications, plus a test that the mailable defines tries and backoff.
+- Retested: 18 Nov 2026 · Yasmina — FlightNotificationTest asserts tries is 3 and backoff is 10 then 30
