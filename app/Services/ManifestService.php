@@ -11,8 +11,10 @@ use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Models\SeatAssignment;
+use App\Support\ConnectionTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 
 /**
  * The gate manifest (G1: SR-11, SR-45). Read-only: status changes stay in StatusService.
@@ -81,7 +83,7 @@ class ManifestService
     {
         return $this->onFlight(Passenger::query(), $flight)
             ->with([
-                'reservation',
+                'reservation.segments.flight.destinationAirport',
                 'accompanyingAdult',
                 'specialServices',
                 // Items handed back at the aircraft door (wheelchair, stroller…).
@@ -90,7 +92,52 @@ class ManifestService
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get()
-            ->each(fn (Passenger $passenger) => $this->showWhoDidIt($passenger));
+            ->each(function (Passenger $passenger) use ($flight) {
+                $this->showWhoDidIt($passenger);
+                $passenger->setAttribute('connection', $this->connectionInfo($passenger, $flight));
+            });
+    }
+
+    /**
+     * Inbound connection on this flight (G7 / SR-81): previous same-direction segment, arrival,
+     * ConnectionTime label, and a tight flag when the gap is under the airport's MCT.
+     *
+     * @return array{flight_no: string, arrives_at: Carbon|null, airport: string, label: string|null, tight: bool}|null
+     */
+    public function connectionInfo(Passenger $passenger, Flight $flight): ?array
+    {
+        $segments = $passenger->reservation->segments->sortBy('sequence')->values();
+        $index = $segments->search(fn ($segment) => $segment->flight_id === $flight->id);
+
+        if ($index === false || $index < 1) {
+            return null;
+        }
+
+        $current = $segments[$index];
+        $previous = $segments[$index - 1];
+
+        if ($previous->direction !== $current->direction) {
+            return null;
+        }
+
+        $inbound = $previous->flight;
+
+        if ($inbound->destination !== $flight->origin) {
+            return null;
+        }
+
+        $gap = $inbound->arrives_at !== null && $flight->departure_at !== null
+            ? (int) $inbound->arrives_at->diffInMinutes($flight->departure_at, false)
+            : null;
+        $minimum = (int) ($inbound->destinationAirport?->min_connection_minutes ?? 60);
+
+        return [
+            'flight_no' => $inbound->flight_no,
+            'arrives_at' => $inbound->arrives_at,
+            'airport' => $inbound->destination,
+            'label' => ConnectionTime::label($inbound, $flight),
+            'tight' => $gap !== null && $gap < $minimum,
+        ];
     }
 
     /**

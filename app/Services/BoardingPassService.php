@@ -7,6 +7,7 @@ use App\Enums\SegmentDirection;
 use App\Exceptions\BoardingPassNotAllowed;
 use App\Exceptions\EntryReasonRequired;
 use App\Exceptions\ExcessBaggageUnpaid;
+use App\Mail\CheckInCompleteMail;
 use App\Models\AuditEntry;
 use App\Models\BoardingPass;
 use App\Models\Flight;
@@ -15,8 +16,11 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Picqer\Barcode\Renderers\SvgRenderer;
 use Picqer\Barcode\Types\TypeCode128;
+use Throwable;
 
 /**
  * Completing check-in and boarding passes (C5 / C10: SR-8, SR-21, SR-32, SR-42, SR-59).
@@ -43,15 +47,54 @@ class BoardingPassService
      */
     public function completeCheckIn(Passenger $passenger, User $by, ?string $entryReason = null, ?SegmentDirection $direction = null): BoardingPass
     {
-        return DB::transaction(function () use ($passenger, $by, $entryReason, $direction) {
-            $direction ??= $this->journeys->directionFor($passenger, $by);
+        $direction ??= $this->journeys->directionFor($passenger, $by);
 
+        $pass = DB::transaction(function () use ($passenger, $by, $entryReason, $direction) {
             $this->statuses->checkIn($passenger, $by, $direction);
             $this->assertExcessPaid($passenger, $direction);
             $this->acknowledgeEntryCheck($passenger, $by, $entryReason, $direction);
 
             return $this->issueDirection($passenger, $by, $direction);
         });
+
+        // After a successful check-in only (not reprints). Failure must not undo the check-in (SR-79).
+        $this->sendCheckInEmail($passenger->fresh(), $direction, $by);
+
+        return $pass;
+    }
+
+    /**
+     * Email boarding-pass and bag-tag PDFs to the passenger (or reservation contact).
+     * No address → skip. Send failure → log + audit_log, check-in already committed.
+     */
+    private function sendCheckInEmail(Passenger $passenger, SegmentDirection $direction, User $by): void
+    {
+        $passenger->loadMissing('reservation');
+        // No passengers.email column yet: reservation contact only. Ready for a future passenger email.
+        $email = trim((string) ($passenger->email ?? $passenger->reservation->contact_email ?? ''));
+
+        if ($email === '') {
+            return;
+        }
+
+        try {
+            Mail::to($email)->send(new CheckInCompleteMail($passenger, $direction));
+        } catch (Throwable $e) {
+            Log::error('Check-in email could not be sent.', [
+                'passenger_id' => $passenger->id,
+                'pnr' => $passenger->reservation->pnr,
+                'exception' => $e->getMessage(),
+            ]);
+
+            AuditEntry::create([
+                'passenger_id' => $passenger->id,
+                'field' => 'checkin_email_failed',
+                'old_value' => null,
+                'new_value' => mb_substr($e->getMessage(), 0, 255),
+                'user_id' => $by->id,
+                'changed_at' => now(),
+            ]);
+        }
     }
 
     /**

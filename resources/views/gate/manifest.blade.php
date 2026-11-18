@@ -68,6 +68,21 @@
                                         · with {{ $passenger->accompanyingAdult->first_name }}
                                     @endif
                                 </span>
+                                @if ($passenger->connection)
+                                    <span class="mt-1 block text-xs text-navy">
+                                        Connecting from {{ $passenger->connection['flight_no'] }}
+                                        @if ($passenger->connection['arrives_at'])
+                                            · arrives
+                                            <x-local-time :at="$passenger->connection['arrives_at']" :airport="$passenger->connection['airport']" format="H:i" />
+                                        @endif
+                                        @if ($passenger->connection['label'])
+                                            · {{ $passenger->connection['label'] }}
+                                        @endif
+                                        @if ($passenger->connection['tight'])
+                                            <span class="ml-1 font-semibold text-amber-800">Tight connection</span>
+                                        @endif
+                                    </span>
+                                @endif
                             </td>
                             <td class="px-4 py-2 font-mono">{{ $passenger->seatAssignment?->seat->seat_no ?? '—' }}</td>
                             <td class="px-4 py-2">
