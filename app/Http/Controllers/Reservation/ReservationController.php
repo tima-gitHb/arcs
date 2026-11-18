@@ -24,6 +24,7 @@ use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Services\CorrectionService;
+use App\Services\FareService;
 use App\Services\Payments\CardDetails;
 use App\Services\PnrGenerator;
 use App\Services\ReservationService;
@@ -277,7 +278,7 @@ class ReservationController extends Controller
         return response()->json(['seats' => $seatService->seatMap($flight)]);
     }
 
-    public function confirmation(Reservation $reservation): View
+    public function confirmation(Reservation $reservation, FareService $fares): View
     {
         $reservation->load([
             'flight',
@@ -291,6 +292,7 @@ class ReservationController extends Controller
         return view('reservation.confirmation', [
             'reservation' => $reservation,
             'payment' => $reservation->farePayment(),
+            'journeyQuote' => $fares->journeyQuote($reservation),
         ]);
     }
 

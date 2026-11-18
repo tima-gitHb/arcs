@@ -170,16 +170,18 @@
 
                 <div class="rounded-lg border border-navy/10 bg-white p-5 shadow-sm">
                     <h2 class="text-lg font-semibold text-navy">Fare quote</h2>
-                    <p class="mt-1 text-xs text-gray-500">Read this total back to the caller before charging.</p>
+                    <p class="mt-1 text-xs text-gray-500">
+                        Each segment uses its route fare (M14), else the default. Extras once. Read the total back before charging.
+                    </p>
                     <p id="summary-flight" class="mt-2 text-sm font-medium text-gray-700">No flight selected</p>
 
-                    <ul id="price-lines" class="mt-4 space-y-2 border-t border-gray-100 pt-4 text-sm text-gray-800"></ul>
+                    <ul id="price-lines" class="mt-4 space-y-3 border-t border-gray-100 pt-4 text-sm text-gray-800"></ul>
 
                     <div class="mt-4 flex items-end justify-between border-t border-gray-100 pt-4">
                         <div>
                             <p class="text-xs uppercase tracking-wide text-gray-500">Amount to charge</p>
                             <p class="text-2xl font-semibold text-navy"><span id="price-total">$0.00</span></p>
-                            <p class="text-xs text-gray-500">USD · fare + prepaid extras</p>
+                            <p class="text-xs text-gray-500">USD · sum of segments + prepaid extras</p>
                         </div>
                     </div>
                 </div>
@@ -324,7 +326,7 @@
             return adult?.querySelector('.passenger-cabin')?.value || '';
         }
 
-        function fareCents(cabin, type, origin = null, destination = null) {
+        function fareLookup(cabin, type, origin = null, destination = null) {
             const route = fares.find((item) =>
                 item.cabin === cabin
                 && item.type === type
@@ -332,15 +334,21 @@
                 && item.destination === destination
             );
             if (route) {
-                return route.cents;
+                return { cents: route.cents, source: 'route' };
             }
 
-            return fares.find((item) =>
+            const fallback = fares.find((item) =>
                 item.cabin === cabin
                 && item.type === type
                 && item.origin === null
                 && item.destination === null
-            )?.cents ?? null;
+            );
+
+            return fallback ? { cents: fallback.cents, source: 'default' } : null;
+        }
+
+        function fareCents(cabin, type, origin = null, destination = null) {
+            return fareLookup(cabin, type, origin, destination)?.cents ?? null;
         }
 
         function selectedFlightIds(box) {
@@ -635,13 +643,16 @@
 
         function refreshPrice() {
             const flights = selectedFlights();
-            const lines = [];
+            const segments = [];
+            const extras = [];
             let total = 0;
             let extraBags = 0;
             let extraKg = 0;
 
             flights.forEach((flight) => {
                 const groups = new Map();
+                const segmentLines = [];
+                let segmentTotal = 0;
 
                 rows().forEach((row) => {
                     const type = row.querySelector('.passenger-type').value;
@@ -657,20 +668,29 @@
 
                 groups.forEach((quantity, key) => {
                     const [cabin, type] = key.split('|');
-                    const unit = fareCents(cabin, type, flight.origin, flight.destination);
+                    const fare = fareLookup(cabin, type, flight.origin, flight.destination);
 
-                    if (unit === null) {
+                    if (fare === null) {
                         return;
                     }
 
-                    const amount = quantity * unit;
+                    const amount = quantity * fare.cents;
+                    segmentTotal += amount;
                     total += amount;
-                    lines.push({
-                        label: `${flight.origin}→${flight.destination} ${flight.flight_no}: ${cabin} ${type}`,
-                        detail: quantity === 1 ? formatMoney(unit) : `${quantity} × ${formatMoney(unit)}`,
+                    segmentLines.push({
+                        label: `${cabin} ${type}`,
+                        detail: `${quantity === 1 ? formatMoney(fare.cents) : `${quantity} × ${formatMoney(fare.cents)}`} · ${fare.source === 'route' ? 'route fare' : 'default fare'}`,
                         amount: formatMoney(amount),
                     });
                 });
+
+                if (segmentLines.length > 0) {
+                    segments.push({
+                        title: `${flight.origin}→${flight.destination} · ${flight.flight_no}`,
+                        total: formatMoney(segmentTotal),
+                        lines: segmentLines,
+                    });
+                }
             });
 
             rows().forEach((row) => {
@@ -685,7 +705,7 @@
             if (extraBags > 0 && fees.extra_bag > 0) {
                 const amount = extraBags * fees.extra_bag;
                 total += amount;
-                lines.push({
+                extras.push({
                     label: 'Extra bags',
                     detail: `${extraBags} × ${formatMoney(fees.extra_bag)}`,
                     amount: formatMoney(amount),
@@ -695,7 +715,7 @@
             if (extraKg > 0 && fees.extra_kg > 0) {
                 const amount = extraKg * fees.extra_kg;
                 total += amount;
-                lines.push({
+                extras.push({
                     label: 'Extra weight',
                     detail: `${extraKg} kg × ${formatMoney(fees.extra_kg)}`,
                     amount: formatMoney(amount),
@@ -705,15 +725,29 @@
             const listEl = document.getElementById('price-lines');
             listEl.replaceChildren();
 
-            if (lines.length === 0) {
+            if (segments.length === 0 && extras.length === 0) {
                 const empty = document.createElement('li');
                 empty.className = 'text-gray-500';
                 empty.textContent = 'Pick flights and passengers to build the quote.';
                 listEl.appendChild(empty);
             } else {
-                lines.forEach((line) => {
+                segments.forEach((segment) => {
+                    const header = document.createElement('li');
+                    header.className = 'flex items-baseline justify-between gap-3 border-b border-gray-100 pb-1 text-xs font-semibold uppercase tracking-wide text-navy';
+                    header.innerHTML = `<span>${segment.title}</span><span>${segment.total}</span>`;
+                    listEl.appendChild(header);
+
+                    segment.lines.forEach((line) => {
+                        const item = document.createElement('li');
+                        item.className = 'flex items-start justify-between gap-3 pl-1';
+                        item.innerHTML = `<span><span class="font-medium text-gray-900">${line.label}</span><span class="mt-0.5 block text-xs text-gray-500">${line.detail}</span></span><span class="font-medium">${line.amount}</span>`;
+                        listEl.appendChild(item);
+                    });
+                });
+
+                extras.forEach((line) => {
                     const item = document.createElement('li');
-                    item.className = 'flex items-start justify-between gap-3';
+                    item.className = 'flex items-start justify-between gap-3 border-t border-dashed border-gray-100 pt-2';
                     item.innerHTML = `<span><span class="font-medium text-gray-900">${line.label}</span><span class="mt-0.5 block text-xs text-gray-500">${line.detail}</span></span><span class="font-medium">${line.amount}</span>`;
                     listEl.appendChild(item);
                 });

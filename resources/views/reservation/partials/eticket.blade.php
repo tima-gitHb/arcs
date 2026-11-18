@@ -13,7 +13,7 @@
                 <p class="mt-2 text-sm text-gray-500">Give this PNR to the passenger for check-in.</p>
             </div>
             @if ($payment)
-                <x-receipt :payment="$payment" />
+                <x-receipt :payment="$payment" :lines="$journeyQuote->lines ?? []" />
             @endif
         </div>
     </div>
