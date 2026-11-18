@@ -4,7 +4,8 @@
     </x-slot>
 
     <div class="space-y-6">
-        <x-todays-flights :role="'manager'" />
+        <x-manager-station :station="$station" />
+        <x-todays-flights :role="'manager'" :station="$station" />
 
         @foreach ($rows as $row)
             @php

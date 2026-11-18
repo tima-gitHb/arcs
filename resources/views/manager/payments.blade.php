@@ -14,6 +14,8 @@
     </style>
 
     <div class="space-y-6">
+        <x-manager-station :station="$station" />
+
         <form method="GET" action="{{ route('manager.payments') }}" class="no-print bg-white rounded-lg shadow-sm p-6 grid gap-4 sm:grid-cols-4 sm:items-start">
             <div>
                 <x-input-label for="flight_id" value="Flight" />

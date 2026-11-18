@@ -14,7 +14,8 @@ use Illuminate\View\View;
  * The role is passed on to the view so each module can add its own action per row later.
  * "Today" is today at the viewer's station (B13a). Check-in, gate and reservation staff see
  * their station's departures (reservation staff with no station see all); the Manager sees all.
- * Departure times are shown in the origin airport's local time.
+ * An optional station (M17) limits the manager's list to that airport. Left out, or null,
+ * the component behaves as before. Departure times are shown in the origin airport's local time.
  */
 class TodaysFlights extends Component
 {
@@ -23,16 +24,16 @@ class TodaysFlights extends Component
     /** @var Collection<int, Flight> */
     public Collection $flights;
 
-    public function __construct(Role|string $role)
+    public function __construct(Role|string $role, public ?string $station = null)
     {
         $this->role = $role instanceof Role ? $role : Role::from($role);
         $user = auth()->user();
-        // The Manager sees every station; the others their own (none set: every station).
-        $station = $this->role === Role::Manager ? null : $user?->airport_code;
+        // The attribute is the manager filter. The other roles keep their own station.
+        $applied = $this->role === Role::Manager ? $this->station : $user?->airport_code;
 
         $this->flights = Flight::query()
             ->when($user, fn ($query) => $query->departingToday($user), fn ($query) => $query->whereBetween('departure_at', [now()->startOfDay(), now()->endOfDay()]))
-            ->when($station, fn ($query, string $code) => $query->departingFrom($code))
+            ->when($applied, fn ($query, string $code) => $query->departingFrom($code))
             ->orderBy('departure_at')
             ->get();
     }

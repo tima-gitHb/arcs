@@ -26,7 +26,9 @@ class SalesFilterRequest extends FormRequest
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d'],
             'route' => ['nullable', 'regex:/^[A-Z]{3}-[A-Z]{3}$/'],
-            'station' => ['nullable', 'string', 'size:3', 'exists:airports,code'],
+            // A real airport code is checked against the list the page already loaded
+            // (ManagerStation). exists:airports would query only when a station is sent.
+            'station' => ['nullable', 'string', 'size:3'],
             'flight' => ['nullable', 'integer', 'exists:flights,id'],
         ];
     }

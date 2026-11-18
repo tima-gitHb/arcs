@@ -8,9 +8,11 @@ use App\Http\Controllers\Controller;
 use App\Models\Flight;
 use App\Models\Payment;
 use App\Models\User;
+use App\Support\ManagerStation;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
 
 class PaymentReportController extends Controller
@@ -30,7 +32,8 @@ class PaymentReportController extends Controller
             'date' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
-        $payments = $this->payments($filters, $request->user());
+        $station = ManagerStation::apply($request);
+        $payments = $this->payments($filters, $request->user(), $station);
 
         $succeeded = $payments->where('status', PaymentStatus::Succeeded);
         $totals = [];
@@ -46,8 +49,12 @@ class PaymentReportController extends Controller
             'grandCents' => array_sum($totals),
             'failedCount' => $failed->count(),
             'failedCents' => (int) $failed->sum('amount_cents'),
-            'flights' => Flight::orderByDesc('departure_at')->get(),
+            'flights' => Flight::query()
+                ->when($station, fn ($query) => $query->departingFrom($station))
+                ->orderByDesc('departure_at')
+                ->get(),
             'staff' => User::orderBy('name')->get(),
+            'station' => $station,
         ]);
     }
 
@@ -59,7 +66,7 @@ class PaymentReportController extends Controller
      * @param  array{flight_id?: int, user_id?: int, date?: string}  $filters
      * @return Collection<int, Payment>
      */
-    private function payments(array $filters, User $viewer): Collection
+    private function payments(array $filters, User $viewer, ?string $station): Collection
     {
         $flightId = 'COALESCE(booking.flight_id, traveller.flight_id)';
 
@@ -72,6 +79,11 @@ class PaymentReportController extends Controller
             ->when($filters['flight_id'] ?? null, fn (Builder $query, int $id) => $query->whereRaw($flightId.' = ?', [$id]))
             ->when($filters['user_id'] ?? null, fn (Builder $query, int $id) => $query->where('payments.taken_by', $id))
             ->when($filters['date'] ?? null, fn (Builder $query, string $date) => $query->whereBetween('payments.created_at', $viewer->stationDay($date)))
+            // The same COALESCE flight, limited to departures from the station. A subquery, not a second query.
+            ->when($station, fn (Builder $query) => $query->whereIn(
+                DB::raw($flightId),
+                Flight::query()->departingFrom($station)->select('flights.id'),
+            ))
             ->orderByDesc('payments.created_at')
             ->orderByDesc('payments.id')
             ->get();

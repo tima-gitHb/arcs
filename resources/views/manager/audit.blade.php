@@ -4,6 +4,8 @@
     </x-slot>
 
     <div class="space-y-6">
+        <x-manager-station :station="$station" />
+
         {{-- Filters: a GET form, so they show in the URL and the pagination links can keep them. --}}
         <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
             <form method="GET" action="{{ route('manager.audit') }}" class="grid gap-4 sm:grid-cols-5 sm:items-start">
