@@ -1,5 +1,7 @@
 # ARCS bug log — every error or crash, see the Whole team card
 
+Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG-001…013 match chronology.
+
 ## BUG-### · short title
 - Date / who:
 - Card / branch:
@@ -11,7 +13,91 @@
 - Fix:
 - Retested:
 
-## BUG-001 · Fares page crashes when a route fare exists and no flight uses it
+## BUG-001 · Extra bag charged twice (as a piece and as kilograms)
+- Date / who: 9 Nov 2026 · Tima
+- Card / branch: C10 · found in the C10 pull-request review
+- Where: BagService excess calculation, check-in bags
+- Steps: 1. Check in a passenger 2. Add bags within the allowance, then one extra bag
+- Expected: the extra bag is charged once (piece fee)
+- Actual: the extra bag was charged as a piece AND its weight was counted again as excess kilograms
+- Screenshot: none (found in code review)
+- Status: Fixed
+- Fix: pool by pieces first, then weight; covered by test_SR59_extra_bag_does_not_double_charge_weight
+- Retested: after merge into dev · Tima
+
+## BUG-002 · A missing fee gave a server error (500)
+- Date / who: 9 Nov 2026 · Tima
+- Card / branch: C10 · found in the C10 pull-request review
+- Where: check-in excess payment, FareService fee lookup
+- Steps: 1. Delete a fee on the manager Fees page 2. Add an excess bag at check-in
+- Expected: a clear message, and confirm stays blocked
+- Actual: 500 server error, because FareService returned nothing for a fee the Manager had not set
+- Screenshot: none (found in code review)
+- Status: Fixed
+- Fix: show "Price not set" and keep confirm blocked; covered by test_SR59_missing_fee_shows_price_not_set_and_still_blocks_confirm
+- Retested: after merge into dev · Tima
+
+## BUG-003 · CI (SQLite) red on the C2 travel-document test after times moved to UTC
+- Date / who: 13 Nov 2026 · Tima
+- Card / branch: B13a (Sprint 3 base) · CI on the pull request
+- Where: tests/Feature/C2TravelDocumentsTest, GitHub Actions SQLite job
+- Steps: 1. Store all times in UTC (B13a) 2. Run the suite in CI
+- Expected: green
+- Actual: C2 test failed, because it used the real clock while dates were now compared in UTC
+- Screenshot: none (CI log)
+- Status: Fixed
+- Fix: frozen clock in Asia/Beirut in C2TravelDocumentsTest setUp
+- Retested: 13 Nov 2026 · CI green
+
+## BUG-004 · Paris demo test failed when run after 20:00 UTC
+- Date / who: 13 Nov 2026 · Tima
+- Card / branch: B13a (Sprint 3 base) · evening test run
+- Where: test_seeded_paris_demo_has_return_flights_with_passengers
+- Steps: 1. Run the suite after 20:00 UTC
+- Expected: green at any hour
+- Actual: failed, because with the real clock "4 hours later" is already tomorrow in Paris
+- Screenshot: none (terminal)
+- Status: Fixed
+- Fix: travelTo in Europe/Paris (commit 76a936a)
+- Retested: 13 Nov 2026 · evening run green
+
+## BUG-005 · Audit date filter missed a row between 22:00 and 24:00 UTC
+- Date / who: 13 Nov 2026 · Tima
+- Card / branch: B12 (Sprint 2 base) / M5 audit · evening test run
+- Where: B12Sprint2BaseTest, M5 audit date filter test
+- Steps: 1. Run the suite between 22:00 and 24:00 UTC
+- Expected: the row from "today" is found
+- Actual: the row was missed, because with the real clock it is already the next day in Beirut
+- Screenshot: none (terminal)
+- Status: Fixed
+- Fix: travelTo in Asia/Beirut in the test
+- Retested: 13 Nov 2026 · evening run green
+
+## BUG-006 · MySQL: "Data too long for column seat_no" in 8 tests
+- Date / who: 15 Nov 2026 · Tima
+- Card / branch: C13 + C14 · CI MySQL 8 job
+- Where: C14ThroughCheckinTest, B13bSegmentsTest (test helper)
+- Steps: 1. Run the full suite on MySQL 8
+- Expected: green on MySQL like on SQLite
+- Actual: 8 tests failed, because the test helper built the seat number from the database id, and MySQL ids keep growing across the suite
+- Screenshot: none (CI log)
+- Status: Fixed
+- Fix: the helper picks a short free seat (commit 2cba5eb)
+- Retested: 15 Nov 2026 · CI MySQL green
+
+## BUG-007 · A connecting passenger's upgrade was audited on the wrong flight
+- Date / who: 15 Nov 2026 · Tima
+- Card / branch: C16 · security tests
+- Where: PaymentService::charge, audit_log
+- Steps: 1. Check in a connecting passenger 2. Pay a cabin upgrade on the second flight
+- Expected: the audit row names the flight that was paid for
+- Actual: the audit row named the first flight, because PaymentService did not know which flight was paid for
+- Screenshot: none (found by a test)
+- Status: Fixed
+- Fix: PaymentService::charge(…, ?Flight); covered by C16CheckinPaymentSecurityTest
+- Retested: 15 Nov 2026 · Tima
+
+## BUG-008 · Fares page crashes when a route fare exists and no flight uses it
 - Date / who: 16 Nov 2026 · Yasmina
 - Card / branch: M14 · feature/M14-fares-per-route
 - Where: tests/Feature/B13bRouteFaresTest (the GET manager.fares page test), during M14 development
@@ -23,7 +109,7 @@
 - Fix: route lists turned into plain collections before merging, commit on feature/M14-fares-per-route; covered by B13bRouteFaresTest and FareRouteTest
 - Retested: 16 Nov 2026 · Yasmina — Fares page with BEY→IST loads on dev
 
-## BUG-002 · Saving MXP makes find('mxp') return that airport on MySQL
+## BUG-009 · Saving MXP makes find('mxp') return that airport on MySQL
 - Date / who: 16 Nov 2026 · Yasmina
 - Card / branch: M13 · feature/M13-airports-stations
 - Where: tests/Feature/Manager/AirportTest (adding an airport uppercases the code), composer test:mysql
@@ -35,7 +121,7 @@
 - Fix: the test asserts the stored code is MXP and that the network grew by one row, instead of a case-sensitive miss. The page already uppercases the code before saving.
 - Retested: 16 Nov 2026 · Yasmina — adding MXP stores code MXP; the test passes on MySQL
 
-## BUG-003 · Confirmation page crashes when no fare exists
+## BUG-010 · Confirmation page crashes when no fare exists
 - Date / who: 18 Nov 2026 · Serge (found on dev); Yasmina (test fix)
 - Card / branch: R3 · fix/BUG-003-r3-test-fares
 - Where: tests/Feature/R3CancelPassengerTest::test_SR5_cancelling_a_booked_passenger_frees_the_seat, the reservation confirmation page
@@ -47,7 +133,7 @@
 - Fix: R3 test now seeds fares (fix/BUG-003-r3-test-fares). Note: the confirmation page still returns 500 when no fare exists at all; follow-up for Serge (show 'price unavailable' instead).
 - Retested: 18 Nov 2026 · Yasmina — R3CancelPassengerTest green on dev after the fix
 
-## BUG-004 · A failed flight-change email is not retried
+## BUG-011 · A failed flight-change email is not retried
 - Date / who: 18 Nov 2026 · Yasmina
 - Card / branch: M16 · feature/M16-flight-notifications
 - Where: M16 manual Mailtrap check, the delay email for ME203
@@ -59,7 +145,7 @@
 - Fix: FlightChangeMail retries ($tries = 3, backoff [10, 30]) on feature/M16-flight-notifications, plus a test that the mailable defines tries and backoff.
 - Retested: 18 Nov 2026 · Yasmina — FlightNotificationTest asserts tries is 3 and backoff is 10 then 30
 
-## BUG-005 · E-ticket email shows raw HTML for the payment line
+## BUG-012 · E-ticket email shows raw HTML for the payment line
 - Date / who: 18 Nov 2026 · Tima
 - Card / branch: R15 · found during Sprint 3 manual test on feature/C17-G7-checkin-email-gate
 - Where: Mailtrap, "ARCS e-ticket JBGNWJ" email, Amount paid section
@@ -71,7 +157,7 @@
 - Fix:
 - Retested:
 
-## BUG-006 · Today's flights hides a flight after midnight while its check-in is open
+## BUG-013 · Today's flights hides a flight after midnight while its check-in is open
 - Date / who: 18 Nov 2026 · Tima
 - Card / branch: Check-in page "Today's flights" (TodaysFlights component) · found during Sprint 3 manual test
 - Where: /checkin, Today's flights panel, logged in as checkin@arcs.test (BEY)
