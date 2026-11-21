@@ -5,15 +5,17 @@ namespace App\Services;
 use App\Enums\CabinClass;
 use App\Enums\FeeCode;
 use App\Enums\PassengerType;
+use App\Enums\SegmentDirection;
 use App\Exceptions\FareNotFound;
 use App\Models\Fare;
 use App\Models\Fee;
 use App\Models\Passenger;
 use App\Models\Reservation;
+use App\Models\TripFare;
 
 /**
  * The only place to compute a price. It reads the fares and fees tables, so changing a
- * price there (card M7) is all it takes.
+ * price there (card M7) is all it takes. Trip fares (B14) override the per-route sum when set.
  */
 class FareService
 {
@@ -77,6 +79,8 @@ class FareService
     /**
      * The price of a journey (B13b, SR-69): for every flight, each passenger's fare on that route (the
      * route fare, else the default), added up. One line per flight and class/type. No extras.
+     * When a trip fare exists for the journey origin → final outbound destination (B14, CR-13/CR-14),
+     * that price is used instead (round_trip_cents when a return is booked and published).
      */
     public function journeyQuote(Reservation $reservation): Quote
     {
@@ -88,6 +92,11 @@ class FareService
             ])
             ->all();
 
+        $trip = $this->tripJourneyQuote($reservation, $passengers);
+        if ($trip !== null) {
+            return $trip;
+        }
+
         $lines = [];
         foreach ($reservation->segments as $segment) {
             $flight = $segment->flight;
@@ -95,6 +104,51 @@ class FareService
             foreach ($this->quote($passengers, origin: $flight->origin, destination: $flight->destination)->lines as $line) {
                 $lines[] = ['label' => "{$flight->origin}→{$flight->destination} {$flight->flight_no}: {$line['label']}"] + $line;
             }
+        }
+
+        return new Quote($lines, array_sum(array_column($lines, 'amount_cents')), self::CURRENCY);
+    }
+
+    /**
+     * @param  list<array{cabin_class: CabinClass, type: PassengerType}>  $passengers
+     */
+    private function tripJourneyQuote(Reservation $reservation, array $passengers): ?Quote
+    {
+        $segments = $reservation->segments;
+        if ($segments->isEmpty()) {
+            return null;
+        }
+
+        $outbound = $segments->where('direction', SegmentDirection::Outbound)->values();
+        if ($outbound->isEmpty()) {
+            $outbound = $segments->values();
+        }
+
+        $origin = $outbound->first()->flight->origin;
+        $destination = $outbound->last()->flight->destination;
+        $hasReturn = $segments->contains(fn ($segment) => $segment->direction === SegmentDirection::Return);
+
+        $lines = [];
+        foreach ($this->groupPassengers($passengers) as $group) {
+            $tripFare = TripFare::query()
+                ->forTrip($origin, $destination)
+                ->where('cabin_class', $group['cabin_class'])
+                ->where('passenger_type', $group['type'])
+                ->first();
+
+            if ($tripFare === null) {
+                return null;
+            }
+
+            $unit = $hasReturn && $tripFare->round_trip_cents !== null
+                ? $tripFare->round_trip_cents
+                : $tripFare->one_way_cents;
+
+            $label = $hasReturn && $tripFare->round_trip_cents !== null
+                ? "{$origin}→{$destination} round-trip {$group['cabin_class']->label()} {$group['type']->label()}"
+                : "{$origin}→{$destination} trip {$group['cabin_class']->label()} {$group['type']->label()}";
+
+            $lines[] = $this->line($label, $group['quantity'], $unit);
         }
 
         return new Quote($lines, array_sum(array_column($lines, 'amount_cents')), self::CURRENCY);

@@ -24,6 +24,22 @@ class SettingSeeder extends Seeder
             ['value' => '32'], // safety limit: no bag above it
         );
 
+        // Rule limits (B14, CR-15). Values only; rules that use them are later cards.
+        foreach ([
+            'child_alone_min_age' => '16',
+            'umnr_min_age' => '5',
+            'max_infants_per_adult' => '1',
+            'max_passengers_per_booking' => '9',
+            'max_bag_kg' => '32',
+            'max_aircraft_seats' => '220',
+            'min_turnaround_minutes' => '45',
+            'max_connection_hours' => '24',
+            'max_pets_in_cabin' => '2',
+            'max_legs' => '6',
+        ] as $key => $value) {
+            Setting::query()->updateOrCreate(['key' => $key], ['value' => $value]);
+        }
+
         $allowances = [
             [CabinClass::Economy, 2, 23.0],
             [CabinClass::Premium, 2, 23.0],

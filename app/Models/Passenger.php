@@ -29,6 +29,7 @@ class Passenger extends Model
         'reservation_id',
         'first_name',
         'last_name',
+        'email',
         'type',
         'cabin_class',
         'extra_bags',

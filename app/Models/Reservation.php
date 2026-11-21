@@ -33,6 +33,7 @@ class Reservation extends Model
                 'flight_id' => $reservation->flight_id,
                 'sequence' => 1,
                 'direction' => SegmentDirection::Outbound,
+                'leg' => 1,
             ]);
         });
     }
