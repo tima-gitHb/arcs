@@ -19,7 +19,7 @@ class ReservationSegment extends Model
     /**
      * @var list<string>
      */
-    protected $fillable = ['reservation_id', 'flight_id', 'sequence', 'direction'];
+    protected $fillable = ['reservation_id', 'flight_id', 'sequence', 'direction', 'leg'];
 
     /**
      * @return array<string, string>
@@ -29,6 +29,7 @@ class ReservationSegment extends Model
         return [
             'sequence' => 'integer',
             'direction' => SegmentDirection::class,
+            'leg' => 'integer',
         ];
     }
 

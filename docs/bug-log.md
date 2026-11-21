@@ -168,3 +168,39 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Open
 - Fix:
 - Retested:
+
+## BUG-014 · Multi-city leg split hid SR-65 connect and return errors
+- Date / who: 21 Nov 2026 · Tima
+- Card / branch: B14 · feature/B14-sprint4-base
+- Where: JourneyService::partitionIntoLegs / validate, B13bSegmentsTest
+- Steps: 1. Add overnight-leg partitioning for CR-16 2. Run B13bSegmentsTest
+- Expected: non-connecting flights still throw "departs from … but … lands at …"; return-before-arrival still throws the SR-65 return message
+- Actual: a non-connecting pair became a new leg and passed; return-before-arrival threw "Leg N starts before the previous leg ends" instead of the round-trip message
+- Screenshot: none — found by B13bSegmentsTest while building B14
+- Status: Fixed
+- Fix: only split a leg when the gap at the same city is over max_connection_hours; run ensureRoundTrip before ensureLegOrder so SR-65 messages stay
+- Retested: 21 Nov 2026 · Tima — B13bSegmentsTest and B14MultiCityLegsTest green
+
+## BUG-015 · Check-in shell dropped the role label and Profile link
+- Date / who: 21 Nov 2026 · Tima
+- Card / branch: B14 · feature/B14-sprint4-base
+- Where: checkin/home via <x-app-shell>, B4RolesTest / B5LayoutTest
+- Steps: 1. Put the find-passenger page in the new shell with module="Check-in" 2. Open /checkin as check-in staff
+- Expected: page shows "Check-in staff" and a Profile link (same as the old layout)
+- Actual: badge said "Check-in" and there was no Profile link
+- Screenshot: none — found by B4RolesTest and B5LayoutTest
+- Status: Fixed
+- Fix: shell defaults to Role::label() and includes Profile; check-in home no longer overrides the module name
+- Retested: 21 Nov 2026 · Tima — B4RolesTest and B5LayoutTest green
+
+## BUG-016 · B13bMigrationTest rollback count missed the four B14 migrations
+- Date / who: 21 Nov 2026 · Tima
+- Card / branch: B14 · feature/B14-sprint4-base
+- Where: tests/Feature/B13bMigrationTest (B13B_STEPS)
+- Steps: 1. Add four B14 migrations 2. Run B13bMigrationTest
+- Expected: rolling back B13B_STEPS reaches the pre-coupon schema
+- Actual: coupons table still existed after rollback, because the step count still assumed six migrations on top of B13b
+- Screenshot: none — found by B13bMigrationTest
+- Status: Fixed
+- Fix: setup only — B13B_STEPS raised from 6 to 10 (list in the test report)
+- Retested: 21 Nov 2026 · Tima — B13bMigrationTest green
