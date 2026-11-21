@@ -7,23 +7,22 @@
 
         <title>{{ config('app.name', 'ARCS') }}</title>
 
-        <!-- Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
-        <!-- Scripts -->
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
-    <body class="font-sans text-gray-900 antialiased">
-        <div class="min-h-screen flex flex-col sm:justify-center items-center pt-6 sm:pt-0 bg-page">
-            <div class="text-center px-6">
-                <a href="/" class="text-xl text-navy">
-                    <span class="font-semibold tracking-wide">ARCS</span> — Airline Reservation &amp; Check-in System
+    <body class="font-sans antialiased text-gray-900" style="background: var(--arcs-page);">
+        <div class="flex min-h-screen flex-col items-center justify-center px-4 py-10">
+            <div class="mb-6 px-2 text-center">
+                <a href="/" class="text-2xl font-bold tracking-wide" style="color: var(--arcs-bar);">
+                    ARCS
                 </a>
+                <p class="mt-1 text-sm text-gray-500">Airline Reservation &amp; Check-in System</p>
             </div>
 
-            <div class="w-full sm:max-w-md mt-6 px-6 py-4 bg-white shadow-md overflow-hidden sm:rounded-lg">
+            <div class="w-full max-w-md rounded-[14px] border bg-white p-6 shadow-sm sm:p-8" style="border-color: var(--arcs-border);">
                 {{ $slot }}
             </div>
         </div>

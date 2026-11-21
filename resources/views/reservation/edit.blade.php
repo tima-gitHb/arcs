@@ -8,19 +8,21 @@
 
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-navy">Correct name</h1>
+        <x-page-header title="Correct name" subtitle="{{ $passenger->reservation->pnr }} · {{ $passenger->reservation->flight->flight_no }} · {{ $passenger->type->label() }}">
+            <a href="{{ route('reservation.search', ['flight' => $passenger->reservation->flight_id]) }}" class="arcs-btn-secondary">Back to the flight</a>
+        </x-page-header>
     </x-slot>
 
-    <div class="max-w-3xl space-y-6">
-        <div class="rounded-lg bg-white p-6 shadow-sm">
-            <p class="text-sm text-gray-500">
+    <div class="mx-auto max-w-3xl space-y-6">
+        <x-panel title="Passenger">
+            <p class="mb-4 text-sm text-[var(--arcs-muted)]">
                 {{ $passenger->reservation->pnr }}
                 · {{ $passenger->reservation->flight->flight_no }}
                 · {{ $passenger->type->label() }}
-                · {{ $passenger->status->label() }}
+                · <x-status-badge :status="$passenger->status" />
             </p>
 
-            <form method="POST" action="{{ route('reservation.update', $passenger) }}" class="mt-4 grid gap-4 sm:grid-cols-2">
+            <form method="POST" action="{{ route('reservation.update', $passenger) }}" class="grid gap-4 sm:grid-cols-2">
                 @csrf
                 @method('PUT')
 
@@ -55,33 +57,29 @@
                 </div>
 
                 <div class="sm:col-span-2">
-                    <button type="submit" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
-                        Save
-                    </button>
+                    <button type="submit" class="arcs-btn-primary">Save</button>
                 </div>
             </form>
-        </div>
+        </x-panel>
 
-        <div class="rounded-lg bg-white p-6 shadow-sm">
-            <h2 class="text-lg font-semibold text-navy">History</h2>
-
+        <x-panel title="History">
             @forelse ($passenger->auditEntries as $entry)
-                <div class="mt-4 border-t border-gray-100 pt-4 text-sm">
+                <div class="mt-4 border-t border-[var(--arcs-border)] pt-4 text-sm first:mt-0 first:border-t-0 first:pt-0">
                     <p>
                         {{ $fieldLabels[$entry->field] ?? $entry->field }}
                         changed from {{ $entry->old_value ?? '—' }} to {{ $entry->new_value }}
                     </p>
-                    <p class="mt-1 text-gray-500">
+                    <p class="mt-1 text-[var(--arcs-muted)]">
                         {{ $entry->user->name }}
                         · <x-station-time :at="$entry->changed_at" format="d M Y H:i" />
                     </p>
                 </div>
             @empty
-                <p class="mt-3 text-sm text-gray-600">No changes yet.</p>
+                <p class="text-sm text-[var(--arcs-muted)]">No changes yet.</p>
             @endforelse
-        </div>
+        </x-panel>
 
-        <a href="{{ route('reservation.search', ['flight' => $passenger->reservation->flight_id]) }}" class="inline-block text-sm font-medium text-navy hover:underline">
+        <a href="{{ route('reservation.search', ['flight' => $passenger->reservation->flight_id]) }}" class="inline-block text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">
             Back to the flight
         </a>
     </div>

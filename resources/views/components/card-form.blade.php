@@ -18,19 +18,19 @@
         ?? ($amountCents !== null ? \App\Support\Money::format((int) $amountCents) : null);
 @endphp
 
-<div {{ $attributes->merge(['class' => 'rounded-lg bg-white p-6 shadow-sm']) }} data-card-form>
+<div {{ $attributes->merge(['class' => 'arcs-card p-5 sm:p-6']) }} data-card-form>
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-            <h2 class="text-lg font-semibold text-navy">{{ $title }}</h2>
+            <h2 class="text-lg font-semibold text-gray-900">{{ $title }}</h2>
             <p class="mt-1 text-sm text-gray-600">{{ $hint }}</p>
         </div>
-        <span id="{{ $prefix }}card-brand" class="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-600">Card</span>
+        <span id="{{ $prefix }}card-brand" class="rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide" style="background: var(--arcs-accent-soft); color: var(--arcs-accent-text);">Card</span>
     </div>
 
     @if ($amountText !== null)
         <p class="mt-3 text-sm text-gray-700">
             Amount to charge:
-            <span id="{{ $prefix }}card-form-amount" class="font-semibold text-navy">{{ $amountText }}</span>
+            <span id="{{ $prefix }}card-form-amount" class="font-semibold arcs-mono" style="color: var(--arcs-accent-text);">{{ $amountText }}</span>
         </p>
     @endif
 

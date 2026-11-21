@@ -214,15 +214,16 @@ class WelcomeEmailTest extends TestCase
 
     public function test_the_resend_button_is_only_on_accounts_that_have_never_logged_in(): void
     {
-        User::factory()->create(['name' => 'Nina New', 'email' => 'nina@arcs.test', 'last_login_at' => null]);
-        User::factory()->create(['name' => 'Rita Recent', 'email' => 'rita@arcs.test', 'last_login_at' => now()]);
+        $nina = User::factory()->create(['name' => 'Nina New', 'email' => 'nina@arcs.test', 'last_login_at' => null]);
+        $rita = User::factory()->create(['name' => 'Rita Recent', 'email' => 'rita@arcs.test', 'last_login_at' => now()]);
 
-        $response = $this->get('/manager/accounts')->assertOk();
+        $ninaPage = $this->get('/manager/accounts/'.$nina->id)->assertOk();
+        $ritaPage = $this->get('/manager/accounts/'.$rita->id)->assertOk();
 
-        $this->assertSame(1, $this->countNodes($response, $this->resendButton('Nina New')));
-        $this->assertSame(0, $this->countNodes($response, $this->resendButton('Rita Recent')));
-        $this->assertSame(1, $this->countNodes($response, $this->resetButton('Nina New')));
-        $this->assertSame(1, $this->countNodes($response, $this->resetButton('Rita Recent')));
+        $this->assertSame(1, $this->countNodes($ninaPage, "//form[contains(@action, '/resend-welcome')]//button[normalize-space()='Resend welcome email']"));
+        $this->assertSame(0, $this->countNodes($ritaPage, "//form[contains(@action, '/resend-welcome')]//button[normalize-space()='Resend welcome email']"));
+        $this->assertSame(1, $this->countNodes($ninaPage, "//button[normalize-space()='Send reset link']"));
+        $this->assertSame(1, $this->countNodes($ritaPage, "//button[normalize-space()='Send reset link']"));
     }
 
     public function test_a_non_manager_cannot_resend_the_welcome_email(): void

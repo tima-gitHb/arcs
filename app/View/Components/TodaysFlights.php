@@ -24,7 +24,7 @@ class TodaysFlights extends Component
     /** @var Collection<int, Flight> */
     public Collection $flights;
 
-    public function __construct(Role|string $role, public ?string $station = null)
+    public function __construct(Role|string $role, public ?string $station = null, public bool $compact = false)
     {
         $this->role = $role instanceof Role ? $role : Role::from($role);
         $user = auth()->user();

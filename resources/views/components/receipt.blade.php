@@ -13,7 +13,7 @@
     use App\Support\Money;
 @endphp
 
-<div {{ $attributes->merge(['class' => 'rounded-lg bg-[#F7FAFD] px-4 py-3']) }} data-receipt>
+<div {{ $attributes->merge(['class' => 'rounded-[14px] border px-4 py-3']) }} style="background: var(--arcs-accent-soft); border-color: var(--arcs-border);" data-receipt>
     @if (count($lines) > 0)
         <ul class="space-y-1 text-sm text-gray-800">
             @foreach ($lines as $line)

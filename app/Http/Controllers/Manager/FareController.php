@@ -12,6 +12,7 @@ use App\Models\AuditEntry;
 use App\Models\Fare;
 use App\Models\Fee;
 use App\Models\Flight;
+use App\Models\TripFare;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,6 +46,12 @@ class FareController extends Controller
             'fees' => $fees,
             'route' => $route ?? '',
             'routes' => $this->routes(),
+            'tripFares' => TripFare::query()
+                ->orderBy('origin_code')
+                ->orderBy('destination_code')
+                ->orderBy('cabin_class')
+                ->orderBy('passenger_type')
+                ->get(),
         ]);
     }
 

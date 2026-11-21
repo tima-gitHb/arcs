@@ -19,10 +19,10 @@
         }
     </style>
 </head>
-<body class="bg-page font-sans text-gray-900 antialiased">
+<body class="font-sans text-gray-900 antialiased" style="background: var(--arcs-page);">
     <div class="mx-auto max-w-2xl p-6">
         <div class="no-print mb-4 flex justify-end">
-            <button type="button" onclick="window.print()" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white">Print</button>
+            <button type="button" onclick="window.print()" class="arcs-btn-primary">Print</button>
         </div>
 
         @include('checkin.partials.boarding-pass-sheet')

@@ -204,3 +204,63 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Fixed
 - Fix: setup only — B13B_STEPS raised from 6 to 10 (list in the test report)
 - Retested: 21 Nov 2026 · Tima — B13bMigrationTest green
+
+## BUG-017 · Find reservation crashed: undefined $q
+- Date / who: 21 Nov 2026 · Auto (UI1)
+- Card / branch: UI1 · feature/UI1-global-layout
+- Where: reservation/search.blade.php · R2FindReservationTest / B6RoutesTest
+- Steps: 1. Restyle find-reservation with a `q` search field 2. Open /reservation/search
+- Expected: page uses the controller's `pnr` / `error` / `reservation` vars and returns 200
+- Actual: ErrorException Undefined variable $q (500)
+- Screenshot: none — found by R2FindReservationTest
+- Status: Fixed
+- Fix: restored the PNR form (`name="pnr"`) and the original flight-browse behaviour; restyle only with panels/buttons
+- Retested: 21 Nov 2026 — R2FindReservationTest and B6RoutesTest green
+
+## BUG-018 · UI2 shell hid gate PNR scan and booking assert copy
+- Date / who: 21 Nov 2026 · Auto (UI2)
+- Card / branch: UI2 · feature/UI2-reservation-shell
+- Where: layouts/app.blade.php · reservation/create.blade.php · G6 / R9 / R12
+- Steps: 1. Left-only shell dropped `$search` slot 2. Create wizard hid “Fare quote” / route-fare blurb 3. Run full suite
+- Expected: gate boarding autofocus `id="pnr"`; booking page still shows asserted fare copy
+- Actual: G6ScanBoardingPassTest, R9PaidBookingTest, R12JourneyPriceTest failed assertSee
+- Screenshot: none — found by php artisan test
+- Status: Fixed
+- Fix: restore `$search` above main content; keep Fare quote / route-fare strings in an sr-only quote block for JS + asserts
+- Retested: 21 Nov 2026 — those three green; full suite 862 SQLite + MySQL; Pint --test
+
+## BUG-019 · Reservation seat map clipped in a narrow column
+- Date / who: 21 Nov 2026 · Auto (UI2 seat-map fix)
+- Card / branch: UI2 · feature/UI2-reservation-shell
+- Where: reservation/create · seat-map.blade.php · seat-map.js · app.css
+- Steps: 1. Open New reservation → Seats 2. View plane at ≥1280px
+- Expected: full A–F cabin aligned, no horizontal scroll, plane centred in main column
+- Actual: map docked in ~260px right column; column F clipped; tiny seats; header letters misaligned; legend outside plane
+- Screenshot: docs/reservation/Reservation 3 · Seats.png
+- Status: Fixed
+- Fix: navy seat-map panel; fixed CSS grid [row#]ABC aisle DEF[row#]; seats step centres plane in main column with passenger list on the right; passengers step keeps seat summary + Assign on map only; check-in/gate aside widened to 32rem
+- Retested: 21 Nov 2026 — full suite 862 passed; Pint --test
+
+## BUG-020 · UI3 check-in home Blade broke on short @php()
+- Date / who: 21 Nov 2026 · Auto (UI3)
+- Card / branch: UI3 · check-in redesign
+- Where: checkin/home.blade.php · layouts/app.blade.php · B5LayoutTest
+- Steps: 1. Restyle check-in home 2. Use `@php($x = …)` next to another `@php(...)` 3. Open /checkin
+- Expected: page renders
+- Actual: ParseError unexpected endif (Blade left `@if` uncompiled after a short `@php()` ate the rest of the slot)
+- Screenshot: none — found by B5LayoutTest
+- Status: Fixed
+- Fix: full `@php`/`@endphp` blocks; menu `aria-current` via `{!! !!}`; keep flight list query-fixed (no per-row relation work)
+- Retested: 21 Nov 2026 — SQLite 866 + MySQL 866; Pint --test
+
+## BUG-021 · Trip fare audit field overflows varchar(30) on MySQL
+- Date / who: 21 Nov 2026 · Auto (polish check-in + manager)
+- Card / branch: polish · feature/UI1-global-layout
+- Where: TripFareController::fieldLabel · audit_log.field · TripFareManagerTest
+- Steps: 1. Create/edit/delete a trip fare on MySQL 2. composer test:mysql
+- Expected: audit row written like other fare changes
+- Actual: SQLSTATE[22001] Data too long for column 'field' ("trip fare BEY-CDG Economy Adult" = 32 chars; column is 30)
+- Screenshot: none — found by composer test:mysql
+- Status: Fixed
+- Fix: shorten label to `trip BEY-CDG Economy Adult` (≤30); delete uses the same field with new_value "—" (no " removed" suffix)
+- Retested: 21 Nov 2026 — SQLite 883 + MySQL 883; Pint --test

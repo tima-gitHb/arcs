@@ -4,36 +4,62 @@
 @endphp
 
 @if ($directionPasses->isNotEmpty())
-    <div class="rounded-lg bg-white p-6 shadow-sm">
-        <h2 class="text-lg font-semibold text-navy">Boarding pass{{ $directionPasses->count() > 1 ? 'es' : '' }}</h2>
+    <div>
+        <h2 class="mb-3 text-base font-semibold text-gray-900">Boarding pass{{ $directionPasses->count() > 1 ? 'es' : '' }}</h2>
 
-        <ul class="mt-3 space-y-4">
-            @foreach ($directionPasses as $pass)
+        <ul class="grid gap-4 lg:grid-cols-2">
+            @foreach ($directionPasses as $index => $pass)
                 @php($passFlight = $pass->coupon?->flight ?? $flight ?? $passenger->reservation->flight)
-                <li class="rounded border border-gray-100 p-4">
-                    <p class="text-sm font-medium text-navy">
-                        {{ $passFlight->flight_no }} · {{ $passFlight->origin }} → {{ $passFlight->destination }}
-                    </p>
-                    <p class="mt-1 text-sm text-gray-700">
-                        Issued <x-station-time :at="$pass->issued_at" format="d M H:i" />
-                        · <span class="font-mono">{{ $pass->barcode }}</span>
-                    </p>
+                <li class="overflow-hidden rounded-[22px] bg-white shadow-sm" style="box-shadow: var(--arcs-shadow-card);">
+                    <div class="flex items-center justify-between px-4 py-3 text-white" style="background: var(--arcs-bar);">
+                        <p class="text-xs font-semibold uppercase tracking-wide text-white/70">
+                            Boarding pass {{ $index + 1 }} of {{ $directionPasses->count() }}
+                        </p>
+                        <p class="arcs-mono text-sm font-semibold">{{ $passFlight->flight_no }}</p>
+                    </div>
+                    <div class="p-4">
+                        <p class="text-2xl font-bold tracking-tight text-gray-900">
+                            {{ $passFlight->origin }} <span class="text-gray-300">→</span> {{ $passFlight->destination }}
+                        </p>
+                        <p class="mt-1 text-sm font-medium" style="color: var(--arcs-accent-text);">
+                            {{ $passFlight->flight_no }} · {{ $passFlight->origin }} → {{ $passFlight->destination }}
+                        </p>
+                        <dl class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <dt class="text-xs text-gray-500">Seat</dt>
+                                <dd class="font-semibold arcs-mono">{{ $pass->coupon?->seatAssignment?->seat?->seat_no ?? $passenger->seatAssignment?->seat?->seat_no ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-gray-500">Gate</dt>
+                                <dd class="font-semibold">{{ $passFlight->gate ?? '—' }}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-gray-500">Departs</dt>
+                                <dd class="font-semibold"><x-local-time :at="$passFlight->departure_at" :airport="$passFlight->origin" format="H:i" /></dd>
+                            </div>
+                            <div>
+                                <dt class="text-xs text-gray-500">Issued</dt>
+                                <dd class="font-semibold"><x-station-time :at="$pass->issued_at" format="d M H:i" /></dd>
+                            </div>
+                        </dl>
+                        <p class="mt-3 arcs-mono text-xs text-gray-500">{{ $pass->barcode }}</p>
 
-                    <div class="mt-3 flex flex-wrap items-center gap-3">
-                        <a href="{{ route('checkin.boarding-pass.show', [$passenger, 'flight' => $passFlight->id]) }}" target="_blank"
-                           class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
-                            Print
-                        </a>
+                        <div class="mt-4 flex flex-wrap items-center gap-3">
+                            <a href="{{ route('checkin.boarding-pass.show', [$passenger, 'flight' => $passFlight->id]) }}" target="_blank"
+                               class="arcs-btn-primary">
+                                Print
+                            </a>
 
-                        @if (($pass->coupon?->status ?? $passenger->status) === \App\Enums\PassengerStatus::CheckedIn)
-                            <form method="POST" action="{{ route('checkin.boarding-pass.reprint', $passenger) }}">
-                                @csrf
-                                <input type="hidden" name="flight_id" value="{{ $passFlight->id }}">
-                                <button type="submit" class="rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy hover:text-white">
-                                    Reprint (voids this pass)
-                                </button>
-                            </form>
-                        @endif
+                            @if (($pass->coupon?->status ?? $passenger->status) === \App\Enums\PassengerStatus::CheckedIn)
+                                <form method="POST" action="{{ route('checkin.boarding-pass.reprint', $passenger) }}">
+                                    @csrf
+                                    <input type="hidden" name="flight_id" value="{{ $passFlight->id }}">
+                                    <button type="submit" class="arcs-btn-secondary">
+                                        Reprint (voids this pass)
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
                     </div>
                 </li>
             @endforeach

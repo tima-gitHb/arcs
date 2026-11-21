@@ -3,7 +3,7 @@
     and $flight: the flight the seat is for (B13b; a connection has a seat per flight).
     Booked: the map is open and a click assigns the seat.
     CheckedIn: "Change seat" opens the map, limited to the same cabin; the boarding pass is replaced.
-    The plane itself is rendered in the sticky column by the parent show view.
+    The plane itself is rendered by the parent show view (shared seat-map), on this step only.
 --}}
 @php
     $flight ??= $passenger->reservation->flight;
@@ -16,15 +16,15 @@
     $showMap = $picking || ($canChange && $changingSeat);
 @endphp
 
-<div class="rounded-lg bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-semibold text-navy">Seat @if (($journeyFlights ?? collect())->count() > 1)on {{ $flight->flight_no }}@endif</h2>
+<x-panel>
+    <h2 class="text-base font-semibold text-gray-900">Seat @if (($journeyFlights ?? collect())->count() > 1)on {{ $flight->flight_no }}@endif</h2>
 
     @if ($passenger->type === \App\Enums\PassengerType::Infant)
         <p class="mt-2 text-sm text-gray-600">An infant has no seat.</p>
     @else
         <p class="mt-2 text-sm">
             Current seat:
-            <span class="font-semibold text-navy">{{ $currentSeat?->seat_no ?? 'none' }}</span>
+            <span class="font-semibold" style="color: var(--arcs-accent-text);">{{ $currentSeat?->seat_no ?? 'none' }}</span>
             @if ($currentSeat)
                 <span class="text-gray-500">({{ $currentSeat->cabin_class->value }})</span>
             @endif
@@ -32,7 +32,7 @@
 
         @if ($canChange && ! $changingSeat)
             <a href="{{ route('checkin.passengers.show', array_filter([$passenger, 'change_seat' => 1, 'flight' => request('flight')])) }}"
-               class="mt-3 inline-block rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy hover:text-white">
+               class="arcs-btn-secondary mt-3">
                 Change seat
             </a>
         @endif
@@ -53,4 +53,4 @@
             @endunless
         @endif
     @endif
-</div>
+</x-panel>

@@ -84,7 +84,7 @@
                             </div>
                         </td>
                         <td class="py-3">{{ $passenger->type->label() }}</td>
-                        <td class="py-3">{{ $passenger->status->label() }}</td>
+                        <td class="py-3"><x-status-badge :status="$passenger->status" /></td>
                         <td class="py-3">{{ $passenger->cabin_class?->label() ?? '—' }}</td>
                         <td class="py-3">
                             @if ($passenger->type === App\Enums\PassengerType::Infant)

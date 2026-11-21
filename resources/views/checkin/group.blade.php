@@ -1,48 +1,39 @@
 <x-app-layout>
-    <x-slot name="header">
-        <div class="flex flex-wrap items-end justify-between gap-3">
-            <div>
-                <h1 class="text-2xl font-semibold text-navy">Group check-in</h1>
-                <p class="mt-1 text-sm text-gray-600">
-                    <span class="font-mono tracking-[0.2em] text-navy">{{ $reservation->pnr }}</span>
-                    · {{ $flight->flight_no }} · {{ $flight->origin }} → {{ $flight->destination }}
-                    · <x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M H:i" />
-                </p>
-            </div>
-            <a href="{{ route('checkin.home', ['q' => $reservation->pnr]) }}" class="text-sm font-medium text-navy hover:underline">
-                ← Back to search
-            </a>
-        </div>
+    <x-slot name="aside">
+        <x-seat-map-dock hint="Select a passenger, then a free seat in their cabin." :data-seats="json_encode($seatMap)" />
     </x-slot>
 
+    <x-page-header title="Group check-in" :subtitle="$flight->flight_no.' · '.$flight->origin.' → '.$flight->destination">
+        <x-status-badge :status="$flight->status" />
+        <a href="{{ route('checkin.home', ['q' => $reservation->pnr]) }}" class="arcs-btn-secondary">← Back to search</a>
+    </x-page-header>
+    <p class="mb-6 text-sm text-gray-600">
+        <span class="arcs-mono tracking-[0.2em]" style="color: var(--arcs-accent-text);">{{ $reservation->pnr }}</span>
+        · <x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="d M H:i" />
+    </p>
+
     @if ($groupResults)
-        <div class="mb-6 rounded-lg bg-white p-4 shadow-sm">
-            <h2 class="text-lg font-semibold text-navy">Confirm all — results</h2>
-            <ul class="mt-3 divide-y divide-gray-100 text-sm">
+        <x-panel class="mb-6" title="Confirm all — results">
+            <ul class="divide-y text-sm" style="border-color: var(--arcs-border);">
                 @foreach ($groupResults as $result)
-                    <li class="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <li class="flex flex-wrap items-center justify-between gap-2 py-2" style="border-color: var(--arcs-border);">
                         <span class="font-medium">{{ $result['name'] }}</span>
-                        @if ($result['ok'])
-                            <span class="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">{{ $result['message'] }}</span>
-                        @else
-                            <span class="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">{{ $result['message'] }}</span>
-                        @endif
+                        <x-status-badge :label="$result['message']" :status="$result['ok'] ? 'Succeeded' : 'Failed'" />
                     </li>
                 @endforeach
             </ul>
             @if ($hasPasses)
-                <a href="{{ route('checkin.reservations.boarding-passes', $reservation) }}" target="_blank"
-                   class="mt-3 inline-block rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
+                <a href="{{ route('checkin.reservations.boarding-passes', $reservation) }}" target="_blank" class="arcs-btn-primary mt-3">
                     Print all passes
                 </a>
             @endif
-        </div>
+        </x-panel>
     @endif
 
-    <div class="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-        <div class="space-y-4">
-            <div class="overflow-hidden rounded-lg bg-white shadow-sm">
-                <table class="w-full text-sm">
+    <div class="space-y-4">
+            <x-panel>
+                <div class="arcs-table-wrap -mx-5 sm:-mx-6">
+                <table class="arcs-table">
                     <thead class="bg-gray-50 text-left text-gray-500">
                         <tr>
                             <th class="px-4 py-2 font-medium">Passenger</th>
@@ -62,21 +53,24 @@
                                 data-booked="{{ $passenger->status === \App\Enums\PassengerStatus::Booked ? '1' : '0' }}">
                                 <td class="px-4 py-3">
                                     <p class="font-medium">{{ $passenger->first_name }} {{ $passenger->last_name }}</p>
-                                    <p class="text-xs text-gray-500">{{ $passenger->type->value }} · {{ $passenger->status->label() }}</p>
-                                    <a href="{{ route('checkin.passengers.show', $passenger) }}" class="text-xs font-medium text-navy hover:underline">Open</a>
+                                    <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                        {{ $passenger->type->value }}
+                                        <x-status-badge :status="$passenger->status" />
+                                    </p>
+                                    <a href="{{ route('checkin.passengers.show', $passenger) }}" class="text-xs font-medium hover:underline" style="color: var(--arcs-accent-text);">Open</a>
                                 </td>
                                 <td class="px-4 py-3">
-                                    <span @class([
-                                        'text-green-800' => $row['documentStatus'] === 'OK',
-                                        'text-red-800' => $row['documentStatus'] !== 'OK',
-                                    ])>{{ $row['documentStatus'] }}</span>
+                                    <x-status-badge :label="$row['documentStatus']" :status="$row['documentStatus'] === 'OK' ? 'Succeeded' : 'Failed'" />
                                 </td>
                                 <td class="px-4 py-3">
-                                    <span @class([
-                                        'text-green-800' => $row['entryResult']->status === \App\Enums\EntryStatus::Ok,
-                                        'text-red-800' => $row['entryResult']->needsAcknowledgement(),
-                                        'text-amber-800' => $row['entryResult']->status === \App\Enums\EntryStatus::Unknown,
-                                    ])>{{ $row['entryResult']->status->label() }}</span>
+                                    <x-status-badge
+                                        :label="$row['entryResult']->status->label()"
+                                        :status="match (true) {
+                                            $row['entryResult']->status === \App\Enums\EntryStatus::Ok => 'Succeeded',
+                                            $row['entryResult']->needsAcknowledgement() => 'Failed',
+                                            default => 'Delayed',
+                                        }"
+                                    />
                                     <p class="mt-0.5 text-xs text-gray-500">{{ $row['entryResult']->message }}</p>
                                 </td>
                                 <td class="px-4 py-3">
@@ -98,11 +92,11 @@
                                     @endif
                                     @if (($row['excessDueCents'] ?? 0) > 0)
                                         <details class="mt-2">
-                                            <summary class="cursor-pointer text-xs font-medium text-navy">Collect payment · {{ \App\Support\Money::format($row['excessDueCents']) }}</summary>
+                                            <summary class="cursor-pointer text-xs font-medium" style="color: var(--arcs-accent-text);">Collect payment · {{ \App\Support\Money::format($row['excessDueCents']) }}</summary>
                                             <form method="POST" action="{{ route('checkin.excess.pay', $passenger) }}" autocomplete="off" class="mt-2">
                                                 @csrf
-                                                <x-card-form :amount-cents="$row['excessDueCents']" :id-prefix="'p'.$passenger->id" title="Collect payment" class="shadow-none border border-amber-200 p-3" />
-                                                <button type="submit" class="mt-2 rounded bg-navy px-3 py-1.5 text-xs font-medium text-white hover:bg-navy/90">
+                                                <x-card-form :amount-cents="$row['excessDueCents']" :id-prefix="'p'.$passenger->id" title="Collect payment" />
+                                                <button type="submit" class="arcs-btn-primary mt-2">
                                                     Charge {{ \App\Support\Money::format($row['excessDueCents']) }}
                                                 </button>
                                             </form>
@@ -113,20 +107,24 @@
                         @endforeach
                     </tbody>
                 </table>
-            </div>
+                </div>
+            </x-panel>
 
             @if ($canConfirm)
-                <form method="POST" action="{{ route('checkin.reservations.seats', $reservation) }}" id="group-seats-form" class="rounded-lg bg-white p-4 shadow-sm">
+                <x-panel>
+                <form method="POST" action="{{ route('checkin.reservations.seats', $reservation) }}" id="group-seats-form">
                     @csrf
                     <div id="seat-inputs"></div>
                     <x-input-error :messages="$errors->get('seats')" class="mb-2" />
-                    <button type="submit" class="rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy hover:text-white">
+                    <button type="submit" class="arcs-btn-secondary">
                         Save seats
                     </button>
                     <p class="mt-2 text-xs text-gray-500">Pick a passenger row, then a free seat in their booked cabin on the map.</p>
                 </form>
+                </x-panel>
 
-                <form method="POST" action="{{ route('checkin.reservations.confirm-all', $reservation) }}" class="rounded-lg bg-white p-4 shadow-sm">
+                <x-panel>
+                <form method="POST" action="{{ route('checkin.reservations.confirm-all', $reservation) }}">
                     @csrf
                     @foreach ($rows as $row)
                         @if ($row['passenger']->status === \App\Enums\PassengerStatus::Booked && $row['entryResult']->needsAcknowledgement())
@@ -139,19 +137,16 @@
                             </div>
                         @endif
                     @endforeach
-                    <button type="submit" class="rounded bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy/90">
+                    <button type="submit" class="arcs-btn-primary">
                         Confirm all
                     </button>
                 </form>
+                </x-panel>
             @elseif ($hasPasses)
-                <a href="{{ route('checkin.reservations.boarding-passes', $reservation) }}" target="_blank"
-                   class="inline-block rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
+                <a href="{{ route('checkin.reservations.boarding-passes', $reservation) }}" target="_blank" class="arcs-btn-primary">
                     Print all passes
                 </a>
             @endif
-        </div>
-
-        <x-seat-map hint="Select a passenger, then a free seat in their cabin." :data-seats="json_encode($seatMap)" />
     </div>
 
     {{-- type="module": runs after the Vite bundle, which provides window.ArcsSeatMap. --}}

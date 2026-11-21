@@ -81,7 +81,7 @@ class FlightTest extends TestCase
     public function test_SR14_aircraft_30x6_with_business_rows_1_to_5_has_180_seats_with_class(): void
     {
         $this->post(route('manager.aircraft.store'), $this->validAircraft())
-            ->assertRedirect(route('manager.flights'));
+            ->assertRedirect(route('manager.aircraft.index'));
 
         $aircraft = Aircraft::where('registration', 'OD-TST')->sole();
         $this->assertSame('A320', $aircraft->model);
@@ -156,11 +156,11 @@ class FlightTest extends TestCase
     {
         $data = $this->validFlight(['flight_no' => 'me205']); // lower case: uppercased before validating
 
-        $this->post(route('manager.flights.store'), $data)
-            ->assertRedirect(route('manager.flights'))
+        $response = $this->post(route('manager.flights.store'), $data)
             ->assertSessionHasNoErrors();
 
         $flight = Flight::sole();
+        $response->assertRedirect(route('manager.flights.show', $flight));
         $this->assertSame('ME205', $flight->flight_no);
         $this->assertSame('BEY', $flight->origin);
         $this->assertSame('CDG', $flight->destination);
@@ -246,10 +246,11 @@ class FlightTest extends TestCase
     {
         $flight = $this->flightWithStatus(FlightStatus::Scheduled);
 
-        $response = $this->from(route('manager.flights'))
+        $response = $this->from(route('manager.flights.show', ['flight' => $flight, 'tab' => 'status']))
             ->patch(route('manager.flights.status', $flight), ['status' => 'Boarding']);
 
-        $response->assertRedirect(route('manager.flights'))->assertSessionHasErrors('status');
+        $response->assertRedirect(route('manager.flights.show', ['flight' => $flight, 'tab' => 'status']))
+            ->assertSessionHasErrors('status');
         $this->assertSame(FlightStatus::Scheduled, $flight->fresh()->status);
 
         $this->followRedirects($response)->assertSee('Flight cannot go from Scheduled to Boarding');
@@ -363,7 +364,8 @@ class FlightTest extends TestCase
     {
         $this->flightWithStatus($current);
 
-        $response = $this->get(route('manager.flights'))->assertOk();
+        $flight = Flight::query()->latest('id')->firstOrFail();
+        $response = $this->get(route('manager.flights.show', ['flight' => $flight, 'tab' => 'status']))->assertOk();
 
         foreach (FlightStatus::cases() as $status) {
             $button = 'name="status" value="'.$status->value.'"';

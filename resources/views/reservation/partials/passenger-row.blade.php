@@ -6,9 +6,10 @@
 @endphp
 
 <div class="passenger-row rounded-lg border border-gray-200 bg-white p-4 shadow-sm" data-index="{{ $index }}">
-    <div class="mb-3 flex items-center justify-between gap-3">
+    <div class="passenger-head mb-3 flex items-center justify-between gap-3">
         <h3 class="font-medium text-navy">
-            Passenger <span class="passenger-number">{{ is_numeric($index) ? ((int) $index + 1) : '' }}</span>
+            <span class="passenger-title-full">Passenger </span><span class="passenger-number">{{ is_numeric($index) ? ((int) $index + 1) : '' }}</span>
+            <span class="passenger-name-short ml-1 text-sm font-semibold text-gray-800"></span>
         </h3>
         <button type="button" class="remove-passenger text-sm text-red-700 hover:underline {{ $canRemove ? '' : 'hidden' }}">
             Remove
@@ -167,7 +168,7 @@
         <x-input-error :messages="$errors->get('passengers.'.$index.'.accompanying_adult')" class="mt-2" />
     </div>
 
-    <div class="mt-4 rounded-md border border-gray-100 bg-gray-50 p-4">
+    <div class="passport-field mt-4 rounded-md border border-gray-100 bg-gray-50 p-4">
         <h4 class="text-sm font-medium text-navy">Passport</h4>
         <div class="mt-3 grid gap-4 sm:grid-cols-2">
             <div>
@@ -220,6 +221,7 @@
 
     <div class="seat-field mt-4 {{ $type === 'Infant' ? 'hidden' : '' }}">
         <p class="text-sm font-medium text-gray-700">Seats</p>
+        {{-- Summary only on the passengers step; plane lives on the Seats step. --}}
         <div class="seat-assignments mt-2 space-y-2">
             @php
                 $seatMap = is_array($passenger['seats'] ?? null) ? $passenger['seats'] : [];

@@ -226,8 +226,9 @@ class SalesDashboardTest extends TestCase
         $this->assertSame(0, $this->countNodes($response, "//section[@data-flight='{$bey->flight_no}']"));
         $this->assertSame(0, $this->countNodes($response, "//section[@data-flight='{$cdgTomorrow->flight_no}']"));
         $this->assertSame('$200.00', $this->total($response, 'grand'));
-        $this->assertSame(1, $this->countNodes($response, '//select[@name="station"]/option[@value="CDG"]'));
-        $this->assertSame(1, $this->countNodes($response, '//select[@name="station"]/option[@value=""]'));
+        // Sidebar station switch + sales filter both expose the station options.
+        $this->assertSame(2, $this->countNodes($response, '//select[@name="station"]/option[@value="CDG"]'));
+        $this->assertSame(2, $this->countNodes($response, '//select[@name="station"]/option[@value=""]'));
     }
 
     public function test_a_flight_filter_shows_that_flight_on_any_day(): void

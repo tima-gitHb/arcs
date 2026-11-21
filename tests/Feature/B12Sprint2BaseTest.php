@@ -569,7 +569,7 @@ class B12Sprint2BaseTest extends TestCase
         $this->seedAllowances();
         $this->actingAsRole('manager');
 
-        $this->get(route('manager.rules'))->assertOk()->assertSee('allowances[premium][pieces]', false);
+        $this->get(route('manager.rules.edit', 'baggage'))->assertOk()->assertSee('allowances[premium][pieces]', false);
 
         $this->put(route('manager.rules.update'), [
             'passport_min_months' => 6,

@@ -50,6 +50,13 @@ class AuditController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $selectedId = $request->query('entry');
+        $selected = null;
+        if (is_numeric($selectedId)) {
+            $selected = AuditEntry::with(['passenger.reservation.flight', 'flight', 'user'])
+                ->find((int) $selectedId);
+        }
+
         return view('manager.audit', [
             'entries' => $entries,
             'flights' => Flight::query()
@@ -58,6 +65,7 @@ class AuditController extends Controller
                 ->get(),
             'staff' => User::orderBy('name')->get(),
             'station' => $station,
+            'selected' => $selected,
         ]);
     }
 

@@ -64,8 +64,8 @@ class StationFilterTest extends TestCase
         $this->assertSame('CDG', session('manager_station'));
         $this->assertSame(1, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME801")]'));
         $this->assertSame(0, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME802")]'));
-        $this->assertSame(1, $this->countNodes($dashboard, '//h2[contains(., "ME801")]'));
-        $this->assertSame(0, $this->countNodes($dashboard, '//h2[contains(., "ME802")]'));
+        $this->assertSame(1, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME801")]'));
+        $this->assertSame(0, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME802")]'));
         $this->assertSeeIndicator($dashboard, 'CDG');
 
         $flights = $this->open('manager.flights');
@@ -181,17 +181,19 @@ class StationFilterTest extends TestCase
         $this->open('manager.flights', 'CDG');
         $aircraft = Aircraft::factory()->create();
 
-        $this->post(route('manager.flights.store'), $this->flightForm($aircraft, 'ME900', 'BEY', 'CDG'))
-            ->assertRedirect(route('manager.flights'))
+        $createdAway = $this->post(route('manager.flights.store'), $this->flightForm($aircraft, 'ME900', 'BEY', 'CDG'))
             ->assertSessionHas('success', 'Flight ME900 created. It departs from BEY, not CDG, so this list does not show it.');
+        $me900 = Flight::where('flight_no', 'ME900')->sole();
+        $createdAway->assertRedirect(route('manager.flights.show', $me900));
 
         $hidden = $this->get(route('manager.flights'))->assertOk();
         // The success message names the flight. The list itself does not.
         $this->assertSame(0, $this->countNodes($hidden, '//table//td[contains(., "ME900")]'));
 
-        $this->post(route('manager.flights.store'), $this->flightForm($aircraft, 'ME901', 'CDG', 'LHR'))
-            ->assertRedirect(route('manager.flights'))
+        $createdHere = $this->post(route('manager.flights.store'), $this->flightForm($aircraft, 'ME901', 'CDG', 'LHR'))
             ->assertSessionHas('success', 'Flight ME901 created.');
+        $me901 = Flight::where('flight_no', 'ME901')->sole();
+        $createdHere->assertRedirect(route('manager.flights.show', $me901));
 
         $this->get(route('manager.flights'))->assertOk()->assertSee('ME901')->assertDontSee('ME900');
     }

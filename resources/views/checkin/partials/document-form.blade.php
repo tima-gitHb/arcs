@@ -16,7 +16,7 @@
 
     <div>
         <x-input-label :for="$bag.'-type'" value="Type" />
-        <select id="{{ $bag }}-type" name="type" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-navy focus:ring-navy" required>
+        <select id="{{ $bag }}-type" name="type" class="arcs-input mt-1" required>
             @unless ($document)
                 <option value="">Choose a type…</option>
             @endunless
@@ -51,7 +51,7 @@
     </div>
 
     <div class="sm:col-span-2">
-        <button type="submit" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
+        <button type="submit" class="arcs-btn-primary">
             {{ $submit }}
         </button>
     </div>

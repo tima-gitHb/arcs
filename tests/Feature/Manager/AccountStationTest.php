@@ -59,9 +59,12 @@ class AccountStationTest extends TestCase
         $this->get('/manager/accounts')
             ->assertOk()
             ->assertSee('CDG · Paris')
-            ->assertSee('BEY · Beirut')
             ->assertSee('Nina None')
-            ->assertSee('—')
+            ->assertSee('—');
+
+        $this->get('/manager/accounts/'.$paris->id)
+            ->assertOk()
+            ->assertSee('BEY · Beirut')
             ->assertSee('name="airport_code"', false)
             ->assertSee('/manager/accounts/'.$paris->id.'/station', false)
             ->assertSee('Save');
@@ -71,7 +74,7 @@ class AccountStationTest extends TestCase
     {
         $this->actingAsRole(Role::Manager);
 
-        $this->get('/manager/accounts')
+        $this->get('/manager/accounts/create')
             ->assertOk()
             ->assertSee('Required for check-in and gate staff');
     }
@@ -119,7 +122,7 @@ class AccountStationTest extends TestCase
         $this->actingAsRole(Role::Manager);
 
         $this->patch("/manager/accounts/{$claire->id}/station", ['airport_code' => 'CDG'])
-            ->assertRedirect('/manager/accounts')
+            ->assertRedirect('/manager/accounts/'.$claire->id)
             ->assertSessionHasNoErrors();
 
         $this->assertSame('CDG', $claire->fresh()->airport_code);
@@ -133,7 +136,7 @@ class AccountStationTest extends TestCase
         $this->actingAsRole(Role::Manager);
 
         $this->patch("/manager/accounts/{$claire->id}/station", ['airport_code' => ''])
-            ->assertRedirect('/manager/accounts')
+            ->assertRedirect('/manager/accounts/'.$claire->id)
             ->assertSessionHasNoErrors();
 
         $this->assertNull($claire->fresh()->airport_code);
@@ -146,9 +149,9 @@ class AccountStationTest extends TestCase
         ]);
         $this->actingAsRole(Role::Manager);
 
-        $this->from('/manager/accounts')
+        $this->from('/manager/accounts/'.$claire->id)
             ->patch("/manager/accounts/{$claire->id}/station", ['airport_code' => 'ZZZ'])
-            ->assertRedirect('/manager/accounts')
+            ->assertRedirect('/manager/accounts/'.$claire->id)
             ->assertSessionHasErrors('airport_code');
 
         $this->assertSame('BEY', $claire->fresh()->airport_code);
