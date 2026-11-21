@@ -1,30 +1,27 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-navy">Flights and aircraft</h1>
-    </x-slot>
+    <x-page-header title="Flights and aircraft" subtitle="Add an aircraft or a flight, then move a flight through the statuses the system allows." />
 
     <div class="space-y-6">
         <x-manager-station :station="$station" />
 
         {{-- A refused status move (StatusService said no) comes back under the 'status' key. --}}
         @if ($errors->has('status'))
-            <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+            <div class="rounded-lg border px-4 py-3 text-sm" style="border-color: #F5C2C0; background: #FCE8E6; color: var(--arcs-error);" role="alert">
                 {{ $errors->first('status') }}
             </div>
         @endif
 
         {{-- A delay time that is not later than the current departure. --}}
         @if ($errors->has('departure_at'))
-            <div class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+            <div class="rounded-lg border px-4 py-3 text-sm" style="border-color: #F5C2C0; background: #FCE8E6; color: var(--arcs-error);" role="alert">
                 {{ $errors->first('departure_at') }}
             </div>
         @endif
 
         <div class="grid gap-6 lg:grid-cols-2">
             {{-- New aircraft: saving it also generates its seats (SR-14). --}}
-            <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
-                <h2 class="text-lg font-semibold text-navy">New aircraft</h2>
-                <p class="mt-1 text-sm text-gray-600">Seats are generated from the layout: the first rows are Business, the next rows are Premium, the rest Economy.</p>
+            <x-panel title="New aircraft">
+                <p class="text-sm text-gray-600">Seats are generated from the layout: the first rows are Business, the next rows are Premium, the rest Economy.</p>
 
                 <form method="POST" action="{{ route('manager.aircraft.store') }}" class="mt-4 grid gap-4 sm:grid-cols-2">
                     @csrf
@@ -69,12 +66,11 @@
                         <x-primary-button>Create aircraft</x-primary-button>
                     </div>
                 </form>
-            </div>
+            </x-panel>
 
             {{-- New flight --}}
-            <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
-                <h2 class="text-lg font-semibold text-navy">New flight</h2>
-                <p class="mt-1 text-sm text-gray-600">A new flight starts as Scheduled. Times are Beirut time.</p>
+            <x-panel title="New flight">
+                <p class="text-sm text-gray-600">A new flight starts as Scheduled. Times are Beirut time.</p>
 
                 <form method="POST" action="{{ route('manager.flights.store') }}" class="mt-4 grid gap-4 sm:grid-cols-2">
                     @csrf
@@ -87,7 +83,7 @@
 
                     <div>
                         <x-input-label for="aircraft_id" value="Aircraft" />
-                        <select id="aircraft_id" name="aircraft_id" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" required>
+                        <select id="aircraft_id" name="aircraft_id" class="arcs-input mt-1 block w-full" required>
                             <option value="" disabled @selected(! old('aircraft_id'))>Choose an aircraft</option>
                             @foreach ($aircraft as $plane)
                                 <option value="{{ $plane->id }}" @selected((string) old('aircraft_id') === (string) $plane->id)>
@@ -149,77 +145,78 @@
                         <x-primary-button>Create flight</x-primary-button>
                     </div>
                 </form>
-            </div>
+            </x-panel>
         </div>
 
         {{-- Flight list: an editable gate and one button per move StatusService allows (SR-25, SR-42). --}}
-        <div class="bg-white rounded-lg shadow-sm overflow-x-auto">
+        <x-panel title="Flights">
             @if ($flights->isEmpty())
-                <p class="px-4 py-4 text-sm text-gray-600">No flights yet.</p>
+                <p class="text-sm text-gray-600">No flights yet.</p>
             @else
-                <table class="w-full text-sm">
-                    <thead class="text-left text-gray-500 border-b border-gray-200">
-                        <tr>
-                            <th class="px-4 py-2 font-medium">Flight</th>
-                            <th class="px-4 py-2 font-medium">Route</th>
-                            <th class="px-4 py-2 font-medium">Departure</th>
-                            <th class="px-4 py-2 font-medium">Check-in window</th>
-                            <th class="px-4 py-2 font-medium">Aircraft</th>
-                            <th class="px-4 py-2 font-medium">Gate</th>
-                            <th class="px-4 py-2 font-medium">Status</th>
-                            <th class="px-4 py-2 font-medium">Change status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach ($flights as $flight)
-                            <tr class="border-b border-gray-100 last:border-0 align-top">
-                                <td class="px-4 py-2 font-medium">{{ $flight->flight_no }}</td>
-                                <td class="px-4 py-2">{{ $flight->origin }} → {{ $flight->destination }}</td>
-                                <td class="px-4 py-2 whitespace-nowrap"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" /></td>
-                                <td class="px-4 py-2 whitespace-nowrap"><x-local-time :at="$flight->checkin_opens_at" :airport="$flight->origin" format="H:i" />–<x-local-time :at="$flight->checkin_closes_at" :airport="$flight->origin" format="H:i" /></td>
-                                <td class="px-4 py-2">{{ $flight->aircraft->registration }}</td>
-                                <td class="px-4 py-2">
-                                    <form method="POST" action="{{ route('manager.flights.gate', $flight) }}" class="flex items-center gap-2">
-                                        @csrf
-                                        @method('PATCH')
-                                        <input type="text" name="gate" value="{{ $flight->gate }}" maxlength="3" pattern="[A-Z][0-9]{1,2}"
-                                               aria-label="Gate for {{ $flight->flight_no }}" placeholder="—"
-                                               oninput="this.value = this.value.toUpperCase()"
-                                               class="w-16 border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm">
-                                        <button type="submit" class="text-indigo-600 hover:underline">Save</button>
-                                    </form>
-                                </td>
-                                <td class="px-4 py-2">{{ $flight->status->label() }}</td>
-                                <td class="px-4 py-2">
-                                    <div class="flex flex-wrap gap-2">
-                                        @forelse ($moves[$flight->id] as $move)
-                                            <form method="POST" action="{{ route('manager.flights.status', $flight) }}">
-                                                @csrf
-                                                @method('PATCH')
-                                                @if ($move->value === 'Delayed')
-                                                    <label class="block text-xs text-gray-600">
-                                                        New departure time
-                                                        <input type="datetime-local" name="departure_at"
-                                                               aria-label="New departure time for {{ $flight->flight_no }}"
-                                                               title="Local time at the origin"
-                                                               class="mt-1 block border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm">
-                                                    </label>
-                                                @endif
-                                                <button type="submit" name="status" value="{{ $move->value }}"
-                                                        class="rounded border border-gray-300 px-2 py-1 text-xs hover:bg-gray-50">
-                                                    {{ $move->label() }}
-                                                </button>
-                                            </form>
-                                        @empty
-                                            <span class="text-gray-500">—</span>
-                                        @endforelse
-                                    </div>
-                                </td>
+                <div class="arcs-table-wrap -mx-5 sm:-mx-6">
+                    <table class="arcs-table">
+                        <thead>
+                            <tr>
+                                <th>Flight</th>
+                                <th>Route</th>
+                                <th>Departure</th>
+                                <th>Check-in window</th>
+                                <th>Aircraft</th>
+                                <th>Gate</th>
+                                <th>Status</th>
+                                <th>Change status</th>
                             </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            @foreach ($flights as $flight)
+                                <tr class="align-top">
+                                    <td class="font-medium arcs-mono">{{ $flight->flight_no }}</td>
+                                    <td>{{ $flight->origin }} → {{ $flight->destination }}</td>
+                                    <td class="whitespace-nowrap"><x-local-time :at="$flight->departure_at" :airport="$flight->origin" /></td>
+                                    <td class="whitespace-nowrap"><x-local-time :at="$flight->checkin_opens_at" :airport="$flight->origin" format="H:i" />–<x-local-time :at="$flight->checkin_closes_at" :airport="$flight->origin" format="H:i" /></td>
+                                    <td>{{ $flight->aircraft->registration }}</td>
+                                    <td>
+                                        <form method="POST" action="{{ route('manager.flights.gate', $flight) }}" class="flex items-center gap-2">
+                                            @csrf
+                                            @method('PATCH')
+                                            <input type="text" name="gate" value="{{ $flight->gate }}" maxlength="3" pattern="[A-Z][0-9]{1,2}"
+                                                   aria-label="Gate for {{ $flight->flight_no }}" placeholder="—"
+                                                   oninput="this.value = this.value.toUpperCase()"
+                                                   class="arcs-input w-16 px-2 text-sm">
+                                            <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Save</button>
+                                        </form>
+                                    </td>
+                                    <td><x-status-badge :status="$flight->status" /></td>
+                                    <td>
+                                        <div class="flex flex-wrap gap-2">
+                                            @forelse ($moves[$flight->id] as $move)
+                                                <form method="POST" action="{{ route('manager.flights.status', $flight) }}">
+                                                    @csrf
+                                                    @method('PATCH')
+                                                    @if ($move->value === 'Delayed')
+                                                        <label class="block text-xs text-gray-600">
+                                                            New departure time
+                                                            <input type="datetime-local" name="departure_at"
+                                                                   aria-label="New departure time for {{ $flight->flight_no }}"
+                                                                   title="Local time at the origin"
+                                                                   class="arcs-input mt-1 block text-sm">
+                                                        </label>
+                                                    @endif
+                                                    <button type="submit" name="status" value="{{ $move->value }}" class="arcs-btn-secondary min-h-[36px] px-2 py-1 text-xs">
+                                                        {{ $move->label() }}
+                                                    </button>
+                                                </form>
+                                            @empty
+                                                <span class="text-gray-500">—</span>
+                                            @endforelse
+                                        </div>
+                                    </td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
             @endif
-        </div>
+        </x-panel>
     </div>
 </x-app-layout>

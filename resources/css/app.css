@@ -1,3 +1,95 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ARCS UI palette (graphite default) — pages use var(--arcs-*), not hex. */
+:root {
+    --arcs-bar: #1E2230;
+    --arcs-side: #262B3A;
+    --arcs-side-active: #3A4156;
+    --arcs-line: #4A5268;
+    --arcs-accent: #C2412D;
+    --arcs-on-accent: #FFFFFF;
+    --arcs-accent-soft: #FBE3DE;
+    --arcs-accent-text: #9E3221;
+    --arcs-page: #F4F5F8;
+    --arcs-border: #E1E4EB;
+    --arcs-input-border: #C3C9D6;
+    --arcs-muted: #6B7280;
+    --arcs-ink: #111827;
+    --arcs-boarded: #2E7D4F;
+    --arcs-booked: #F2C46B;
+    --arcs-free-border: #9AA3B5;
+    --arcs-error: #B3261E;
+    --arcs-success: #1F6B43;
+    --arcs-success-bg: #E0F2E7;
+}
+
+@layer base {
+    body {
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+        background: var(--arcs-page);
+        color: #111827;
+    }
+
+    [x-cloak] { display: none !important; }
+
+    .font-mono, [data-pnr], .arcs-mono {
+        font-family: "JetBrains Mono", ui-monospace, monospace;
+    }
+}
+
+@layer components {
+    .arcs-btn {
+        @apply inline-flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
+    }
+    .arcs-btn-primary {
+        @apply arcs-btn;
+        background: var(--arcs-accent);
+        color: var(--arcs-on-accent);
+    }
+    .arcs-btn-primary:hover { filter: brightness(0.95); }
+    .arcs-btn-secondary {
+        @apply arcs-btn border bg-white text-gray-900;
+        border-color: var(--arcs-line);
+    }
+    .arcs-btn-danger {
+        @apply arcs-btn border bg-white;
+        border-color: var(--arcs-error);
+        color: var(--arcs-error);
+    }
+    .arcs-input {
+        @apply block w-full rounded-lg shadow-sm;
+        border: 1px solid var(--arcs-input-border);
+        min-height: 44px;
+    }
+    .arcs-input:focus {
+        border-color: var(--arcs-accent);
+        outline: none;
+        box-shadow: 0 0 0 1px var(--arcs-accent);
+    }
+    .arcs-table-wrap {
+        @apply overflow-x-auto;
+    }
+    .arcs-table {
+        @apply w-full text-sm;
+    }
+    .arcs-table thead {
+        @apply text-left text-xs font-semibold uppercase tracking-wide text-gray-500;
+    }
+    .arcs-table th {
+        @apply px-4 py-3;
+    }
+    .arcs-table td {
+        @apply border-t px-4 py-3 align-middle;
+        border-color: var(--arcs-border);
+    }
+    .arcs-table tbody tr:hover {
+        background: #FAFBFC;
+    }
+    .arcs-table tbody tr.arcs-row-selected,
+    .arcs-table tbody tr.arcs-row-selected:hover {
+        background: var(--arcs-accent-soft);
+        box-shadow: inset 3px 0 0 var(--arcs-accent);
+    }
+}

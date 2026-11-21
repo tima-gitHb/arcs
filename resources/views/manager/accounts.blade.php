@@ -1,12 +1,9 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-navy">Staff accounts</h1>
-    </x-slot>
+    <x-page-header title="Staff accounts" subtitle="Create an account, set the station, and unlock or deactivate from the list." />
 
     <div class="space-y-6">
-        <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
-            <h2 class="text-lg font-semibold text-navy">New account</h2>
-            <p class="mt-1 text-sm text-gray-600">The person gets a welcome email with a link to choose their password.</p>
+        <x-panel title="New account">
+            <p class="text-sm text-gray-600">The person gets a welcome email with a link to choose their password.</p>
 
             <form method="POST" action="{{ route('manager.accounts.store') }}" class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5 sm:items-start">
                 @csrf
@@ -25,7 +22,7 @@
 
                 <div>
                     <x-input-label for="role" value="Role" />
-                    <select id="role" name="role" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm" required>
+                    <select id="role" name="role" class="arcs-input mt-1 block w-full" required>
                         <option value="" disabled @selected(! old('role'))>Choose a role</option>
                         @foreach ($roles as $role)
                             <option value="{{ $role->value }}" @selected(old('role') === $role->value)>{{ $role->label() }}</option>
@@ -36,7 +33,7 @@
 
                 <div>
                     <x-input-label for="airport_code" value="Station" />
-                    <select id="airport_code" name="airport_code" class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                    <select id="airport_code" name="airport_code" class="arcs-input mt-1 block w-full">
                         <option value="" @selected(old('airport_code') === null)>—</option>
                         @foreach ($airports as $airport)
                             <option value="{{ $airport->code }}" @selected(old('airport_code') === $airport->code)>{{ $airport->code }} · {{ $airport->city }}</option>
@@ -50,102 +47,104 @@
                     <x-primary-button>Create account</x-primary-button>
                 </div>
             </form>
-        </div>
+        </x-panel>
 
-        <div class="bg-white rounded-lg shadow-sm overflow-x-auto">
-            <table class="w-full text-sm">
-                <thead class="text-left text-gray-500 border-b border-gray-200">
-                    <tr>
-                        <th class="px-4 py-2 font-medium">Name</th>
-                        <th class="px-4 py-2 font-medium">Email</th>
-                        <th class="px-4 py-2 font-medium">Role</th>
-                        <th class="px-4 py-2 font-medium">Station</th>
-                        <th class="px-4 py-2 font-medium">State</th>
-                        <th class="px-4 py-2 font-medium">Last login</th>
-                        <th class="px-4 py-2 font-medium">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($users as $user)
-                        <tr class="border-b border-gray-100 last:border-0">
-                            <td class="px-4 py-2 font-medium">
-                                {{ $user->name }}
-                                @if ($user->is(auth()->user()))
-                                    <span class="font-normal text-gray-500">(you)</span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-2">{{ $user->email }}</td>
-                            <td class="px-4 py-2">{{ $user->role->label() }}</td>
-                            <td class="px-4 py-2">
-                                <p>{{ $user->airport_code ? $user->airport_code.' · '.$user->airport->city : '—' }}</p>
-                                <form method="POST" action="{{ route('manager.accounts.station', $user) }}" class="mt-2 flex flex-wrap items-center gap-2">
-                                    @csrf
-                                    @method('PATCH')
-                                    <select name="airport_code" aria-label="Station for {{ $user->name }}" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm text-sm">
-                                        <option value="" @selected($user->airport_code === null)>—</option>
-                                        @foreach ($airports as $airport)
-                                            <option value="{{ $airport->code }}" @selected($user->airport_code === $airport->code)>{{ $airport->code }} · {{ $airport->city }}</option>
-                                        @endforeach
-                                    </select>
-                                    <button type="submit" class="text-indigo-600 hover:underline">Save</button>
-                                </form>
-                            </td>
-                            <td class="px-4 py-2">
-                                {{-- A locked account is shown as Locked even if it is also deactivated. --}}
-                                @if ($user->locked)
-                                    <span class="text-red-600">Locked</span>
-                                @elseif (! $user->active)
-                                    <span class="text-gray-500">Deactivated</span>
-                                @else
-                                    <span class="text-green-700">Active</span>
-                                @endif
-                            </td>
-                            <td class="px-4 py-2">@if ($user->last_login_at)<x-station-time :at="$user->last_login_at" format="Y-m-d H:i" />@else Never @endif</td>
-                            <td class="px-4 py-2">
-                                <div class="flex flex-wrap gap-2">
-                                    @if ($user->locked)
-                                        <form method="POST" action="{{ route('manager.accounts.unlock', $user) }}">
-                                            @csrf
-                                            @method('PATCH')
-                                            <button type="submit" class="text-indigo-600 hover:underline">Unlock</button>
-                                        </form>
-                                    @endif
-
-                                    {{-- No button to deactivate yourself (the service refuses it too). --}}
-                                    @if (! $user->active)
-                                        <form method="POST" action="{{ route('manager.accounts.active', $user) }}">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="active" value="1">
-                                            <button type="submit" class="text-indigo-600 hover:underline">Activate</button>
-                                        </form>
-                                    @elseif (! $user->is(auth()->user()))
-                                        <form method="POST" action="{{ route('manager.accounts.active', $user) }}">
-                                            @csrf
-                                            @method('PATCH')
-                                            <input type="hidden" name="active" value="0">
-                                            <button type="submit" class="text-indigo-600 hover:underline">Deactivate</button>
-                                        </form>
-                                    @endif
-
-                                    <form method="POST" action="{{ route('manager.accounts.reset-link', $user) }}">
-                                        @csrf
-                                        <button type="submit" class="text-indigo-600 hover:underline">Send reset link</button>
-                                    </form>
-
-                                    {{-- A welcome email is for someone who has never signed in. After that, use the reset link. --}}
-                                    @if ($user->last_login_at === null)
-                                        <form method="POST" action="{{ route('manager.accounts.resend-welcome', $user) }}">
-                                            @csrf
-                                            <button type="submit" class="text-indigo-600 hover:underline">Resend welcome email</button>
-                                        </form>
-                                    @endif
-                                </div>
-                            </td>
+        <x-panel title="Accounts">
+            <div class="arcs-table-wrap -mx-5 sm:-mx-6">
+                <table class="arcs-table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Station</th>
+                            <th>State</th>
+                            <th>Last login</th>
+                            <th>Actions</th>
                         </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        @foreach ($users as $user)
+                            <tr>
+                                <td class="font-medium">
+                                    {{ $user->name }}
+                                    @if ($user->is(auth()->user()))
+                                        <span class="font-normal text-gray-500">(you)</span>
+                                    @endif
+                                </td>
+                                <td>{{ $user->email }}</td>
+                                <td>{{ $user->role->label() }}</td>
+                                <td>
+                                    <p>{{ $user->airport_code ? $user->airport_code.' · '.$user->airport->city : '—' }}</p>
+                                    <form method="POST" action="{{ route('manager.accounts.station', $user) }}" class="mt-2 flex flex-wrap items-center gap-2">
+                                        @csrf
+                                        @method('PATCH')
+                                        <select name="airport_code" aria-label="Station for {{ $user->name }}" class="arcs-input w-full max-w-[14rem] text-sm">
+                                            <option value="" @selected($user->airport_code === null)>—</option>
+                                            @foreach ($airports as $airport)
+                                                <option value="{{ $airport->code }}" @selected($user->airport_code === $airport->code)>{{ $airport->code }} · {{ $airport->city }}</option>
+                                            @endforeach
+                                        </select>
+                                        <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Save</button>
+                                    </form>
+                                </td>
+                                <td>
+                                    {{-- A locked account is shown as Locked even if it is also deactivated. --}}
+                                    @if ($user->locked)
+                                        <x-status-badge status="Failed" label="Locked" />
+                                    @elseif (! $user->active)
+                                        <x-status-badge label="Deactivated" />
+                                    @else
+                                        <x-status-badge status="Succeeded" label="Active" />
+                                    @endif
+                                </td>
+                                <td>@if ($user->last_login_at)<x-station-time :at="$user->last_login_at" format="Y-m-d H:i" />@else Never @endif</td>
+                                <td>
+                                    <div class="flex flex-wrap gap-x-3 gap-y-1">
+                                        @if ($user->locked)
+                                            <form method="POST" action="{{ route('manager.accounts.unlock', $user) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Unlock</button>
+                                            </form>
+                                        @endif
+
+                                        {{-- No button to deactivate yourself (the service refuses it too). --}}
+                                        @if (! $user->active)
+                                            <form method="POST" action="{{ route('manager.accounts.active', $user) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <input type="hidden" name="active" value="1">
+                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Activate</button>
+                                            </form>
+                                        @elseif (! $user->is(auth()->user()))
+                                            <form method="POST" action="{{ route('manager.accounts.active', $user) }}">
+                                                @csrf
+                                                @method('PATCH')
+                                                <input type="hidden" name="active" value="0">
+                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Deactivate</button>
+                                            </form>
+                                        @endif
+
+                                        <form method="POST" action="{{ route('manager.accounts.reset-link', $user) }}">
+                                            @csrf
+                                            <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Send reset link</button>
+                                        </form>
+
+                                        {{-- A welcome email is for someone who has never signed in. After that, use the reset link. --}}
+                                        @if ($user->last_login_at === null)
+                                            <form method="POST" action="{{ route('manager.accounts.resend-welcome', $user) }}">
+                                                @csrf
+                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Resend welcome email</button>
+                                            </form>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </x-panel>
     </div>
 </x-app-layout>

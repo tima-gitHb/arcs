@@ -1,105 +1,127 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <meta name="csrf-token" content="{{ csrf_token() }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ config('app.name', 'ARCS') }}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+@php
+    $user = Auth::user();
+    $role = $user->role;
+    $stationCode = $user->airport_code;
+    $menuGroups = match ($role) {
+        App\Enums\Role::Manager => [
+            'Operations' => ['Flight lists', 'Dashboard', 'Flights and aircraft', 'Airports'],
+            'People' => ['Staff accounts'],
+            'Pricing' => ['Rules and allowances', 'Fares and fees'],
+            'Reports' => ['Sales per flight', 'Payments', 'Audit log'],
+        ],
+        App\Enums\Role::Reservation => [
+            'Bookings' => ['New reservation', 'Find reservation'],
+        ],
+        App\Enums\Role::Checkin => [
+            'Check-in' => ['Check in passenger'],
+        ],
+        App\Enums\Role::Gate => [
+            'Gate' => ['Manifest'],
+        ],
+    };
+    $menu = $role->menu();
+@endphp
+<body class="font-sans antialiased text-gray-900" style="background: var(--arcs-page);">
+<div data-arcs-shell class="arcs-shell flex min-h-screen flex-col">
+    <header class="flex flex-wrap items-center gap-3 px-4 py-3 text-white sm:px-6" style="background: var(--arcs-bar);">
+        <a href="{{ route($role->homeRoute()) }}" class="text-lg font-semibold tracking-wide">ARCS</a>
+        {{-- Role::label() kept for B4/B5/UI1; accent fill matches docs/ui mocks. --}}
+        <span class="rounded-md px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white" style="background: var(--arcs-accent);" data-role-badge>
+            {{ $role->label() }}
+        </span>
+        @if ($role === App\Enums\Role::Manager && trim(strip_tags((string) ($station ?? ''))) !== '')
+            <div class="flex items-center">{{ $station }}</div>
+        @elseif ($stationCode)
+            {{-- Station code only (no airport row query) so page query budgets stay flat. --}}
+            <span class="text-xs text-white/70">
+                {{ $stationCode }} · <x-station-time :at="now()" format="H:i" /> local
+            </span>
+        @else
+            <span class="text-xs text-white/70"><x-station-time :at="now()" format="H:i" /> UTC</span>
+        @endif
 
-        <title>{{ config('app.name', 'ARCS') }}</title>
-
-        <!-- Fonts -->
-        <link rel="preconnect" href="https://fonts.googleapis.com">
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
-
-        <!-- Scripts -->
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
-    </head>
-    @php
-        $user = Auth::user();
-        $role = $user->role;
-        // Role badge colours from the design canvas.
-        $badge = match ($role) {
-            App\Enums\Role::Reservation => 'bg-[#DCE8F7] text-[#1B4F8A]',
-            App\Enums\Role::Checkin => 'bg-[#D3EFEA] text-[#145A50]',
-            App\Enums\Role::Gate => 'bg-white text-navy',
-            App\Enums\Role::Manager => 'bg-[#FBE3D2] text-[#8A3F08]',
-        };
-    @endphp
-    <body class="font-sans antialiased bg-page text-gray-900">
-        <div class="min-h-screen flex flex-col">
-            <!-- Header -->
-            <header class="bg-navy text-white">
-                <div class="px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
-                    <div class="flex items-center gap-3">
-                        <a href="{{ route($role->homeRoute()) }}" class="text-xl font-semibold tracking-wide">ARCS</a>
-                        <span class="rounded-full px-3 py-0.5 text-xs font-semibold {{ $badge }}" data-role-badge>
-                            {{ $role->label() }}
-                        </span>
-                    </div>
-
-                    <div class="flex items-center gap-4 text-sm">
-                        <span>{{ $user->name }}</span>
-                        <a href="{{ route('profile.edit') }}" class="hover:underline">Profile</a>
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit" class="rounded border border-white/40 px-3 py-1 hover:bg-white/10">
-                                Log out
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            </header>
-
-            <!-- Flash messages -->
-            @if (session('success'))
-                <div class="bg-green-50 border-b border-green-200 text-green-800 px-4 sm:px-6 py-3 text-sm" role="status">
-                    {{ session('success') }}
-                </div>
+        <div class="min-w-[8rem] flex-1">
+            @isset($search)
+                {{ $search }}
+            @elseif (in_array($role, [App\Enums\Role::Reservation, App\Enums\Role::Checkin], true))
+                <form method="GET" action="{{ $role === App\Enums\Role::Reservation ? route('reservation.search') : route('checkin.home') }}" class="max-w-xs">
+                    <label for="shell-q" class="sr-only">PNR or last name</label>
+                    <input id="shell-q" name="q" type="search" placeholder="PNR or last name"
+                           value="{{ request('q') }}"
+                           class="w-full rounded-lg border-0 bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50 focus:bg-white/15 focus:outline-none focus:ring-1 focus:ring-white/40" />
+                </form>
             @endif
-            @if (session('error'))
-                <div class="bg-red-50 border-b border-red-200 text-red-800 px-4 sm:px-6 py-3 text-sm" role="alert">
-                    {{ session('error') }}
-                </div>
-            @endif
+        </div>
 
-            <div class="flex flex-1 flex-col md:flex-row">
-                <!-- Side menu: items from Role::menu(); routes not built yet are greyed out. -->
-                <nav class="w-full md:w-60 shrink-0 bg-white border-b md:border-b-0 md:border-r border-gray-200 p-3">
-                    <ul class="space-y-1 text-sm">
-                        @foreach ($role->menu() as $label => $routeName)
+        <div class="ml-auto flex items-center gap-3 text-sm">
+            <span class="hidden sm:inline">{{ $user->name }}</span>
+            <a href="{{ route('profile.edit') }}" class="text-white/80 hover:text-white hover:underline">Profile</a>
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <button type="submit" class="inline-flex min-h-[36px] items-center rounded-lg border border-white/40 bg-transparent px-3 py-1 text-xs font-medium text-white hover:bg-white/10">
+                    Log out
+                </button>
+            </form>
+        </div>
+    </header>
+
+    <x-flash />
+
+    <div class="flex flex-1 flex-col md:flex-row">
+        <nav class="w-full shrink-0 p-3 text-white md:w-56" style="background: var(--arcs-side);" aria-label="Role menu">
+            @foreach ($menuGroups as $group => $labels)
+                <p class="mb-1 mt-3 px-3 text-[11px] font-semibold uppercase tracking-wider text-white/40 first:mt-0">{{ $group }}</p>
+                <ul class="mb-2 space-y-0.5 text-sm">
+                    @foreach ($labels as $label)
+                        @php $routeName = $menu[$label] ?? null; @endphp
+                        @if ($routeName)
                             <li>
                                 @if (Route::has($routeName))
                                     <a href="{{ route($routeName) }}"
                                        @class([
-                                           'block rounded px-3 py-2',
-                                           'bg-navy text-white font-medium' => request()->routeIs($routeName),
-                                           'text-gray-700 hover:bg-gray-100' => ! request()->routeIs($routeName),
+                                           'block rounded-lg px-3 py-2.5 min-h-[44px] flex items-center',
+                                           'font-medium' => request()->routeIs($routeName),
+                                           'text-white/80 hover:bg-white/5' => ! request()->routeIs($routeName),
                                        ])
+                                       @style(['background: var(--arcs-side-active)' => request()->routeIs($routeName)])
                                        @if (request()->routeIs($routeName)) aria-current="page" @endif>
                                         {{ $label }}
                                     </a>
                                 @else
-                                    <span class="block rounded px-3 py-2 text-gray-400 cursor-not-allowed" aria-disabled="true">
-                                        {{ $label }}
-                                    </span>
+                                    <span class="block rounded-lg px-3 py-2.5 text-white/35">{{ $label }}</span>
                                 @endif
                             </li>
-                        @endforeach
-                    </ul>
-                </nav>
+                        @endif
+                    @endforeach
+                </ul>
+            @endforeach
+        </nav>
 
-                <!-- Page content -->
-                <main class="flex-1 min-w-0 p-4 sm:p-6">
-                    @isset($header)
-                        <div class="mb-6">
-                            {{ $header }}
-                        </div>
-                    @endisset
+        <main class="min-w-0 flex-1 p-4 sm:p-6">
+            @isset($header)
+                <div class="mb-6">{{ $header }}</div>
+            @endisset
+            {{ $slot }}
+        </main>
 
-                    {{ $slot }}
-                </main>
-            </div>
-        </div>
-    </body>
+        @isset($aside)
+            <aside id="arcs-aside" class="w-full shrink-0 border-t p-4 md:w-72 md:border-l md:border-t-0 lg:w-80" style="border-color: var(--arcs-border); background: var(--arcs-page);">
+                {{ $aside }}
+            </aside>
+        @endisset
+    </div>
+</div>
+</body>
 </html>

@@ -1,26 +1,26 @@
-{{-- Entry requirements card (SR-49). Advisory and read only. Expects $passenger, $entryResult, $showEntryCheck. --}}
-<div class="rounded-lg bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-semibold text-navy">Entry requirements</h2>
+{{-- Entry requirements (SR-49). Advisory. Expects $passenger, $entryResult, $showEntryCheck. --}}
+@php
+    $entryTone = match (true) {
+        $entryResult->status === \App\Enums\EntryStatus::Ok => 'background: var(--arcs-success-bg); color: var(--arcs-success); border-color: var(--arcs-success);',
+        $entryResult->needsAcknowledgement() => 'background: color-mix(in srgb, var(--arcs-error) 10%, white); color: var(--arcs-error); border-color: var(--arcs-error);',
+        $entryResult->status === \App\Enums\EntryStatus::Unknown => 'background: color-mix(in srgb, var(--arcs-booked) 45%, white); color: var(--arcs-accent-text); border-color: var(--arcs-booked);',
+        default => 'background: var(--arcs-page); color: var(--arcs-bar); border-color: var(--arcs-border);',
+    };
+@endphp
 
-    @if ($showEntryCheck)
-        <div @class([
-            'mt-3 rounded border px-4 py-3 text-sm font-medium',
-            'border-green-200 bg-green-50 text-green-800' => $entryResult->status === \App\Enums\EntryStatus::Ok,
-            'border-red-200 bg-red-50 text-red-800' => $entryResult->needsAcknowledgement(),
-            'border-amber-200 bg-amber-50 text-amber-800' => $entryResult->status === \App\Enums\EntryStatus::Unknown,
-        ])>
-            {{ $entryResult->message }}
-            @if ($entryResult->note)
-                <span class="mt-1 block text-xs font-normal">{{ $entryResult->note }}</span>
-            @endif
-        </div>
-        <p class="mt-2 text-xs text-gray-500">
-            Rules as of {{ \App\Services\EntryRequirementChecker::RULES_AS_OF }}. Advisory: the agent decides.
-        </p>
-    @else
-        <a href="{{ route('checkin.passengers.show', [$passenger, 'check_entry' => 1]) }}"
-           class="mt-3 inline-block rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy hover:text-white">
-            Check requirements
-        </a>
+<div class="mt-4 rounded-[14px] border px-4 py-3 text-sm font-medium" style="{{ $entryTone }}">
+    {{ $entryResult->message }}
+    @if ($showEntryCheck && $entryResult->note)
+        <span class="mt-1 block text-xs font-normal">{{ $entryResult->note }}</span>
     @endif
 </div>
+
+@if ($showEntryCheck)
+    <p class="mt-2 text-xs text-gray-500">
+        Rules as of {{ \App\Services\EntryRequirementChecker::RULES_AS_OF }}. Advisory: the agent decides.
+    </p>
+@else
+    <a href="{{ route('checkin.passengers.show', [$passenger, 'check_entry' => 1]) }}" class="arcs-btn-secondary mt-3">
+        Check requirements
+    </a>
+@endif

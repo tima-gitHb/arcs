@@ -8,17 +8,17 @@
     $excessKgLabel = rtrim(rtrim(number_format($excess->excessKg, 1, '.', ''), '0'), '.');
 @endphp
 
-<div class="rounded-lg bg-white p-6 shadow-sm">
+<x-panel>
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-lg font-semibold text-navy">Bags</h2>
+        <h2 class="text-base font-semibold text-gray-900">Bags</h2>
         @if ($passenger->bags->isNotEmpty())
             <a href="{{ route('checkin.passengers.bag-tags', $passenger) }}" target="_blank"
-               class="text-sm font-medium text-navy hover:underline">Print all tags</a>
+               class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Print all tags</a>
         @endif
     </div>
 
     @if ($allowance->isSet)
-        <p class="mt-2 text-sm text-navy">
+        <p class="mt-2 text-sm" style="color: var(--arcs-accent-text);">
             Allowance: {{ $allowance->cabinClass->label() }}
             {{ $allowance->pieces }} × {{ rtrim(rtrim(number_format($allowance->kgPerBag, 1, '.', ''), '0'), '.') }} kg
             ({{ rtrim(rtrim(number_format($allowance->totalKg, 1, '.', ''), '0'), '.') }} kg total)
@@ -53,7 +53,7 @@
                         ->latest('id')
                         ->first();
             @endphp
-            <p class="mt-1 text-sm font-medium text-amber-800">
+            <p class="mt-1 text-sm font-medium" style="color: var(--arcs-accent-text);">
                 Excess baggage:
                 @if ($excess->extraBags > 0)
                     {{ $excess->extraBags }} extra bag{{ $excess->extraBags === 1 ? '' : 's' }}
@@ -74,12 +74,12 @@
             </p>
 
             @if ($dueCents > 0 && $excess->priceIsSet() && $passenger->checkinDetailsEditable())
-                <div class="mt-4 border-t border-gray-100 pt-4">
-                    <p class="mb-3 text-sm font-medium text-navy">Collect payment · {{ \App\Support\Money::format($dueCents) }}</p>
+                <div class="mt-4 border-t pt-4" style="border-color: var(--arcs-border);" x-show="step === 4" x-cloak>
+                    <p class="mb-3 text-sm font-medium" style="color: var(--arcs-accent-text);">Collect payment · {{ \App\Support\Money::format($dueCents) }}</p>
                     <form method="POST" action="{{ route('checkin.excess.pay', $passenger) }}" autocomplete="off">
                         @csrf
-                        <x-card-form :amount-cents="$dueCents" title="Collect payment" class="shadow-none border border-amber-200" />
-                        <button type="submit" class="mt-3 rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">
+                        <x-card-form :amount-cents="$dueCents" title="Collect payment" />
+                        <button type="submit" class="arcs-btn-primary mt-3">
                             Charge {{ \App\Support\Money::format($dueCents) }}
                         </button>
                     </form>
@@ -95,53 +95,55 @@
     @if ($passenger->bags->isEmpty())
         <p class="mt-2 text-sm text-gray-600">No bags.</p>
     @else
-        <table class="mt-3 w-full text-sm">
-            <thead class="text-left text-gray-500">
-                <tr>
-                    <th class="py-1 font-medium">Tag</th>
-                    <th class="py-1 font-medium">Weight</th>
-                    <th class="py-1 font-medium">Type</th>
-                    <th class="py-1 font-medium">Handling</th>
-                    <th class="py-1"></th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach ($passenger->bags as $bag)
-                    <tr class="border-t border-gray-100">
-                        <td class="py-2 font-mono">{{ $bag->tag_no }}</td>
-                        <td class="py-2">{{ $bag->weight_kg }} kg</td>
-                        <td class="py-2">
-                            {{ $bag->type->label() }}
-                            @if (! $bag->type->countsTowardAllowance())
-                                <span class="ml-1 text-xs text-gray-500">(free)</span>
-                            @endif
-                        </td>
-                        <td class="py-2">{{ $bag->handling->label() }}</td>
-                        <td class="py-2 text-right">
-                            <div class="flex flex-wrap items-center justify-end gap-3">
-                                <a href="{{ route('checkin.bags.tag', $bag) }}" target="_blank"
-                                   class="text-xs font-medium text-navy hover:underline">Print tag</a>
-                                <form method="POST" action="{{ route('checkin.bags.tag.reprint', $bag) }}" target="_blank">
-                                    @csrf
-                                    <button type="submit" class="text-xs font-medium text-navy hover:underline">Reprint</button>
-                                </form>
-                                @if ($canRemove)
-                                    <form method="POST" action="{{ route('checkin.bags.destroy', $bag) }}">
-                                        @csrf
-                                        @method('DELETE')
-                                        <button type="submit" class="text-xs font-medium text-red-700 hover:underline">Remove</button>
-                                    </form>
-                                @endif
-                            </div>
-                        </td>
+        <div class="arcs-table-wrap mt-3">
+            <table class="arcs-table">
+                <thead>
+                    <tr>
+                        <th>Tag</th>
+                        <th>Weight</th>
+                        <th>Type</th>
+                        <th>Handling</th>
+                        <th></th>
                     </tr>
-                @endforeach
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @foreach ($passenger->bags as $bag)
+                        <tr>
+                            <td class="arcs-mono">{{ $bag->tag_no }}</td>
+                            <td>{{ $bag->weight_kg }} kg</td>
+                            <td>
+                                {{ $bag->type->label() }}
+                                @if (! $bag->type->countsTowardAllowance())
+                                    <span class="ml-1 text-xs text-gray-500">(free)</span>
+                                @endif
+                            </td>
+                            <td>{{ $bag->handling->label() }}</td>
+                            <td class="text-right">
+                                <div class="flex flex-wrap items-center justify-end gap-3">
+                                    <a href="{{ route('checkin.bags.tag', $bag) }}" target="_blank"
+                                       class="text-xs font-medium hover:underline" style="color: var(--arcs-accent-text);">Print tag</a>
+                                    <form method="POST" action="{{ route('checkin.bags.tag.reprint', $bag) }}" target="_blank">
+                                        @csrf
+                                        <button type="submit" class="text-xs font-medium hover:underline" style="color: var(--arcs-accent-text);">Reprint</button>
+                                    </form>
+                                    @if ($canRemove)
+                                        <form method="POST" action="{{ route('checkin.bags.destroy', $bag) }}">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="text-xs font-medium hover:underline" style="color: var(--arcs-error);">Remove</button>
+                                        </form>
+                                    @endif
+                                </div>
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
     @endif
 
     @if ($passenger->checkinDetailsEditable())
-        <form method="POST" action="{{ route('checkin.bags.store', $passenger) }}" class="mt-6 flex flex-wrap items-end gap-4 border-t border-gray-200 pt-4">
+        <form method="POST" action="{{ route('checkin.bags.store', $passenger) }}" class="mt-6 flex flex-wrap items-end gap-4 border-t pt-4" style="border-color: var(--arcs-border);" x-show="step === 2" x-cloak>
             @csrf
             <div>
                 <x-input-label for="bag-weight" value="Weight (kg)" />
@@ -151,7 +153,7 @@
             </div>
             <div>
                 <x-input-label for="bag-type" value="Type" />
-                <select id="bag-type" name="type" class="mt-1 block rounded-md border-gray-300 shadow-sm focus:border-navy focus:ring-navy">
+                <select id="bag-type" name="type" class="arcs-input mt-1 w-auto">
                     @foreach (\App\Enums\BagType::cases() as $type)
                         <option value="{{ $type->value }}" @selected(($bagErrors->any() ? old('type') : 'Standard') === $type->value)>
                             {{ $type->label() }}
@@ -160,8 +162,8 @@
                 </select>
                 <x-input-error :messages="$bagErrors->get('type')" class="mt-2" />
             </div>
-            <button type="submit" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90">Add bag</button>
+            <button type="submit" class="arcs-btn-primary">Add bag</button>
         </form>
-        <p class="mt-2 text-xs text-gray-500">Excess is pooled by weight and pieces. Wheelchairs and strollers are free. Payment of excess is a separate step.</p>
+        <p class="mt-2 text-xs text-gray-500" x-show="step === 2">Excess is pooled by weight and pieces. Wheelchairs and strollers are free. Payment of excess is a separate step.</p>
     @endif
-</div>
+</x-panel>

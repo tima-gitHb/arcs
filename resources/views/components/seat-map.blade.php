@@ -8,11 +8,12 @@
 
 <aside id="seat-map-panel"
     {{ $attributes->except(['data-seats', 'data-selected-seat', 'data-cabin', 'data-seat-states'])->merge([
-        'class' => 'seat-map-sticky plane-panel lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto rounded-[2rem] bg-[#14213d] px-4 py-5 text-white',
-    ]) }}>
+        'class' => 'seat-map-sticky plane-panel lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto rounded-[14px] px-4 py-5 text-white',
+    ]) }}
+    style="background: var(--arcs-bar);">
     <div class="plane-fuselage mx-auto w-full max-w-[16rem]">
-        <div class="plane-nose mx-auto h-10 w-16 rounded-t-full bg-[#2c406e]"></div>
-        <div class="plane-body relative rounded-b-[2rem] border border-white/15 bg-[#1a2a4a] px-2 pb-4 pt-2">
+        <div class="plane-nose mx-auto h-10 w-16 rounded-t-full" style="background: var(--arcs-side-active);"></div>
+        <div class="plane-body relative rounded-b-[14px] border border-white/15 px-2 pb-4 pt-2" style="background: var(--arcs-side);">
             <div class="plane-wing plane-wing-left" aria-hidden="true"></div>
             <div class="plane-wing plane-wing-right" aria-hidden="true"></div>
             <p class="text-center text-xs uppercase tracking-[0.2em] text-white/70">Cabin</p>
@@ -24,7 +25,7 @@
                 'data-mode' => $mode,
             ]) }}></div>
         </div>
-        <div class="plane-tail mx-auto mt-1 h-6 w-10 rounded-b-md bg-[#2c406e]"></div>
+        <div class="plane-tail mx-auto mt-1 h-6 w-10 rounded-b-md" style="background: var(--arcs-side-active);"></div>
     </div>
 
     <div class="mt-4 grid grid-cols-2 gap-2 text-xs text-white/80">
@@ -51,7 +52,7 @@
         top: 42%;
         width: 2.75rem;
         height: 0.55rem;
-        background: #3a5080;
+        background: var(--arcs-line);
         border-radius: 999px;
     }
     .plane-wing-left { left: -2.4rem; transform: rotate(-8deg); }

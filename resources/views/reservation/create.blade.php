@@ -11,26 +11,43 @@
     }
 @endphp
 
-<x-app-layout>
-    <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-navy">New reservation</h1>
-    </x-slot>
+@php
+    $bookingStep = 0;
+    if ($errors->has('card_number') || $errors->has('card_expiry') || $errors->has('card_cvc')) {
+        $bookingStep = 4;
+    } elseif ($errors->has('seat') || $errors->has('passengers.*.seats') || $errors->has('passengers.*.seat_id')) {
+        $bookingStep = 2;
+    } elseif ($errors->has('passengers') || $errors->has('passengers.*') || $errors->has('contact_email')) {
+        $bookingStep = 1;
+    } elseif ($errors->has('outbound_flight_ids') || $errors->has('return_flight_ids') || $errors->has('journey_type')) {
+        $bookingStep = 0;
+    }
+@endphp
 
-    <div class="mb-6 max-w-6xl">
+<x-app-layout>
+    <x-page-header title="New reservation" subtitle="Desk / phone booking: trip, passengers, seats, extras, then card. PNR is created only after approval.">
+        <a href="{{ route('reservation.search') }}" class="arcs-btn-secondary">Find reservation</a>
+    </x-page-header>
+
+    <div class="mb-6">
         <x-todays-flights :role="'reservation'" />
     </div>
 
-    <form method="POST" action="{{ route('reservation.store') }}" class="max-w-6xl" autocomplete="off" id="booking-form">
+    <div class="mb-6" x-data="{ step: {{ $bookingStep }} }" x-cloak>
+        <x-step-bar class="mb-4" :steps="['Trip', 'Passengers', 'Seats', 'Extras', 'Payment']" :current="$bookingStep" />
+        <p class="mb-4 text-xs text-gray-500">Steps are sections of one form — use Continue / Back, then charge on Payment. A validation error opens the step with the problem.</p>
+
+    <form method="POST" action="{{ route('reservation.store') }}" autocomplete="off" id="booking-form">
         @csrf
 
         @if (! $pricesReady)
-            <div class="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
+            <div class="mb-4 rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="alert">
                 Fares are not published. Ask a manager to set prices (M7), then refresh.
             </div>
         @endif
 
         @if ($errors->any())
-            <div class="mb-4 rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800" role="alert">
+            <div class="mb-4 rounded-[14px] border px-4 py-3 text-sm" style="border-color: #F5C2C0; color: var(--arcs-error); background: #FCE8E6;" role="alert">
                 @if ($errors->has('card_number') && ! $errors->has('outbound_flight_ids') && ! $errors->has('passengers'))
                     {{ $errors->first('card_number') }}
                 @elseif ($errors->has('outbound_flight_ids'))
@@ -41,21 +58,26 @@
             </div>
         @endif
 
-        <div class="rounded-lg bg-white p-6 shadow-sm">
+        <div class="rounded-[14px] border bg-white p-5 sm:p-6 shadow-sm" style="border-color: var(--arcs-border);" x-show="step === 0">
             <p class="text-sm text-gray-600">
                 Desk / phone booking: choose one-way, connection or round trip, pick the flights, assign a seat on each, read the quote, then take the card. PNR is created only after approval.
             </p>
 
             <fieldset class="mt-6">
                 <legend class="text-sm font-medium text-gray-700">Journey type</legend>
-                <div class="mt-2 flex flex-wrap gap-4 text-sm">
+                {{-- Segmented control (docs/ui/Reservation.png); same radio names/values as before. --}}
+                <div class="mt-2 inline-flex flex-wrap rounded-lg border p-1 text-sm" style="border-color: var(--arcs-input-border); background: var(--arcs-page);">
                     @foreach (['one_way' => 'One-way', 'connection' => 'With connection', 'round_trip' => 'Round trip'] as $value => $label)
-                        <label class="inline-flex items-center gap-2">
+                        <label @class([
+                            'inline-flex min-h-[40px] cursor-pointer items-center rounded-md px-3 py-1.5 font-medium',
+                            'bg-[var(--arcs-bar)] text-white shadow-sm' => $journeyType === $value,
+                            'text-gray-700 hover:bg-white' => $journeyType !== $value,
+                        ])>
                             <input
                                 type="radio"
                                 name="journey_type"
                                 value="{{ $value }}"
-                                class="journey-type border-gray-300 text-navy focus:ring-navy"
+                                class="journey-type sr-only"
                                 @checked($journeyType === $value)
                             >
                             {{ $label }}
@@ -94,11 +116,14 @@
             @if ($flights->isEmpty())
                 <p class="mt-2 text-sm text-gray-500">No bookable flights right now.</p>
             @endif
+            <div class="mt-6 flex justify-end">
+                <button type="button" class="arcs-btn-primary" @click="step = 1">Continue</button>
+            </div>
         </div>
 
         <div class="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
             <div class="space-y-6">
-                <div id="passengers" class="space-y-4">
+                <div id="passengers" class="space-y-4" x-show="step === 1 || step === 2 || step === 3">
                     @foreach ($passengers as $index => $passenger)
                         @include('reservation.partials.passenger-row', [
                             'index' => $index,
@@ -115,13 +140,19 @@
                 <button
                     type="button"
                     id="add-passenger"
-                    class="rounded border border-navy px-4 py-2 text-sm font-medium text-navy hover:bg-navy/5"
+                    class="arcs-btn-secondary"
+                    x-show="step === 1"
                 >
                     Add passenger
                 </button>
 
-                <div class="rounded-lg bg-white p-6 shadow-sm">
-                    <h2 class="text-lg font-semibold text-navy">Caller contact</h2>
+                <div class="flex justify-between gap-2" x-show="step === 1">
+                    <button type="button" class="arcs-btn-secondary" @click="step = 0">Back</button>
+                    <button type="button" class="arcs-btn-primary" @click="step = 2">Continue</button>
+                </div>
+
+                <div class="rounded-[14px] border bg-white p-5 sm:p-6 shadow-sm" style="border-color: var(--arcs-border);" x-show="step === 1 || step === 4">
+                    <h2 class="text-lg font-semibold text-gray-900">Caller contact</h2>
                     <p class="mt-1 text-sm text-gray-600">Optional. Email sends the e-ticket / receipt after the PNR is saved.</p>
                     <div class="mt-4 grid gap-4 sm:grid-cols-2">
                         <div>
@@ -139,37 +170,57 @@
                     </div>
                 </div>
 
-                <x-card-form amount-label="$0.00" />
+                <div x-show="step === 3" class="rounded-[14px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                    <h2 class="text-lg font-semibold text-gray-900">Extras</h2>
+                    <p class="mt-1 text-sm text-gray-600">Extra bags and kilograms are set on each passenger row. Review the quote, then continue to payment.</p>
+                    <div class="mt-4 flex justify-between gap-2">
+                        <button type="button" class="arcs-btn-secondary" @click="step = 2">Back</button>
+                        <button type="button" class="arcs-btn-primary" @click="step = 4">Continue</button>
+                    </div>
+                </div>
 
-                <div>
-                    <button
-                        type="submit"
-                        class="rounded bg-navy px-5 py-2.5 text-sm font-semibold text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-50"
-                        @disabled($flights->isEmpty() || ! $pricesReady)
-                    >
-                        Charge <span id="pay-button-amount">$0.00</span> and save PNR
-                    </button>
-                    <p class="mt-2 text-sm text-gray-500">Declined card → no PNR created.</p>
+                <div x-show="step === 4">
+                    <x-card-form amount-label="$0.00" />
+
+                    <div class="mt-4">
+                        <div class="mb-3 flex justify-between gap-2">
+                            <button type="button" class="arcs-btn-secondary" @click="step = 3">Back</button>
+                        </div>
+                        <button
+                            type="submit"
+                            class="arcs-btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+                            @disabled($flights->isEmpty() || ! $pricesReady)
+                        >
+                            Charge <span id="pay-button-amount">$0.00</span> and save PNR
+                        </button>
+                        <p class="mt-2 text-sm text-gray-500">Declined card → no PNR created.</p>
+                    </div>
                 </div>
             </div>
 
-            <aside class="space-y-4">
-                <div class="rounded-lg border border-navy/10 bg-white p-4 shadow-sm">
+            <aside class="space-y-4" x-show="step === 2 || step === 3 || step === 4">
+                <div class="rounded-[14px] border bg-white p-4 shadow-sm" style="border-color: var(--arcs-border);" x-show="step === 2">
                     <x-input-label for="active-seat-flight" value="Seat map flight" />
                     <select
                         id="active-seat-flight"
-                        class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-navy focus:ring-navy"
+                        class="arcs-input mt-1"
                     >
                         <option value="">Select flights first…</option>
                     </select>
+                    <div class="mt-4 flex justify-between gap-2">
+                        <button type="button" class="arcs-btn-secondary" @click="step = 1">Back</button>
+                        <button type="button" class="arcs-btn-primary" @click="step = 3">Continue</button>
+                    </div>
                 </div>
 
-                <x-seat-map hint="Pick the flight above → select passenger → assign a free seat in that cabin on that flight.">
-                    <x-input-error :messages="$errors->get('seat')" class="mt-3" />
-                </x-seat-map>
+                <div x-show="step === 2">
+                    <x-seat-map-dock hint="Pick the flight above → select passenger → assign a free seat in that cabin on that flight.">
+                        <x-input-error :messages="$errors->get('seat')" class="mt-3" />
+                    </x-seat-map-dock>
+                </div>
 
-                <div class="rounded-lg border border-navy/10 bg-white p-5 shadow-sm">
-                    <h2 class="text-lg font-semibold text-navy">Fare quote</h2>
+                <div class="rounded-[14px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                    <h2 class="text-lg font-semibold text-gray-900">Fare quote</h2>
                     <p class="mt-1 text-xs text-gray-500">
                         Each segment uses its route fare (M14), else the default. Extras once. Read the total back before charging.
                     </p>
@@ -188,6 +239,7 @@
             </aside>
         </div>
     </form>
+    </div>
 
     <template id="passenger-template">
         @include('reservation.partials.passenger-row', [

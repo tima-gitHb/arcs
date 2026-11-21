@@ -20,11 +20,11 @@
         }
     </style>
 </head>
-<body class="bg-page font-sans text-gray-900 antialiased">
+<body class="font-sans text-gray-900 antialiased" style="background: var(--arcs-page);">
     <div class="mx-auto max-w-2xl space-y-8 p-6">
         <div class="no-print flex items-center justify-between">
             <p class="text-sm text-gray-600">PNR {{ $reservation->pnr }} · {{ $cards->count() }} passes</p>
-            <button type="button" onclick="window.print()" class="rounded bg-navy px-4 py-2 text-sm font-medium text-white">Print</button>
+            <button type="button" onclick="window.print()" class="arcs-btn-primary">Print</button>
         </div>
 
         @foreach ($cards as $card)

@@ -1,36 +1,35 @@
 <x-app-layout>
     <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-navy print:hidden">PNR confirmed</h1>
+        <x-page-header title="PNR confirmed" subtitle="Read the PNR back to the caller, then print or email the receipt." class="print:hidden">
+            <a href="{{ route('reservation.create') }}" class="arcs-btn-secondary">Next booking</a>
+            <a href="{{ route('reservation.search', ['pnr' => $reservation->pnr]) }}" class="arcs-btn-secondary">Open in find reservation</a>
+        </x-page-header>
     </x-slot>
 
-    <div class="max-w-3xl">
+    <div class="mx-auto max-w-3xl space-y-6">
         @if (session('success'))
-            <div class="mb-4 rounded border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800 print:hidden" role="status">
+            <div class="rounded-[14px] border px-4 py-3 text-sm print:hidden" style="border-color: var(--arcs-success); background: var(--arcs-success-bg); color: var(--arcs-success);" role="status">
                 {{ session('success') }}
-                <span class="mt-1 block text-green-700">Read the PNR back to the caller, then print or email the receipt.</span>
+                <span class="mt-1 block">Read the PNR back to the caller, then print or email the receipt.</span>
             </div>
         @endif
 
-        <div class="rounded-lg bg-white p-6 shadow-sm">
+        <x-panel class="print:border-0 print:shadow-none">
             @include('reservation.partials.eticket', [
                 'reservation' => $reservation,
                 'payment' => $payment,
                 'journeyQuote' => $journeyQuote,
             ])
-        </div>
+        </x-panel>
 
-        <div class="mt-6 flex flex-wrap items-center gap-4 print:hidden">
-            <button
-                type="button"
-                onclick="window.print()"
-                class="rounded bg-navy px-4 py-2 text-sm font-medium text-white hover:bg-navy/90"
-            >
+        <div class="flex flex-wrap items-center gap-3 print:hidden">
+            <button type="button" onclick="window.print()" class="arcs-btn-primary">
                 Print receipt
             </button>
-            <a href="{{ route('reservation.create') }}" class="text-sm font-medium text-navy hover:underline">
+            <a href="{{ route('reservation.create') }}" class="arcs-btn-secondary">
                 Next booking
             </a>
-            <a href="{{ route('reservation.search', ['pnr' => $reservation->pnr]) }}" class="text-sm font-medium text-navy hover:underline">
+            <a href="{{ route('reservation.search', ['pnr' => $reservation->pnr]) }}" class="arcs-btn-secondary">
                 Open in find reservation
             </a>
         </div>

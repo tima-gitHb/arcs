@@ -1,14 +1,9 @@
 <x-app-layout>
-    <x-slot name="header">
-        <h1 class="text-2xl font-semibold text-navy">Airports</h1>
-    </x-slot>
+    <x-page-header title="Airports" subtitle="Airports of the network. The code cannot be changed once the airport is added." />
 
     <div class="space-y-6">
-        <div class="bg-white rounded-lg shadow-sm p-6 text-gray-700">
-            <h2 class="text-lg font-semibold text-navy">New airport</h2>
-            <p class="mt-1 text-sm text-gray-600">The code cannot be changed once the airport is added.</p>
-
-            <form method="POST" action="{{ route('manager.airports.store') }}" class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:items-start">
+        <x-panel title="New airport">
+            <form method="POST" action="{{ route('manager.airports.store') }}" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 sm:items-start">
                 @csrf
 
                 <div>
@@ -37,7 +32,7 @@
 
                 <div>
                     <x-input-label for="timezone" value="Time zone" />
-                    <select id="timezone" name="timezone" required class="mt-1 block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                    <select id="timezone" name="timezone" required class="arcs-input mt-1 block w-full">
                         <option value="" disabled @selected(old('timezone') === null)>Choose a time zone</option>
                         @foreach ($timezones as $zone)
                             <option value="{{ $zone }}" @selected(old('timezone') === $zone)>{{ $zone }}</option>
@@ -56,26 +51,26 @@
                     <x-primary-button>Add airport</x-primary-button>
                 </div>
             </form>
-        </div>
+        </x-panel>
 
-        <div class="bg-white rounded-lg shadow-sm overflow-x-auto text-sm">
-            <div class="hidden lg:grid lg:grid-cols-7 gap-3 px-4 py-2 text-gray-500 border-b border-gray-200">
-                <span class="font-medium">Code</span>
-                <span class="font-medium">Name</span>
-                <span class="font-medium">City</span>
-                <span class="font-medium">Country</span>
-                <span class="font-medium">Time zone</span>
-                <span class="font-medium">Minimum connection (minutes)</span>
+        <x-panel title="Network">
+            <div class="hidden lg:grid lg:grid-cols-7 gap-3 border-b pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500" style="border-color: var(--arcs-border);">
+                <span>Code</span>
+                <span>Name</span>
+                <span>City</span>
+                <span>Country</span>
+                <span>Time zone</span>
+                <span>Minimum connection (minutes)</span>
             </div>
             @foreach ($airports as $airport)
-                <form method="POST" action="{{ route('manager.airports.update', $airport) }}" class="grid gap-3 border-b border-gray-100 px-4 py-3 last:border-0 lg:grid-cols-7 lg:items-start">
+                <form method="POST" action="{{ route('manager.airports.update', $airport) }}" class="grid gap-3 border-b py-3 last:border-0 lg:grid-cols-7 lg:items-start" style="border-color: var(--arcs-border);">
                     @csrf
                     @method('PUT')
-                    <p class="font-medium text-gray-900 pt-2">{{ $airport->code }}</p>
+                    <p class="pt-2 font-medium text-gray-900 arcs-mono">{{ $airport->code }}</p>
                     <x-text-input :id="'name-'.$airport->code" name="name" type="text" maxlength="100" class="block w-full" :value="$airport->name" required />
                     <x-text-input :id="'city-'.$airport->code" name="city" type="text" maxlength="80" class="block w-full" :value="$airport->city" required />
                     <x-country-select :id="'country-'.$airport->code" name="country" :selected="$airport->country" />
-                    <select id="timezone-{{ $airport->code }}" name="timezone" required class="block w-full border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm">
+                    <select id="timezone-{{ $airport->code }}" name="timezone" required class="arcs-input block w-full">
                         @foreach ($timezones as $zone)
                             <option value="{{ $zone }}" @selected($airport->timezone === $zone)>{{ $zone }}</option>
                         @endforeach
@@ -86,6 +81,6 @@
                     </div>
                 </form>
             @endforeach
-        </div>
+        </x-panel>
     </div>
 </x-app-layout>

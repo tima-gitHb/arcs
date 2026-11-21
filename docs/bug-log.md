@@ -204,3 +204,15 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Fixed
 - Fix: setup only — B13B_STEPS raised from 6 to 10 (list in the test report)
 - Retested: 21 Nov 2026 · Tima — B13bMigrationTest green
+
+## BUG-017 · Find reservation crashed: undefined $q
+- Date / who: 21 Nov 2026 · Auto (UI1)
+- Card / branch: UI1 · feature/UI1-global-layout
+- Where: reservation/search.blade.php · R2FindReservationTest / B6RoutesTest
+- Steps: 1. Restyle find-reservation with a `q` search field 2. Open /reservation/search
+- Expected: page uses the controller's `pnr` / `error` / `reservation` vars and returns 200
+- Actual: ErrorException Undefined variable $q (500)
+- Screenshot: none — found by R2FindReservationTest
+- Status: Fixed
+- Fix: restored the PNR form (`name="pnr"`) and the original flight-browse behaviour; restyle only with panels/buttons
+- Retested: 21 Nov 2026 — R2FindReservationTest and B6RoutesTest green
