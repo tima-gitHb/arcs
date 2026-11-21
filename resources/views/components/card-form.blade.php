@@ -18,7 +18,7 @@
         ?? ($amountCents !== null ? \App\Support\Money::format((int) $amountCents) : null);
 @endphp
 
-<div {{ $attributes->merge(['class' => 'rounded-[14px] border bg-white p-5 sm:p-6 shadow-sm']) }} style="border-color: var(--arcs-border);" data-card-form>
+<div {{ $attributes->merge(['class' => 'arcs-card p-5 sm:p-6']) }} data-card-form>
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h2 class="text-lg font-semibold text-gray-900">{{ $title }}</h2>

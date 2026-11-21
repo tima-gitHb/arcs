@@ -22,19 +22,16 @@
 
     <x-slot name="aside">
         <div class="md:sticky md:top-4">
-            <div class="mb-2 flex items-center justify-between gap-2">
-                <p class="text-sm font-semibold text-gray-900">Seat map · {{ $flight->flight_no }}</p>
-                <span class="inline-flex items-center gap-1.5 text-xs font-semibold" style="color: var(--arcs-boarded);">
-                    <span class="inline-block h-2 w-2 rounded-full" style="background: var(--arcs-boarded);"></span>
-                    live
-                </span>
-            </div>
             <x-seat-map-dock
                 mode="gate"
-                hint="Live cabin. Click a seat to highlight that passenger. Updates every 10 seconds."
+                hint="Live cabin · {{ $flight->flight_no }}. Click a seat to highlight that passenger. Updates every 10 seconds."
                 data-seats="{{ $seatMap->toJson() }}"
                 data-seat-states="{{ json_encode($seatStates) }}"
             />
+            <p class="mt-2 flex items-center justify-end gap-1.5 text-xs font-semibold" style="color: var(--arcs-boarded);">
+                <span class="inline-block h-2 w-2 rounded-full" style="background: var(--arcs-boarded);"></span>
+                live
+            </p>
         </div>
     </x-slot>
 

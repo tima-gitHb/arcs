@@ -2,34 +2,47 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ARCS UI palette (graphite default) — pages use var(--arcs-*), not hex. */
+/* ARCS UI2 — rounded soft UI. Pages use var(--arcs-*). */
 :root {
-    --arcs-bar: #1E2230;
-    --arcs-side: #262B3A;
-    --arcs-side-active: #3A4156;
-    --arcs-line: #4A5268;
+    --arcs-bar: #1B1F2B;
+    --arcs-side: #1B1F2B;
+    --arcs-side-active: #2A3144;
+    --arcs-line: #D9DCE5;
     --arcs-accent: #C2412D;
     --arcs-on-accent: #FFFFFF;
     --arcs-accent-soft: #FBE3DE;
     --arcs-accent-text: #9E3221;
-    --arcs-page: #F4F5F8;
-    --arcs-border: #E1E4EB;
-    --arcs-input-border: #C3C9D6;
+    --arcs-page: #F3F4F8;
+    --arcs-border: #DDE0E8;
+    --arcs-input-border: #DDE0E8;
     --arcs-muted: #6B7280;
-    --arcs-ink: #111827;
+    --arcs-ink: #171A23;
     --arcs-boarded: #2E7D4F;
     --arcs-booked: #F2C46B;
-    --arcs-free-border: #9AA3B5;
+    --arcs-free-border: #B9C0CF;
+    --arcs-taken: #DCE0E8;
     --arcs-error: #B3261E;
     --arcs-success: #1F6B43;
     --arcs-success-bg: #E0F2E7;
+    --arcs-track: #F0F1F5;
+    --arcs-seat-bg: #F7F8FB;
+    --arcs-seat-panel: #1E2A47;
+    --arcs-seat-muted: #C9D3EA;
+    --arcs-seat-taken-legend: #5B6785;
+    --arcs-seat-premium-legend: #B9A8F0;
+    --arcs-seat-legroom-legend: #4CC38A;
+    --arcs-radius-card: 22px;
+    --arcs-radius-input: 14px;
+    --arcs-shadow-card: 0 1px 2px rgba(23, 26, 35, 0.05), 0 10px 30px rgba(23, 26, 35, 0.06);
+    --arcs-shadow-primary: 0 6px 16px rgba(194, 65, 45, 0.28);
+    --arcs-shadow-fuselage: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 @layer base {
     body {
         font-family: Inter, ui-sans-serif, system-ui, sans-serif;
         background: var(--arcs-page);
-        color: #111827;
+        color: var(--arcs-ink);
     }
 
     [x-cloak] { display: none !important; }
@@ -41,17 +54,23 @@
 
 @layer components {
     .arcs-btn {
-        @apply inline-flex min-h-[44px] items-center justify-center rounded-lg px-4 py-2 text-sm font-semibold transition;
+        @apply inline-flex min-h-[44px] items-center justify-center px-5 py-2 text-sm font-semibold transition;
+        border-radius: 999px;
     }
     .arcs-btn-primary {
         @apply arcs-btn;
         background: var(--arcs-accent);
         color: var(--arcs-on-accent);
+        box-shadow: var(--arcs-shadow-primary);
     }
-    .arcs-btn-primary:hover { filter: brightness(0.95); }
+    .arcs-btn-primary:hover { filter: brightness(0.96); }
     .arcs-btn-secondary {
         @apply arcs-btn border bg-white text-gray-900;
         border-color: var(--arcs-line);
+    }
+    .arcs-btn-ghost {
+        @apply arcs-btn border bg-white text-gray-800 shadow-sm;
+        border-color: transparent;
     }
     .arcs-btn-danger {
         @apply arcs-btn border bg-white;
@@ -59,14 +78,45 @@
         color: var(--arcs-error);
     }
     .arcs-input {
-        @apply block w-full rounded-lg shadow-sm;
+        @apply block w-full shadow-sm;
         border: 1px solid var(--arcs-input-border);
-        min-height: 44px;
+        border-radius: var(--arcs-radius-input);
+        min-height: 48px;
+        padding: 0.625rem 0.875rem;
+        background: #fff;
     }
     .arcs-input:focus {
         border-color: var(--arcs-accent);
         outline: none;
         box-shadow: 0 0 0 1px var(--arcs-accent);
+    }
+    .arcs-label {
+        @apply mb-1.5 block text-xs font-semibold text-gray-600;
+    }
+    .arcs-card {
+        background: #fff;
+        border-radius: var(--arcs-radius-card);
+        box-shadow: var(--arcs-shadow-card);
+    }
+    .arcs-seg {
+        @apply inline-flex flex-wrap gap-1 p-1;
+        background: var(--arcs-track);
+        border-radius: 999px;
+    }
+    .arcs-seg label,
+    .arcs-seg button.arcs-seg-item {
+        @apply inline-flex min-h-[40px] cursor-pointer items-center rounded-full px-4 py-1.5 text-sm font-medium text-gray-600;
+    }
+    .arcs-seg label:has(input:checked),
+    .arcs-seg button.arcs-seg-item.is-active {
+        background: #fff;
+        color: var(--arcs-ink);
+        box-shadow: 0 1px 3px rgba(23, 26, 35, 0.08);
+    }
+    .arcs-seg input { @apply sr-only; }
+    .arcs-counter-btn {
+        @apply inline-flex h-10 w-10 items-center justify-center rounded-full border bg-white text-lg font-semibold;
+        border-color: var(--arcs-line);
     }
     .arcs-table-wrap {
         @apply overflow-x-auto;
@@ -91,5 +141,275 @@
     .arcs-table tbody tr.arcs-row-selected:hover {
         background: var(--arcs-accent-soft);
         box-shadow: inset 3px 0 0 var(--arcs-accent);
+    }
+
+    /* Seat map — navy panel + fixed cabin grid. Keep Tailwind class names in JS for B12 asserts. */
+    .arcs-seat-map-panel {
+        border-radius: 22px;
+        padding: 28px;
+        color: var(--arcs-seat-muted);
+        box-shadow: var(--arcs-shadow-card);
+        overflow: visible;
+    }
+    .arcs-plane-fuselage {
+        width: max-content;
+        max-width: 100%;
+        margin-inline: auto;
+        background: #fff;
+        border-radius: 220px 220px 48px 48px;
+        box-shadow: var(--arcs-shadow-fuselage);
+        padding: 28px 20px 24px;
+        position: relative;
+    }
+    .arcs-plane-nose {
+        position: absolute;
+        left: 50%;
+        top: 18px;
+        width: 2.25rem;
+        height: 0.7rem;
+        transform: translateX(-50%);
+        border-radius: 999px;
+        background: #D8DEE9;
+    }
+    .arcs-plane-body {
+        position: relative;
+    }
+    .arcs-seat-map-scroll {
+        max-height: 70vh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding-inline: 4px;
+        scrollbar-gutter: stable;
+    }
+    .arcs-seat-grid {
+        display: grid;
+        grid-template-columns: 28px 42px 42px 42px 36px 42px 42px 42px 28px;
+        column-gap: 8px;
+        align-items: center;
+        justify-content: center;
+        width: max-content;
+        max-width: 100%;
+        margin-inline: auto;
+    }
+    .arcs-seat-header {
+        background: #fff;
+        padding-bottom: 0.35rem;
+        text-align: center;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #8B93A7;
+    }
+    .arcs-seat-col-letter {
+        width: 42px;
+        text-align: center;
+    }
+    .arcs-seat-cabin-label {
+        margin: 0.85rem 0 0.55rem;
+        text-align: center;
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        color: #9AA3B5;
+    }
+    .arcs-seat-row {
+        margin-bottom: 8px;
+    }
+    .arcs-seat-row-legroom {
+        margin-top: 14px;
+    }
+    .arcs-seat-rownum {
+        text-align: center;
+        font-size: 11px;
+        font-weight: 700;
+        color: #8B93A7;
+        line-height: 1.1;
+    }
+    .arcs-seat-exit {
+        font-size: 8px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--arcs-boarded);
+    }
+    .arcs-seat-aisle {
+        width: 36px;
+        height: 1px;
+    }
+    .arcs-seat-wings {
+        height: 10px;
+        margin: 10px -8px 14px;
+        border-radius: 999px;
+        background: linear-gradient(90deg, transparent, #E6EAF2 12%, #E6EAF2 88%, transparent);
+    }
+    .arcs-seat {
+        width: 42px !important;
+        height: 46px !important;
+        min-height: 46px !important;
+        border-radius: 12px 12px 8px 8px !important;
+        border-width: 1px !important;
+        border-top-width: 5px !important;
+        border-style: solid !important;
+        font-size: 11px !important;
+        font-weight: 700 !important;
+        line-height: 1 !important;
+        padding: 0 !important;
+    }
+    .arcs-seat-free,
+    button.bg-white.arcs-seat {
+        background: #fff !important;
+        color: var(--arcs-ink) !important;
+        border-color: var(--arcs-free-border) !important;
+    }
+    .arcs-seat-taken,
+    button.bg-slate-600.arcs-seat {
+        background: var(--arcs-taken) !important;
+        color: #8B93A7 !important;
+        border-color: #C5CAD6 !important;
+        cursor: not-allowed;
+    }
+    .arcs-seat-selected,
+    button.bg-emerald-400.arcs-seat {
+        background: var(--arcs-accent) !important;
+        color: #fff !important;
+        border-color: var(--arcs-accent) !important;
+    }
+    .arcs-seat-legroom {
+        border-color: var(--arcs-boarded) !important;
+        border-top-color: var(--arcs-boarded) !important;
+    }
+    .arcs-seat-booked,
+    button.bg-sky-300.arcs-seat {
+        background: var(--arcs-booked) !important;
+        color: #5C4810 !important;
+        border-color: #E0B04A !important;
+    }
+    .arcs-seat-checked,
+    button.bg-amber-300.arcs-seat {
+        background: var(--arcs-accent-soft) !important;
+        color: var(--arcs-accent-text) !important;
+        border-color: var(--arcs-accent-text) !important;
+    }
+    .arcs-seat-boarded {
+        background: var(--arcs-boarded) !important;
+        color: #fff !important;
+        border-color: var(--arcs-boarded) !important;
+    }
+    .arcs-seat-premium,
+    button.bg-violet-200.arcs-seat {
+        background: #fff !important;
+        color: #4C1D95 !important;
+        border-color: var(--arcs-seat-premium-legend) !important;
+    }
+    .arcs-seat-business,
+    button.bg-amber-200.arcs-seat {
+        background: #fff !important;
+        color: #78350F !important;
+        border-color: var(--arcs-booked) !important;
+    }
+    .arcs-seat-legend-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 28px;
+        border-radius: 999px;
+        padding: 0 0.75rem;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid transparent;
+        color: var(--arcs-seat-muted);
+    }
+    .arcs-seat-legend-available {
+        border-color: #fff;
+        color: #fff;
+    }
+    .arcs-seat-legend-selected {
+        background: var(--arcs-accent);
+        border-color: var(--arcs-accent);
+        color: #fff;
+    }
+    .arcs-seat-legend-taken {
+        background: var(--arcs-seat-taken-legend);
+        border-color: var(--arcs-seat-taken-legend);
+        color: #fff;
+    }
+    .arcs-seat-legend-premium {
+        background: var(--arcs-seat-premium-legend);
+        border-color: var(--arcs-seat-premium-legend);
+        color: #2A2150;
+    }
+    .arcs-seat-legend-business {
+        background: var(--arcs-booked);
+        border-color: var(--arcs-booked);
+        color: #5C4810;
+    }
+    .arcs-seat-legend-legroom {
+        border-color: var(--arcs-seat-legroom-legend);
+        color: var(--arcs-seat-legroom-legend);
+    }
+    .arcs-seat-legend-booked {
+        background: var(--arcs-booked);
+        border-color: var(--arcs-booked);
+        color: #5C4810;
+    }
+    .arcs-seat-legend-checked {
+        background: var(--arcs-accent-soft);
+        border-color: var(--arcs-accent-text);
+        color: var(--arcs-accent-text);
+    }
+    .arcs-seat-legend-boarded {
+        background: var(--arcs-boarded);
+        border-color: var(--arcs-boarded);
+        color: #fff;
+    }
+    .arcs-seat-legend-noshow {
+        background: #fb7185;
+        border-color: #fb7185;
+        color: #fff;
+    }
+    .arcs-seat-flight-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35rem;
+        padding: 0.25rem;
+        margin-bottom: 1rem;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+    }
+    .arcs-seat-flight-tabs button {
+        min-height: 40px;
+        border-radius: 999px;
+        padding: 0.4rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--arcs-seat-muted);
+    }
+    .arcs-seat-flight-tabs button.is-active {
+        background: #fff;
+        color: var(--arcs-seat-panel);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+    }
+    .pax-compact .passenger-row {
+        cursor: pointer;
+        border-radius: 16px;
+        padding: 0.85rem 1rem;
+    }
+    .pax-compact .passenger-row.is-active-pax {
+        box-shadow: inset 0 0 0 2px var(--arcs-accent);
+    }
+    .pax-compact .passenger-row > .grid,
+    .pax-compact .extras-field,
+    .pax-compact .accompanying-field,
+    .pax-compact .passport-field,
+    .pax-compact .remove-passenger,
+    .pax-compact .passenger-head .passenger-title-full {
+        display: none !important;
+    }
+    .pax-compact .seat-field {
+        margin-top: 0.5rem;
+    }
+    .pax-compact .seat-field > p {
+        display: none;
     }
 }

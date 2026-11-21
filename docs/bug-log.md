@@ -216,3 +216,27 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Fixed
 - Fix: restored the PNR form (`name="pnr"`) and the original flight-browse behaviour; restyle only with panels/buttons
 - Retested: 21 Nov 2026 — R2FindReservationTest and B6RoutesTest green
+
+## BUG-018 · UI2 shell hid gate PNR scan and booking assert copy
+- Date / who: 21 Nov 2026 · Auto (UI2)
+- Card / branch: UI2 · feature/UI2-reservation-shell
+- Where: layouts/app.blade.php · reservation/create.blade.php · G6 / R9 / R12
+- Steps: 1. Left-only shell dropped `$search` slot 2. Create wizard hid “Fare quote” / route-fare blurb 3. Run full suite
+- Expected: gate boarding autofocus `id="pnr"`; booking page still shows asserted fare copy
+- Actual: G6ScanBoardingPassTest, R9PaidBookingTest, R12JourneyPriceTest failed assertSee
+- Screenshot: none — found by php artisan test
+- Status: Fixed
+- Fix: restore `$search` above main content; keep Fare quote / route-fare strings in an sr-only quote block for JS + asserts
+- Retested: 21 Nov 2026 — those three green; full suite 862 SQLite + MySQL; Pint --test
+
+## BUG-019 · Reservation seat map clipped in a narrow column
+- Date / who: 21 Nov 2026 · Auto (UI2 seat-map fix)
+- Card / branch: UI2 · feature/UI2-reservation-shell
+- Where: reservation/create · seat-map.blade.php · seat-map.js · app.css
+- Steps: 1. Open New reservation → Seats 2. View plane at ≥1280px
+- Expected: full A–F cabin aligned, no horizontal scroll, plane centred in main column
+- Actual: map docked in ~260px right column; column F clipped; tiny seats; header letters misaligned; legend outside plane
+- Screenshot: docs/reservation/Reservation 3 · Seats.png
+- Status: Fixed
+- Fix: navy seat-map panel; fixed CSS grid [row#]ABC aisle DEF[row#]; seats step centres plane in main column with passenger list on the right; passengers step keeps seat summary + Assign on map only; check-in/gate aside widened to 32rem
+- Retested: 21 Nov 2026 — full suite 862 passed; Pint --test
