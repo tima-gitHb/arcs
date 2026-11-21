@@ -1,150 +1,107 @@
 <x-app-layout>
-    <x-page-header title="Staff accounts" subtitle="Create an account, set the station, and unlock or deactivate from the list." />
+    <x-page-header title="Staff accounts" subtitle="Search by person, role or station, then open an account.">
+        <x-slot:breadcrumb>
+            <span class="text-gray-400">Staff accounts</span>
+            <span class="text-gray-300">›</span>
+            <span>Accounts</span>
+        </x-slot:breadcrumb>
+        <a href="{{ route('manager.accounts.create') }}" class="arcs-btn-primary">+ New account</a>
+    </x-page-header>
 
     <div class="space-y-6">
-        <x-panel title="New account">
-            <p class="text-sm text-gray-600">The person gets a welcome email with a link to choose their password.</p>
-
-            <form method="POST" action="{{ route('manager.accounts.store') }}" class="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5 sm:items-start">
-                @csrf
-
-                <div>
-                    <x-input-label for="name" value="Name" />
-                    <x-text-input id="name" name="name" type="text" class="mt-1 block w-full" :value="old('name')" required />
-                    <x-input-error :messages="$errors->get('name')" class="mt-2" />
+        <x-panel>
+            <form method="GET" action="{{ route('manager.accounts') }}" class="flex flex-wrap items-end gap-3">
+                <div class="min-w-[12rem] flex-1">
+                    <x-input-label for="q" value="Search" />
+                    <x-text-input id="q" name="q" type="search" class="mt-1 block w-full" :value="$filters['q']" placeholder="Name or email" />
                 </div>
-
-                <div>
-                    <x-input-label for="email" value="Email" />
-                    <x-text-input id="email" name="email" type="email" class="mt-1 block w-full" :value="old('email')" required />
-                    <x-input-error :messages="$errors->get('email')" class="mt-2" />
-                </div>
-
-                <div>
-                    <x-input-label for="role" value="Role" />
-                    <select id="role" name="role" class="arcs-input mt-1 block w-full" required>
-                        <option value="" disabled @selected(! old('role'))>Choose a role</option>
-                        @foreach ($roles as $role)
-                            <option value="{{ $role->value }}" @selected(old('role') === $role->value)>{{ $role->label() }}</option>
-                        @endforeach
-                    </select>
-                    <x-input-error :messages="$errors->get('role')" class="mt-2" />
-                </div>
-
                 <div>
                     <x-input-label for="airport_code" value="Station" />
-                    <select id="airport_code" name="airport_code" class="arcs-input mt-1 block w-full">
-                        <option value="" @selected(old('airport_code') === null)>—</option>
+                    <select id="airport_code" name="airport_code" class="arcs-input mt-1 block w-40">
+                        <option value="">All stations</option>
                         @foreach ($airports as $airport)
-                            <option value="{{ $airport->code }}" @selected(old('airport_code') === $airport->code)>{{ $airport->code }} · {{ $airport->city }}</option>
+                            <option value="{{ $airport->code }}" @selected($filters['airport_code'] === $airport->code)>{{ $airport->code }}</option>
                         @endforeach
                     </select>
-                    <p class="mt-1 text-sm text-gray-600">Required for check-in and gate staff</p>
-                    <x-input-error :messages="$errors->get('airport_code')" class="mt-2" />
                 </div>
-
-                <div class="sm:pt-6">
-                    <x-primary-button>Create account</x-primary-button>
-                </div>
+                <x-primary-button>Filter</x-primary-button>
             </form>
+            <div class="mt-4 flex flex-wrap gap-2">
+                <a href="{{ route('manager.accounts', array_filter(['q' => $filters['q'] ?: null, 'airport_code' => $filters['airport_code'] ?: null])) }}"
+                    class="rounded-full px-3 py-1.5 text-sm {{ $filters['role'] === '' ? 'font-semibold text-white' : 'text-gray-600' }}"
+                    style="{{ $filters['role'] === '' ? 'background: var(--arcs-bar)' : 'background: #EEF0F4' }}">All roles</a>
+                @foreach ($roles as $role)
+                    <a href="{{ route('manager.accounts', array_filter(['q' => $filters['q'] ?: null, 'airport_code' => $filters['airport_code'] ?: null, 'role' => $role->value])) }}"
+                        class="rounded-full px-3 py-1.5 text-sm {{ $filters['role'] === $role->value ? 'font-semibold text-white' : 'text-gray-600' }}"
+                        style="{{ $filters['role'] === $role->value ? 'background: var(--arcs-bar)' : 'background: #EEF0F4' }}">{{ $role->label() }}</a>
+                @endforeach
+            </div>
         </x-panel>
 
-        <x-panel title="Accounts">
+        <x-panel>
             <div class="arcs-table-wrap -mx-5 sm:-mx-6">
                 <table class="arcs-table">
                     <thead>
                         <tr>
-                            <th>Name</th>
-                            <th>Email</th>
+                            <th>Person</th>
                             <th>Role</th>
                             <th>Station</th>
                             <th>State</th>
                             <th>Last login</th>
-                            <th>Actions</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach ($users as $user)
+                        @forelse ($users as $user)
+                            @php
+                                $initials = collect(preg_split('/\s+/', trim($user->name)))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p, 0, 1)))->implode('');
+                                $locked = (bool) ($user->locked ?? false);
+                            @endphp
                             <tr>
-                                <td class="font-medium">
-                                    {{ $user->name }}
-                                    @if ($user->is(auth()->user()))
-                                        <span class="font-normal text-gray-500">(you)</span>
-                                    @endif
-                                </td>
-                                <td>{{ $user->email }}</td>
-                                <td>{{ $user->role->label() }}</td>
                                 <td>
-                                    <p>{{ $user->airport_code ? $user->airport_code.' · '.$user->airport->city : '—' }}</p>
-                                    <form method="POST" action="{{ route('manager.accounts.station', $user) }}" class="mt-2 flex flex-wrap items-center gap-2">
-                                        @csrf
-                                        @method('PATCH')
-                                        <select name="airport_code" aria-label="Station for {{ $user->name }}" class="arcs-input w-full max-w-[14rem] text-sm">
-                                            <option value="" @selected($user->airport_code === null)>—</option>
-                                            @foreach ($airports as $airport)
-                                                <option value="{{ $airport->code }}" @selected($user->airport_code === $airport->code)>{{ $airport->code }} · {{ $airport->city }}</option>
-                                            @endforeach
-                                        </select>
-                                        <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Save</button>
-                                    </form>
-                                </td>
-                                <td>
-                                    {{-- A locked account is shown as Locked even if it is also deactivated. --}}
-                                    @if ($user->locked)
-                                        <x-status-badge status="Failed" label="Locked" />
-                                    @elseif (! $user->active)
-                                        <x-status-badge label="Deactivated" />
-                                    @else
-                                        <x-status-badge status="Succeeded" label="Active" />
-                                    @endif
-                                </td>
-                                <td>@if ($user->last_login_at)<x-station-time :at="$user->last_login_at" format="Y-m-d H:i" />@else Never @endif</td>
-                                <td>
-                                    <div class="flex flex-wrap gap-x-3 gap-y-1">
-                                        @if ($user->locked)
-                                            <form method="POST" action="{{ route('manager.accounts.unlock', $user) }}">
-                                                @csrf
-                                                @method('PATCH')
-                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Unlock</button>
-                                            </form>
-                                        @endif
-
-                                        {{-- No button to deactivate yourself (the service refuses it too). --}}
-                                        @if (! $user->active)
-                                            <form method="POST" action="{{ route('manager.accounts.active', $user) }}">
-                                                @csrf
-                                                @method('PATCH')
-                                                <input type="hidden" name="active" value="1">
-                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Activate</button>
-                                            </form>
-                                        @elseif (! $user->is(auth()->user()))
-                                            <form method="POST" action="{{ route('manager.accounts.active', $user) }}">
-                                                @csrf
-                                                @method('PATCH')
-                                                <input type="hidden" name="active" value="0">
-                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Deactivate</button>
-                                            </form>
-                                        @endif
-
-                                        <form method="POST" action="{{ route('manager.accounts.reset-link', $user) }}">
-                                            @csrf
-                                            <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Send reset link</button>
-                                        </form>
-
-                                        {{-- A welcome email is for someone who has never signed in. After that, use the reset link. --}}
-                                        @if ($user->last_login_at === null)
-                                            <form method="POST" action="{{ route('manager.accounts.resend-welcome', $user) }}">
-                                                @csrf
-                                                <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Resend welcome email</button>
-                                            </form>
-                                        @endif
+                                    <div class="flex items-center gap-3">
+                                        <span class="flex h-9 w-9 items-center justify-center rounded-full text-xs font-bold text-white" style="background: var(--arcs-bar);">{{ $initials }}</span>
+                                        <span>
+                                            <span class="block font-medium">{{ $user->name }}</span>
+                                            <span class="block text-sm text-gray-500">{{ $user->email }}</span>
+                                        </span>
                                     </div>
                                 </td>
+                                <td>{{ $user->role->label() }}</td>
+                                <td class="arcs-mono">
+                                    @if ($user->airport)
+                                        {{ $user->airport->code }} · {{ $user->airport->city }}
+                                    @else
+                                        —
+                                    @endif
+                                </td>
+                                <td>
+                                    @if (! $user->active)
+                                        Inactive
+                                    @elseif ($locked)
+                                        Locked
+                                    @else
+                                        Active
+                                    @endif
+                                </td>
+                                <td>
+                                    @if ($user->last_login_at)
+                                        <x-station-time :at="$user->last_login_at" format="Y-m-d H:i" />
+                                    @else
+                                        Never
+                                    @endif
+                                </td>
+                                <td class="text-right">
+                                    <a href="{{ route('manager.accounts.show', $user) }}" class="font-medium hover:underline" style="color: var(--arcs-accent-text);">Open →</a>
+                                </td>
                             </tr>
-                        @endforeach
+                        @empty
+                            <tr><td colspan="6"><x-empty-state message="No accounts match." /></td></tr>
+                        @endforelse
                     </tbody>
                 </table>
             </div>
+            <div class="mt-4">{{ $users->links() }}</div>
         </x-panel>
     </div>
 </x-app-layout>

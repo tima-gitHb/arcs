@@ -92,6 +92,11 @@ class AirportTest extends TestCase
             ->assertSee('Beirut')
             ->assertSee('CDG')
             ->assertSee('Paris')
+            ->assertDontSee('name="code"', false)
+            ->assertDontSee('Delete');
+
+        $this->get('/manager/airports/create')
+            ->assertOk()
             ->assertSee('name="code"', false)
             ->assertSee('name="name"', false)
             ->assertSee('name="city"', false)
@@ -99,14 +104,18 @@ class AirportTest extends TestCase
             ->assertSee('Search country')
             ->assertSee('name="timezone"', false)
             ->assertSee('value="'.$extraZone.'"', false)
-            ->assertSee('name="min_connection_minutes"', false)
+            ->assertSee('name="min_connection_minutes"', false);
+
+        $this->get('/manager/airports/CDG/edit')
+            ->assertOk()
             ->assertSee('/manager/airports/CDG', false)
-            ->assertDontSee('Delete');
+            ->assertSee('name="name"', false)
+            ->assertDontSee('name="code"', false);
     }
 
     public function test_the_new_airport_form_has_no_time_zone_preselected(): void
     {
-        $html = $this->get('/manager/airports')->assertOk()->getContent();
+        $html = $this->get('/manager/airports/create')->assertOk()->getContent();
 
         $this->assertSame(1, preg_match('/<select id="timezone" name="timezone".*?<\/select>/s', $html, $match));
 

@@ -81,7 +81,7 @@ class PremiumAllowanceTest extends TestCase
     {
         $this->post(route('manager.aircraft.store'), $this->validAircraft())
             ->assertSessionHasNoErrors()
-            ->assertRedirect(route('manager.flights'));
+            ->assertRedirect(route('manager.aircraft.index'));
 
         $aircraft = Aircraft::where('registration', 'OD-PRM')->sole();
         $this->assertSame(3, $aircraft->premium_rows);
@@ -99,7 +99,7 @@ class PremiumAllowanceTest extends TestCase
 
     public function test_aircraft_form_has_a_premium_rows_field_after_business_rows(): void
     {
-        $this->get(route('manager.flights'))
+        $this->get(route('manager.aircraft.create'))
             ->assertOk()
             ->assertSee('name="premium_rows"', false)
             ->assertSeeInOrder(['name="business_rows"', 'name="premium_rows"'], false);
@@ -172,7 +172,10 @@ class PremiumAllowanceTest extends TestCase
     {
         $this->get(route('manager.rules'))
             ->assertOk()
-            ->assertSeeInOrder(['Economy', 'Premium', 'Business'])
+            ->assertSeeInOrder(['Economy', 'Premium', 'Business']);
+
+        $this->get(route('manager.rules.edit', 'baggage'))
+            ->assertOk()
             ->assertSee('name="allowances[premium][pieces]"', false)
             ->assertSee('name="allowances[premium][max_kg_per_bag]"', false)
             ->assertSee('max 32 kg per bag');
@@ -180,7 +183,7 @@ class PremiumAllowanceTest extends TestCase
 
     public function test_the_kg_inputs_use_the_hard_max_as_their_max_attribute(): void
     {
-        $html = $this->get(route('manager.rules'))->getContent();
+        $html = $this->get(route('manager.rules.edit', 'baggage'))->getContent();
 
         // One kg input per class, each capped at 32 (not the old 999.9).
         $this->assertSame(3, preg_match_all('/name="allowances\[\w+\]\[max_kg_per_bag\]"[^>]*max="32"/', $html));
@@ -191,7 +194,7 @@ class PremiumAllowanceTest extends TestCase
     {
         Setting::where('key', 'hard_max_kg_per_bag')->update(['value' => '30']);
 
-        $this->get(route('manager.rules'))
+        $this->get(route('manager.rules.edit', 'baggage'))
             ->assertSee('max 30 kg per bag')
             ->assertSee('max="30"', false);
     }
@@ -265,7 +268,7 @@ class PremiumAllowanceTest extends TestCase
 
         $this->put(route('manager.rules.update'), $this->rulesPayload())->assertSessionHasNoErrors();
 
-        $this->get(route('manager.rules'))->assertSee('max 32 kg per bag');
+        $this->get(route('manager.rules.edit', 'baggage'))->assertSee('max 32 kg per bag');
     }
 
     // ── The edited allowance reaches AllowanceService::for() ────────────────

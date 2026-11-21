@@ -2,8 +2,6 @@
     <x-page-header title="Sales per flight" subtitle="Ticket revenue and load for the flights in this filter." />
 
     <div class="space-y-6">
-        <x-manager-station :station="$filters['station']" :control="false" />
-
         {{-- Filters. A GET form, so the choice is in the URL. Empty fields leave today's page as it is. --}}
         <x-panel>
             <form method="GET" action="{{ route('manager.sales') }}" class="flex flex-wrap items-end gap-4">
@@ -127,9 +125,9 @@
             <p class="mt-4 text-sm text-gray-600">Sports equipment and pets are included in the payment they were charged with.</p>
         </section>
 
-        {{-- Today's flights, one link each. Only on the default page: a chosen flight is shown alone. --}}
+        {{-- Flight list with Details → (keeps data-today-flight for existing sales tests). --}}
         @if ($defaultPage)
-            <x-panel title="Today's flights">
+            <x-panel title="Flights">
                 @if ($reports->isEmpty())
                     <p class="text-sm text-gray-600">No flights today.</p>
                 @else
@@ -140,6 +138,8 @@
                                     <th>Flight</th>
                                     <th>Route</th>
                                     <th>Departure</th>
+                                    <th>Tickets</th>
+                                    <th>Extras</th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -147,13 +147,26 @@
                                 @foreach ($reports as $report)
                                     @php
                                         $flight = $report['flight'];
+                                        $ticketBar = max(1, (int) $report['revenue']['fares_cents']);
+                                        $extraBar = (int) $report['revenue']['fees_cents'];
+                                        $scale = max($ticketBar, $extraBar, 1);
                                     @endphp
                                     <tr data-today-flight="{{ $flight->flight_no }}">
                                         <td class="font-medium arcs-mono">{{ $flight->flight_no }}</td>
                                         <td>{{ $flight->origin }} → {{ $flight->destination }}</td>
                                         <td><x-local-time :at="$flight->departure_at" :airport="$flight->origin" format="H:i" /></td>
+                                        <td>
+                                            <div class="h-2 w-24 rounded-full" style="background: #EEF0F4;">
+                                                <div class="h-2 rounded-full" style="width: {{ intdiv($ticketBar * 100, $scale) }}%; background: var(--arcs-bar);"></div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="h-2 w-24 rounded-full" style="background: #EEF0F4;">
+                                                <div class="h-2 rounded-full" style="width: {{ intdiv($extraBar * 100, $scale) }}%; background: #4A5268;"></div>
+                                            </div>
+                                        </td>
                                         <td class="text-right">
-                                            <a href="{{ route('manager.sales', ['flight' => $flight->id]) }}" class="font-medium hover:underline" style="color: var(--arcs-accent-text);">Sales</a>
+                                            <a href="{{ route('manager.sales', ['flight' => $flight->id]) }}" class="font-medium hover:underline" style="color: var(--arcs-accent-text);">Details →</a>
                                         </td>
                                     </tr>
                                 @endforeach

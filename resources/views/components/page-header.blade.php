@@ -14,6 +14,9 @@
 
 <div {{ $attributes->merge(['class' => 'mb-6 flex flex-wrap items-start justify-between gap-4']) }}>
     <div class="min-w-0">
+        @isset($breadcrumb)
+            <p class="mb-1 flex flex-wrap items-center gap-1.5 text-xs text-gray-500">{{ $breadcrumb }}</p>
+        @endisset
         <h1 class="text-[26px] font-bold tracking-tight text-gray-900">{{ $title }}</h1>
         @if ($subtitle)
             <p class="mt-1 text-sm text-gray-500">{{ $subtitle }}</p>

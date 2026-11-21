@@ -240,3 +240,27 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Fixed
 - Fix: navy seat-map panel; fixed CSS grid [row#]ABC aisle DEF[row#]; seats step centres plane in main column with passenger list on the right; passengers step keeps seat summary + Assign on map only; check-in/gate aside widened to 32rem
 - Retested: 21 Nov 2026 — full suite 862 passed; Pint --test
+
+## BUG-020 · UI3 check-in home Blade broke on short @php()
+- Date / who: 21 Nov 2026 · Auto (UI3)
+- Card / branch: UI3 · check-in redesign
+- Where: checkin/home.blade.php · layouts/app.blade.php · B5LayoutTest
+- Steps: 1. Restyle check-in home 2. Use `@php($x = …)` next to another `@php(...)` 3. Open /checkin
+- Expected: page renders
+- Actual: ParseError unexpected endif (Blade left `@if` uncompiled after a short `@php()` ate the rest of the slot)
+- Screenshot: none — found by B5LayoutTest
+- Status: Fixed
+- Fix: full `@php`/`@endphp` blocks; menu `aria-current` via `{!! !!}`; keep flight list query-fixed (no per-row relation work)
+- Retested: 21 Nov 2026 — SQLite 866 + MySQL 866; Pint --test
+
+## BUG-021 · Trip fare audit field overflows varchar(30) on MySQL
+- Date / who: 21 Nov 2026 · Auto (polish check-in + manager)
+- Card / branch: polish · feature/UI1-global-layout
+- Where: TripFareController::fieldLabel · audit_log.field · TripFareManagerTest
+- Steps: 1. Create/edit/delete a trip fare on MySQL 2. composer test:mysql
+- Expected: audit row written like other fare changes
+- Actual: SQLSTATE[22001] Data too long for column 'field' ("trip fare BEY-CDG Economy Adult" = 32 chars; column is 30)
+- Screenshot: none — found by composer test:mysql
+- Status: Fixed
+- Fix: shorten label to `trip BEY-CDG Economy Adult` (≤30); delete uses the same field with new_value "—" (no " removed" suffix)
+- Retested: 21 Nov 2026 — SQLite 883 + MySQL 883; Pint --test

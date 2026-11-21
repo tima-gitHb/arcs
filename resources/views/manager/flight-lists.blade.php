@@ -12,7 +12,7 @@
     </style>
 
     <div class="space-y-6">
-        <x-manager-station :station="$station" />
+        {{-- Station filter lives in the manager sidebar (UI4). --}}
 
         {{-- Flight picker: a GET form, so the chosen flight (and tab) is in the URL. --}}
         <x-panel class="no-print">

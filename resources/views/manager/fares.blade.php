@@ -1,6 +1,69 @@
+@php $tab = request('tab', 'routes'); @endphp
 <x-app-layout>
-    <x-page-header title="Fares and fees" subtitle="Default prices, or prices for one route. Amounts are US dollars." />
+    <x-page-header title="Fares and fees" subtitle="Default prices, or prices for one route. Amounts are US dollars.">
+        <x-slot:breadcrumb>
+            <span>Fares and fees</span>
+        </x-slot:breadcrumb>
+    </x-page-header>
 
+    <div class="mb-6 flex flex-wrap gap-2">
+        <a href="{{ route('manager.fares', array_filter(['route' => $route ?: null, 'tab' => 'routes'])) }}" class="rounded-full px-3 py-1.5 text-sm {{ $tab === 'routes' ? 'font-semibold text-white' : 'text-gray-600' }}" style="{{ $tab === 'routes' ? 'background: var(--arcs-bar)' : 'background: #EEF0F4' }}">Route fares</a>
+        <a href="{{ route('manager.fares', ['tab' => 'trips']) }}" class="rounded-full px-3 py-1.5 text-sm {{ $tab === 'trips' ? 'font-semibold text-white' : 'text-gray-600' }}" style="{{ $tab === 'trips' ? 'background: var(--arcs-bar)' : 'background: #EEF0F4' }}">Trip fares</a>
+        <a href="{{ route('manager.fares', array_filter(['route' => $route ?: null, 'tab' => 'fees'])) }}" class="rounded-full px-3 py-1.5 text-sm {{ $tab === 'fees' ? 'font-semibold text-white' : 'text-gray-600' }}" style="{{ $tab === 'fees' ? 'background: var(--arcs-bar)' : 'background: #EEF0F4' }}">Fees</a>
+    </div>
+
+    @if ($tab === 'trips')
+        @if (session('status'))
+            <div class="mb-6 rounded-lg border px-4 py-3 text-sm" style="border-color: #B7DFC4; background: var(--arcs-success-bg); color: var(--arcs-success);" role="status">
+                {{ session('status') }}
+            </div>
+        @endif
+
+        <x-panel>
+            <div class="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <p class="text-sm text-gray-600">A trip fare replaces the route sum only when every passenger type has one.</p>
+                <a href="{{ route('manager.trip-fares.create') }}" class="arcs-btn-primary">+ New trip fare</a>
+            </div>
+
+            <div class="arcs-table-wrap -mx-5 sm:-mx-6">
+                <table class="arcs-table">
+                    <thead>
+                        <tr>
+                            <th>Route</th>
+                            <th>Cabin</th>
+                            <th>Passenger type</th>
+                            <th>One-way</th>
+                            <th>Round-trip</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse ($tripFares as $fare)
+                            <tr>
+                                <td class="arcs-mono font-medium">{{ $fare->origin_code }} → {{ $fare->destination_code }}</td>
+                                <td>{{ $fare->cabin_class->label() }}</td>
+                                <td>{{ $fare->passenger_type->label() }}</td>
+                                <td>{{ \App\Support\Money::format($fare->one_way_cents) }}</td>
+                                <td>{{ $fare->round_trip_cents !== null ? \App\Support\Money::format($fare->round_trip_cents) : '—' }}</td>
+                                <td class="text-right">
+                                    <a href="{{ route('manager.trip-fares.edit', $fare) }}" class="font-medium hover:underline" style="color: var(--arcs-accent-text);">Edit →</a>
+                                    <form method="POST" action="{{ route('manager.trip-fares.destroy', $fare) }}" class="ml-3 inline" onsubmit="return confirm('Delete this trip fare?')">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="text-sm font-medium hover:underline" style="color: var(--arcs-error);">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="6"><x-empty-state message="No trip fares yet." /></td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </x-panel>
+    @else
     <x-panel>
         @if (session('status'))
             <div class="mb-6 rounded-lg border px-4 py-3 text-sm" style="border-color: #B7DFC4; background: var(--arcs-success-bg); color: var(--arcs-success);" role="status">
@@ -12,7 +75,7 @@
             @csrf
             @method('PUT')
 
-            <section class="space-y-4">
+            <section class="space-y-4" @if ($tab === 'fees') style="display:none" @endif>
                 <h2 class="text-base font-semibold text-gray-900">Fares</h2>
                 <p class="text-sm text-gray-600">Ticket price in US dollars, per cabin class and passenger type.</p>
 
@@ -70,7 +133,7 @@
                 </div>
             </section>
 
-            <section class="space-y-4">
+            <section class="space-y-4" @if ($tab === 'routes') style="display:none" @endif>
                 <h2 class="text-base font-semibold text-gray-900">Fees</h2>
                 <p class="text-sm text-gray-600">Price of each extra in US dollars. Excess baggage is charged per kg.</p>
 
@@ -94,4 +157,5 @@
             </div>
         </form>
     </x-panel>
+    @endif
 </x-app-layout>

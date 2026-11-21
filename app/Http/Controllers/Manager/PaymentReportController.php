@@ -43,8 +43,16 @@ class PaymentReportController extends Controller
 
         $failed = $payments->where('status', PaymentStatus::Failed);
 
+        $status = $request->query('status');
+
         return view('manager.payments', [
-            'payments' => $payments,
+            'payments' => $payments->when(
+                is_string($status) && $status === 'paid',
+                fn ($c) => $c->where('status', PaymentStatus::Succeeded)
+            )->when(
+                is_string($status) && $status === 'failed',
+                fn ($c) => $c->where('status', PaymentStatus::Failed)
+            )->values(),
             'totals' => $totals,
             'grandCents' => array_sum($totals),
             'failedCount' => $failed->count(),
@@ -55,6 +63,32 @@ class PaymentReportController extends Controller
                 ->get(),
             'staff' => User::orderBy('name')->get(),
             'station' => $station,
+            'statusFilter' => is_string($status) ? $status : '',
+        ]);
+    }
+
+    public function show(Payment $payment, Request $request): View
+    {
+        ManagerStation::apply($request);
+        $payment->load(['reservation.flight', 'reservation.passengers', 'passenger.reservation.flight', 'takenBy']);
+
+        $reservation = $payment->reservation ?? $payment->passenger?->reservation;
+        $attempts = collect();
+        if ($reservation !== null) {
+            $attempts = Payment::query()
+                ->where(function ($query) use ($reservation) {
+                    $query->where('reservation_id', $reservation->id)
+                        ->orWhereIn('passenger_id', $reservation->passengers()->pluck('id'));
+                })
+                ->with('takenBy')
+                ->orderByDesc('created_at')
+                ->get();
+        }
+
+        return view('manager.payments-show', [
+            'payment' => $payment,
+            'reservation' => $reservation,
+            'attempts' => $attempts,
         ]);
     }
 

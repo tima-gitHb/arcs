@@ -1,8 +1,4 @@
 <x-app-layout>
-    <x-slot name="station">
-        <x-manager-station :station="$station" bar />
-    </x-slot>
-
     @php
         $airports = \App\Support\ManagerStation::airports(request());
         $viewer = $airports->firstWhere('code', auth()->user()->airport_code);
@@ -16,199 +12,143 @@
         $firstName = \Illuminate\Support\Str::before(auth()->user()->name, ' ');
         $selectedAirport = is_string($station) && $station !== '' ? $airports->firstWhere('code', $station) : null;
         $place = $selectedAirport ? $selectedAirport->city.' station' : 'All stations';
-
-        $avgLoad = $rows->isEmpty() ? 0 : (int) round($rows->avg('percent'));
-        $flightCount = $rows->count();
-        $onTimeStatuses = [
-            \App\Enums\FlightStatus::Scheduled,
-            \App\Enums\FlightStatus::CheckinOpen,
-            \App\Enums\FlightStatus::Boarding,
-            \App\Enums\FlightStatus::Closed,
-            \App\Enums\FlightStatus::Departed,
-        ];
-        $onTime = $rows->filter(fn ($row) => in_array($row['flight']->status, $onTimeStatuses, true))->count();
-
+        $periodLabel = match ($period) {
+            '7d' => 'Last 7 days',
+            '30d' => 'Last 30 days',
+            default => 'Today',
+        };
         $disrupted = $rows->filter(fn ($row) => in_array($row['flight']->status, [
             \App\Enums\FlightStatus::Delayed,
             \App\Enums\FlightStatus::Cancelled,
         ], true));
-
         $routes = $rows
             ->groupBy(fn ($row) => $row['flight']->origin.' → '.$row['flight']->destination)
             ->map(fn ($group) => (int) $group->sum('passengers'))
             ->sortDesc();
         $topRoute = $routes->keys()->first();
         $topRoutePassengers = $routes->first();
-
-        $loadPreview = $flightCount.' '.Str::plural('flight', $flightCount).' · average check-in '.$avgLoad.' %';
-        $routePreview = $topRoute
-            ? $topRoute.' · '.$topRoutePassengers.' '.Str::plural('passenger', (int) $topRoutePassengers)
-            : 'No flights today.';
-        $disruptionPreview = $disrupted->isEmpty()
-            ? 'No delayed or cancelled flights in today\'s list.'
-            : $disrupted->count().' delayed or cancelled · '.$disrupted->first()['flight']->flight_no;
     @endphp
 
+    <x-page-header :title="$hello.', '.$firstName" :subtitle="$place.' · '.$localNow->format('l j M').' · '.$periodLabel">
+        <x-slot:breadcrumb>
+            <span>Dashboard</span>
+        </x-slot:breadcrumb>
+        <div class="inline-flex rounded-full bg-white p-1 shadow-sm" style="border: 1px solid var(--arcs-border);" role="group" aria-label="Period">
+            @foreach (['today' => 'Today', '7d' => '7 days', '30d' => '30 days'] as $key => $label)
+                <a href="{{ route('manager.dashboard', ['period' => $key]) }}"
+                    class="rounded-full px-3 py-1.5 text-sm font-medium {{ $period === $key ? 'text-white' : 'text-gray-600' }}"
+                    style="{{ $period === $key ? 'background: var(--arcs-bar)' : '' }}">{{ $label }}</a>
+            @endforeach
+        </div>
+    </x-page-header>
+
     <div class="space-y-6">
-        <div class="flex flex-wrap items-start justify-between gap-4">
-            <div>
-                <h1 class="text-[22px] font-bold tracking-tight text-gray-900 sm:text-2xl">{{ $hello }}, {{ $firstName }}</h1>
-                <p class="mt-1 text-sm text-gray-500">{{ $place }} · {{ $localNow->format('l j M') }}</p>
-            </div>
-
-            {{-- Decorative only. The dashboard has no period argument, so Today, 7 days and 30 days all keep today's $rows. --}}
-            <div x-data="{ period: 'today' }" class="text-right">
-                <div class="inline-flex rounded-full bg-white p-1 shadow-sm" style="border: 1px solid var(--arcs-border);" role="group" aria-label="Period">
-                    <button type="button" class="rounded-full px-3 py-1.5 text-sm font-medium" :class="period === 'today' ? 'text-white' : 'text-gray-600'" :style="period === 'today' ? 'background: var(--arcs-bar)' : ''" @click="period = 'today'">Today</button>
-                    <button type="button" class="rounded-full px-3 py-1.5 text-sm font-medium" :class="period === '7' ? 'text-white' : 'text-gray-600'" :style="period === '7' ? 'background: var(--arcs-bar)' : ''" @click="period = '7'">7 days</button>
-                    <button type="button" class="rounded-full px-3 py-1.5 text-sm font-medium" :class="period === '30' ? 'text-white' : 'text-gray-600'" :style="period === '30' ? 'background: var(--arcs-bar)' : ''" @click="period = '30'">30 days</button>
-                </div>
-                <p x-show="period !== 'today'" x-cloak class="mt-2 max-w-xs text-xs text-gray-500">Still today's flights. This control does not change the figures.</p>
-            </div>
-        </div>
-
         <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <div class="rounded-[14px] border bg-white px-5 py-4 shadow-sm" style="border-color: var(--arcs-border);">
-                <p class="text-sm text-gray-500">Ticket revenue</p>
-                <a href="{{ route('manager.sales') }}" class="mt-2 inline-block text-2xl font-bold hover:underline" style="color: var(--arcs-accent-text);">See sales</a>
-            </div>
-            <div class="rounded-[14px] border bg-white px-5 py-4 shadow-sm" style="border-color: var(--arcs-border);">
-                <p class="text-sm text-gray-500">Extras: bags, upgrades</p>
-                <a href="{{ route('manager.sales') }}" class="mt-2 inline-block text-2xl font-bold hover:underline" style="color: var(--arcs-accent-text);">See sales</a>
-            </div>
-            <div class="rounded-[14px] border bg-white px-5 py-4 shadow-sm" style="border-color: var(--arcs-border);">
-                <p class="text-sm text-gray-500">Average load factor</p>
-                <p class="mt-2 text-2xl font-bold text-gray-900">{{ $avgLoad }} %</p>
-            </div>
-            <div class="rounded-[14px] border bg-white px-5 py-4 shadow-sm" style="border-color: var(--arcs-border);">
-                <p class="text-sm text-gray-500">On-time departures</p>
-                <p class="mt-2 text-2xl font-bold text-gray-900">{{ $onTime }} of {{ $flightCount }}</p>
-            </div>
+            @foreach ([
+                ['key' => 'ticket', 'label' => 'Ticket revenue', 'value' => $kpis['ticket'], 'href' => route('manager.sales'), 'link' => 'Sales', 'delta' => $kpis['deltas']['ticket']],
+                ['key' => 'extras', 'label' => 'Extras: bags, upgrades', 'value' => $kpis['extras'], 'href' => route('manager.sales'), 'link' => 'Extras', 'delta' => $kpis['deltas']['extras']],
+                ['key' => 'load', 'label' => 'Average load factor', 'value' => $kpis['avg_load'].' %', 'href' => route('manager.sales'), 'link' => 'Loads', 'delta' => $kpis['deltas']['avg_load']],
+                ['key' => 'ontime', 'label' => 'On-time departures', 'value' => $kpis['on_time'].' of '.$kpis['flight_count'], 'href' => route('manager.flights'), 'link' => 'Flights', 'delta' => $kpis['deltas']['on_time']],
+            ] as $tile)
+                <div class="rounded-[22px] border bg-white px-5 py-4 shadow-sm" style="border-color: var(--arcs-border);">
+                    <p class="text-sm text-gray-500">{{ $tile['label'] }}</p>
+                    <p class="mt-2 text-2xl font-bold text-gray-900" data-kpi="{{ $tile['key'] }}">{{ $tile['value'] }}</p>
+                    <p class="mt-2">
+                        <span data-kpi-delta="{{ $tile['key'] }}" class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                            style="background: {{ $tile['delta']['direction'] === 'up' ? '#E6F4EA' : ($tile['delta']['direction'] === 'down' ? '#FCE8E6' : '#EEF0F4') }};
+                                   color: {{ $tile['delta']['direction'] === 'up' ? 'var(--arcs-success)' : ($tile['delta']['direction'] === 'down' ? 'var(--arcs-error)' : '#6B7280') }};">
+                            {{ $tile['delta']['label'] }}
+                        </span>
+                    </p>
+                    <a href="{{ $tile['href'] }}" class="mt-2 inline-block text-sm font-semibold hover:underline" style="color: var(--arcs-accent-text);">{{ $tile['link'] }}</a>
+                </div>
+            @endforeach
         </div>
 
-        <div x-data="{ loadOpen: false }" class="space-y-4">
-            <p class="text-sm text-gray-500">Choose an analysis · hover to preview, click to open</p>
+        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <a href="{{ route('manager.sales') }}" class="rounded-[22px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                <p class="font-semibold text-gray-900">Revenue</p>
+                <p class="mt-1 text-sm text-gray-600">Tickets against extras for this period.</p>
+            </a>
+            <a href="{{ route('manager.sales') }}" class="rounded-[22px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                <p class="font-semibold text-gray-900">Flight load</p>
+                <p class="mt-1 text-sm text-gray-600">Average check-in {{ $kpis['avg_load'] }} % across {{ $kpis['flight_count'] }} flights.</p>
+            </a>
+            <a href="{{ route('manager.flights') }}" class="rounded-[22px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                <p class="font-semibold text-gray-900">Top routes</p>
+                <p class="mt-1 text-sm text-gray-600">{{ $topRoute ? $topRoute.' · '.$topRoutePassengers.' passengers' : 'No flights today.' }}</p>
+            </a>
+            <a href="{{ route('manager.flights', ['status' => 'Delayed']) }}" class="rounded-[22px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                <p class="font-semibold text-gray-900">Disruptions</p>
+                <p class="mt-1 text-sm text-gray-600">{{ $disrupted->isEmpty() ? 'No delayed or cancelled flights today.' : $disrupted->count().' delayed or cancelled' }}</p>
+            </a>
+            <a href="{{ route('manager.payments') }}" class="rounded-[22px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                <p class="font-semibold text-gray-900">Payments</p>
+                <p class="mt-1 text-sm text-gray-600">Card charges and failed attempts.</p>
+            </a>
+            <a href="{{ route('manager.audit') }}" class="rounded-[22px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
+                <p class="font-semibold text-gray-900">Staff activity</p>
+                <p class="mt-1 text-sm text-gray-600">Who changed what in the audit log.</p>
+            </a>
+        </div>
 
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <a href="{{ route('manager.sales') }}" class="group block rounded-[14px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700" style="background: #EEF0F4;" aria-hidden="true">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-                    </span>
-                    <p class="mt-3 font-semibold text-gray-900">Revenue</p>
-                    <p class="mt-1 text-sm text-gray-600 group-hover:hidden">Tickets against extras (bags, upgrades, equipment), day by day.</p>
-                    <p class="mt-1 hidden text-sm text-gray-600 group-hover:block">No revenue figure on this page. Open sales for tickets and extras.</p>
-                    <p class="mt-3 text-sm font-semibold" style="color: var(--arcs-accent-text);">Open</p>
-                </a>
-
-                <button type="button" class="group rounded-[14px] border bg-white p-5 text-left shadow-sm" style="border-color: var(--arcs-border);" @click="loadOpen = ! loadOpen" :aria-expanded="loadOpen ? 'true' : 'false'">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700" style="background: #EEF0F4;" aria-hidden="true">
-                        <span class="text-sm font-semibold">%</span>
-                    </span>
-                    <p class="mt-3 font-semibold text-gray-900">Flight load</p>
-                    <p class="mt-1 text-sm text-gray-600 group-hover:hidden">How full each departure is, with the cabin on the plane.</p>
-                    <p class="mt-1 hidden text-sm text-gray-600 group-hover:block">{{ $loadPreview }}</p>
-                    <p class="mt-3 text-sm font-semibold" style="color: var(--arcs-accent-text);" x-text="loadOpen ? 'Close' : 'Open'">Open</p>
-                </button>
-
-                <a href="{{ route('manager.flights') }}" class="group block rounded-[14px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700" style="background: #EEF0F4;" aria-hidden="true">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-                    </span>
-                    <p class="mt-3 font-semibold text-gray-900">Top routes</p>
-                    <p class="mt-1 text-sm text-gray-600 group-hover:hidden">Which routes and connections sell best.</p>
-                    <p class="mt-1 hidden text-sm text-gray-600 group-hover:block">{{ $routePreview }}</p>
-                    <p class="mt-3 text-sm font-semibold" style="color: var(--arcs-accent-text);">Open</p>
-                </a>
-
-                <a href="{{ route('manager.flights') }}" class="group block rounded-[14px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700" style="background: #EEF0F4;" aria-hidden="true">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4M12 17h.01"/><path d="M10.3 4.8 2.6 18a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.8a2 2 0 0 0-3.4 0z"/></svg>
-                    </span>
-                    <p class="mt-3 font-semibold text-gray-900">Disruptions</p>
-                    <p class="mt-1 text-sm text-gray-600 group-hover:hidden">Delays, gate changes and no-shows today.</p>
-                    <p class="mt-1 hidden text-sm text-gray-600 group-hover:block">{{ $disruptionPreview }}</p>
-                    <p class="mt-3 text-sm font-semibold" style="color: var(--arcs-accent-text);">Open</p>
-                </a>
-
-                <a href="{{ route('manager.payments') }}" class="group block rounded-[14px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700" style="background: #EEF0F4;" aria-hidden="true">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg>
-                    </span>
-                    <p class="mt-3 font-semibold text-gray-900">Payments</p>
-                    <p class="mt-1 text-sm text-gray-600 group-hover:hidden">Every card payment, failed ones apart.</p>
-                    <p class="mt-1 hidden text-sm text-gray-600 group-hover:block">No payment totals on this page.</p>
-                    <p class="mt-3 text-sm font-semibold" style="color: var(--arcs-accent-text);">Open</p>
-                </a>
-
-                <a href="{{ route('manager.audit') }}" class="group block rounded-[14px] border bg-white p-5 shadow-sm" style="border-color: var(--arcs-border);">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-lg text-gray-700" style="background: #EEF0F4;" aria-hidden="true">
-                        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="3"/><path d="M5 19a7 7 0 0 1 14 0"/></svg>
-                    </span>
-                    <p class="mt-3 font-semibold text-gray-900">Staff activity</p>
-                    <p class="mt-1 text-sm text-gray-600 group-hover:hidden">Who did what, from the audit log.</p>
-                    <p class="mt-1 hidden text-sm text-gray-600 group-hover:block">No staff counts on this page. Open the audit log.</p>
-                    <p class="mt-3 text-sm font-semibold" style="color: var(--arcs-accent-text);">Open</p>
-                </a>
-            </div>
-
-            <div x-show="loadOpen" x-cloak class="space-y-4">
-                @forelse ($rows as $row)
-                    @php
-                        $share = fn (int $number) => $row['passengers'] > 0 ? round($number / $row['passengers'] * 100) : 0;
-                    @endphp
-
-                    <x-panel>
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <h2 class="text-base font-semibold text-gray-900">
-                                <span class="arcs-mono">{{ $row['flight']->flight_no }}</span>
-                                <span class="font-normal text-gray-500">{{ $row['flight']->origin }} → {{ $row['flight']->destination }}</span>
-                            </h2>
-                            <x-status-badge :status="$row['flight']->status" />
-                        </div>
-
-                        <dl class="mt-4 space-y-4 text-sm text-gray-700">
-                            <div>
-                                <div class="flex justify-between gap-3">
-                                    <dt>Checked in</dt>
-                                    <dd class="font-medium"><span data-figure="checked-in">{{ $row['percent'] }} %</span> ({{ $row['checked_in'] }} of {{ $row['passengers'] }})</dd>
-                                </div>
-                                <div class="mt-1 h-2.5 rounded-full" style="background: #EEF0F4;">
-                                    <div class="h-2.5 rounded-full" style="width: {{ $row['percent'] }}%; background: var(--arcs-accent);"></div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <div class="flex justify-between gap-3">
-                                    <dt>Boarded</dt>
-                                    <dd class="font-medium"><span data-figure="boarded">{{ $row['boarded'] }}</span></dd>
-                                </div>
-                                <div class="mt-1 h-2.5 rounded-full" style="background: #EEF0F4;">
-                                    <div class="h-2.5 rounded-full" style="width: {{ $share($row['boarded']) }}%; background: var(--arcs-boarded);"></div>
-                                </div>
-                            </div>
-
-                            <div>
-                                <div class="flex justify-between gap-3">
-                                    <dt>No-shows</dt>
-                                    <dd class="font-medium"><span data-figure="no-shows">{{ $row['no_shows'] }}</span></dd>
-                                </div>
-                                <div class="mt-1 h-2.5 rounded-full" style="background: #EEF0F4;">
-                                    <div class="h-2.5 rounded-full" style="width: {{ $share($row['no_shows']) }}%; background: var(--arcs-error);"></div>
-                                </div>
-                            </div>
-
-                            <div class="flex justify-between gap-3">
-                                <dt>Bags</dt>
-                                <dd class="font-medium"><span data-figure="bags">{{ $row['bags'] }}</span></dd>
-                            </div>
-                        </dl>
-                    </x-panel>
+        <x-panel title="Needs attention">
+            <ul class="space-y-2 text-sm text-gray-700">
+                @forelse ($needsAttention['boarding'] as $flight)
+                    <li>
+                        <a href="{{ route('manager.flights.show', $flight) }}" class="font-medium hover:underline arcs-mono" style="color: var(--arcs-accent-text);">{{ $flight->flight_no }}</a>
+                        — boarding with passengers not yet boarded
+                    </li>
                 @empty
-                    <x-empty-state message="No flights today." />
+                    <li class="text-gray-500">No boarding gaps right now.</li>
                 @endforelse
-            </div>
-        </div>
+                @foreach ($needsAttention['checkin_closing'] as $flight)
+                    <li>
+                        <a href="{{ route('manager.flights.show', $flight) }}" class="font-medium hover:underline arcs-mono" style="color: var(--arcs-accent-text);">{{ $flight->flight_no }}</a>
+                        — check-in closes within 30 minutes
+                    </li>
+                @endforeach
+                <li>Failed payments today: <span class="font-semibold">{{ $needsAttention['failed_payments'] }}</span>
+                    <a href="{{ route('manager.payments', ['status' => 'failed', 'date' => now()->toDateString()]) }}" class="ml-2 font-medium hover:underline" style="color: var(--arcs-accent-text);">Open</a>
+                </li>
+            </ul>
+        </x-panel>
 
-        <x-todays-flights :role="'manager'" :station="$station" />
+        {{-- Compact today's departures: keeps SR-47 / station-filter assertions (data-role + data-figure). --}}
+        <div class="arcs-card overflow-hidden" data-role="manager">
+            <h2 class="border-b px-5 py-4 text-base font-semibold text-gray-900" style="border-color: var(--arcs-border);">Today's departures</h2>
+            @if ($rows->isEmpty())
+                <p class="px-5 py-6 text-sm text-gray-600">No flights today.</p>
+            @else
+                <div class="arcs-table-wrap">
+                    <table class="arcs-table">
+                        <thead>
+                            <tr>
+                                <th>Flight</th>
+                                <th>Route</th>
+                                <th>Checked in</th>
+                                <th>Boarded</th>
+                                <th>No-shows</th>
+                                <th>Bags</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach ($rows as $row)
+                                <tr>
+                                    <td class="arcs-mono font-medium">
+                                        <a href="{{ route('manager.flights.show', $row['flight']) }}" class="hover:underline">{{ $row['flight']->flight_no }}</a>
+                                    </td>
+                                    <td>{{ $row['flight']->origin }} → {{ $row['flight']->destination }}</td>
+                                    <td><span data-figure="checked-in">{{ $row['percent'] }} %</span> ({{ $row['checked_in'] }} of {{ $row['passengers'] }})</td>
+                                    <td><span data-figure="boarded">{{ $row['boarded'] }}</span></td>
+                                    <td><span data-figure="no-shows">{{ $row['no_shows'] }}</span></td>
+                                    <td><span data-figure="bags">{{ $row['bags'] }}</span></td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </div>
     </div>
 </x-app-layout>

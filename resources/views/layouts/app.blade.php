@@ -20,17 +20,12 @@
         ->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))
         ->implode('');
     $menuGroups = match ($role) {
-        App\Enums\Role::Manager => [
-            'Operations' => ['Flight lists', 'Dashboard', 'Flights and aircraft', 'Airports'],
-            'People' => ['Staff accounts'],
-            'Pricing' => ['Rules and allowances', 'Fares and fees'],
-            'Reports' => ['Sales per flight', 'Payments', 'Audit log'],
-        ],
+        App\Enums\Role::Manager => [],
         App\Enums\Role::Reservation => [
             'Bookings' => ['New reservation', 'Find reservation'],
         ],
         App\Enums\Role::Checkin => [
-            'Check-in' => ['Check in passenger'],
+            'Check-in' => ['Check in passenger', 'Check-in lists'],
         ],
         App\Enums\Role::Gate => [
             'Gate' => ['Manifest'],
@@ -38,6 +33,15 @@
     };
     $menu = $role->menu();
     $showTodaysInMenu = in_array($role, [App\Enums\Role::Reservation, App\Enums\Role::Checkin, App\Enums\Role::Gate], true);
+    $managerStation = $role === App\Enums\Role::Manager
+        ? \App\Support\ManagerStation::apply(request())
+        : null;
+    $managerAirports = $role === App\Enums\Role::Manager
+        ? \App\Support\ManagerStation::airports(request())
+        : collect();
+    $managerStationAirport = is_string($managerStation) && $managerStation !== ''
+        ? $managerAirports->firstWhere('code', $managerStation)
+        : null;
 @endphp
 <body class="font-sans antialiased text-gray-900" style="background: var(--arcs-page);">
 <div data-arcs-shell class="arcs-shell flex min-h-screen flex-col lg:flex-row">
@@ -53,15 +57,61 @@
                 </a>
             </div>
 
-            @if ($role === App\Enums\Role::Manager && trim(strip_tags((string) ($station ?? ''))) !== '')
-                <div class="rounded-2xl px-3 py-2.5 text-xs" style="background: var(--arcs-side-active);">
-                    {{ $station }}
+            @if ($role === App\Enums\Role::Manager)
+                <div class="rounded-2xl px-3 py-2.5" style="background: #353B4F;">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <p class="text-sm font-semibold">
+                                @if ($managerStationAirport)
+                                    {{ $managerStationAirport->code }} · {{ $managerStationAirport->city }}
+                                @else
+                                    All stations
+                                @endif
+                            </p>
+                            <p class="mt-0.5 text-xs text-white/60">
+                                @if ($managerStationAirport)
+                                    <x-local-time :at="now()" :airport="$managerStationAirport->code" format="H:i" /> local
+                                @elseif ($stationCode)
+                                    <x-station-time :at="now()" format="H:i" /> local
+                                @else
+                                    <x-station-time :at="now()" format="H:i" /> UTC
+                                @endif
+                            </p>
+                        </div>
+                    </div>
+                    <form method="GET" action="{{ request()->url() }}" class="no-print mt-2">
+                        @foreach (request()->except('station') as $name => $value)
+                            @if (is_scalar($value))
+                                <input type="hidden" name="{{ $name }}" value="{{ $value }}">
+                            @endif
+                        @endforeach
+                        <label for="manager-station" class="sr-only">Station</label>
+                        <select id="manager-station" name="station" onchange="this.form.submit()" class="h-9 w-full rounded-lg border-0 bg-white/10 px-2 text-sm text-white">
+                            <option value="" @selected($managerStation === null || $managerStation === '')>All stations</option>
+                            @foreach ($managerAirports as $airport)
+                                <option value="{{ $airport->code }}" @selected($managerStation === $airport->code) class="text-gray-900">{{ $airport->code }} · {{ $airport->city }}</option>
+                            @endforeach
+                        </select>
+                    </form>
+                    @if (is_string($managerStation) && $managerStation !== '')
+                        <p class="no-print mt-2 text-xs text-white/80">
+                            Station: {{ $managerStation }} ·
+                            <a href="{{ request()->fullUrlWithQuery(['station' => '']) }}" class="font-medium text-white underline">Show all stations</a>
+                        </p>
+                    @endif
                 </div>
             @elseif ($stationCode)
+                @php
+                    $staffStation = $user->relationLoaded('airport')
+                        ? $user->airport
+                        : $user->airport()->first();
+                @endphp
                 <div class="rounded-2xl px-3 py-2.5" style="background: var(--arcs-side-active);">
-                    <p class="text-sm font-semibold">{{ $stationCode }}</p>
+                    <p class="text-sm font-semibold">
+                        {{ $stationCode }}@if ($staffStation) · {{ $staffStation->city }}@endif
+                    </p>
                     <p class="mt-0.5 text-xs text-white/60">
-                        <x-station-time :at="now()" format="H:i" /> local
+                        <x-local-time :at="now()" :airport="$stationCode" format="H:i" /> local
                     </p>
                 </div>
             @else
@@ -70,36 +120,49 @@
                 </div>
             @endif
 
-            <nav class="space-y-4">
-                @foreach ($menuGroups as $group => $labels)
-                    <div>
-                        <p class="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/35">{{ $group }}</p>
-                        <ul class="space-y-1 text-sm">
-                            @foreach ($labels as $label)
-                                @php $routeName = $menu[$label] ?? null; @endphp
-                                @if ($routeName)
-                                    <li>
-                                        @if (Route::has($routeName))
-                                            <a href="{{ route($routeName) }}"
-                                               @class([
-                                                   'flex min-h-[44px] items-center rounded-full px-3 py-2',
-                                                   'font-medium' => request()->routeIs($routeName),
-                                                   'text-white/75 hover:bg-white/5' => ! request()->routeIs($routeName),
-                                               ])
-                                               @style(['background: var(--arcs-side-active)' => request()->routeIs($routeName)])
-                                               @if (request()->routeIs($routeName)) aria-current="page" @endif>
-                                                {{ $label }}
-                                            </a>
-                                        @else
-                                            <span class="flex min-h-[44px] items-center rounded-full px-3 py-2 text-white/35">{{ $label }}</span>
-                                        @endif
-                                    </li>
-                                @endif
-                            @endforeach
-                        </ul>
-                    </div>
-                @endforeach
-            </nav>
+            @if ($role === App\Enums\Role::Manager)
+                <x-manager-nav />
+            @else
+                <nav class="space-y-4">
+                    @foreach ($menuGroups as $group => $labels)
+                        <div>
+                            <p class="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-wider text-white/35">{{ $group }}</p>
+                            <ul class="space-y-1 text-sm">
+                                @foreach ($labels as $label)
+                                    @php $routeName = $menu[$label] ?? null; @endphp
+                                    @if ($routeName)
+                                        @php
+                                            $menuActive = match ($label) {
+                                                'Check-in lists' => request()->routeIs('checkin.flights.*'),
+                                                'Check in passenger' => request()->routeIs('checkin.home')
+                                                    || request()->routeIs('checkin.passengers.*')
+                                                    || request()->routeIs('checkin.reservations.*'),
+                                                default => request()->routeIs($routeName),
+                                            };
+                                        @endphp
+                                        <li>
+                                            @if (Route::has($routeName))
+                                                @php
+                                                    $menuHref = $label === 'Check-in lists'
+                                                        ? route('checkin.home').'#checking-in'
+                                                        : route($routeName);
+                                                    $menuClass = 'flex min-h-[44px] items-center rounded-full px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40 '.($menuActive ? 'font-medium' : 'text-white/75 hover:bg-white/5');
+                                                    $menuStyle = $menuActive ? 'background: #353B4F' : null;
+                                                @endphp
+                                                <a href="{{ $menuHref }}" class="{{ $menuClass }}" style="{{ $menuStyle }}" {!! $menuActive ? 'aria-current="page"' : '' !!}>
+                                                    {{ $label }}
+                                                </a>
+                                            @else
+                                                <span class="flex min-h-[44px] items-center rounded-full px-3 py-2 text-white/35">{{ $label }}</span>
+                                            @endif
+                                        </li>
+                                    @endif
+                                @endforeach
+                            </ul>
+                        </div>
+                    @endforeach
+                </nav>
+            @endif
 
             @if ($showTodaysInMenu)
                 <div class="min-h-0 flex-1 overflow-y-auto">
@@ -109,7 +172,7 @@
                 <div class="flex-1"></div>
             @endif
 
-            <div class="mt-auto rounded-2xl p-3" style="background: var(--arcs-side-active);" data-user-card>
+            <div class="mt-auto rounded-2xl p-3" style="background: #353B4F;" data-user-card>
                 <div class="mb-3 flex items-center gap-2.5">
                     <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold" style="background: var(--arcs-accent);">{{ $initials }}</span>
                     <span class="min-w-0">

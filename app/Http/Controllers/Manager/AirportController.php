@@ -8,6 +8,7 @@ use App\Http\Requests\Manager\UpdateAirportRequest;
 use App\Models\Airport;
 use App\Models\AuditEntry;
 use App\Services\CountryList;
+use App\Support\ManagerStation;
 use DateTimeZone;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,12 +18,50 @@ use Illuminate\View\View;
 class AirportController extends Controller
 {
     /**
-     * The network, an add form, and one edit form per airport. The code is shown, not edited.
+     * The network list (read-only). Create and edit are their own pages.
      */
-    public function index(): View
+    public function index(Request $request): View
     {
+        ManagerStation::apply($request);
+        $q = trim((string) $request->query('q', ''));
+        $country = $request->query('country');
+
+        $airports = Airport::query()
+            ->orderBy('code')
+            ->when($q !== '', fn ($query) => $query->where(function ($inner) use ($q) {
+                $inner->where('code', 'like', "%{$q}%")
+                    ->orWhere('name', 'like', "%{$q}%")
+                    ->orWhere('city', 'like', "%{$q}%");
+            }))
+            ->when(is_string($country) && $country !== '', fn ($query) => $query->where('country', $country))
+            ->get();
+
         return view('manager.airports', [
-            'airports' => Airport::query()->orderBy('code')->get(),
+            'airports' => $airports,
+            'countries' => app(CountryList::class)->all(),
+            'filters' => [
+                'q' => $q,
+                'country' => is_string($country) ? $country : '',
+            ],
+        ]);
+    }
+
+    public function create(): View
+    {
+        ManagerStation::apply(request());
+
+        return view('manager.airports-form', [
+            'airport' => null,
+            'timezones' => DateTimeZone::listIdentifiers(),
+        ]);
+    }
+
+    public function edit(Airport $airport): View
+    {
+        ManagerStation::apply(request());
+
+        return view('manager.airports-form', [
+            'airport' => $airport,
             'timezones' => DateTimeZone::listIdentifiers(),
         ]);
     }

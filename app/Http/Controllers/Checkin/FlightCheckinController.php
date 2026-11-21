@@ -16,11 +16,30 @@ class FlightCheckinController extends Controller
     public function show(Request $request, Flight $flight, CheckinFlightService $flights): View
     {
         $filter = (string) $request->query('q', '');
+        $status = $request->query('status', 'all');
+        if (! in_array($status, ['all', 'waiting', 'done'], true)) {
+            $status = 'all';
+        }
+
+        $rows = $flights->reservations($flight, $filter);
+        $counts = [
+            'all' => $rows->count(),
+            'waiting' => $rows->filter(fn (array $row) => $row['checked_in'] < $row['passengers'])->count(),
+            'done' => $rows->filter(fn (array $row) => $row['passengers'] > 0 && $row['checked_in'] >= $row['passengers'])->count(),
+        ];
+
+        $filtered = match ($status) {
+            'waiting' => $rows->filter(fn (array $row) => $row['checked_in'] < $row['passengers'])->values(),
+            'done' => $rows->filter(fn (array $row) => $row['passengers'] > 0 && $row['checked_in'] >= $row['passengers'])->values(),
+            default => $rows,
+        };
 
         return view('checkin.flight', [
             'flight' => $flight,
             'filter' => $filter,
-            'rows' => $flights->reservations($flight, $filter),
+            'status' => $status,
+            'statusCounts' => $counts,
+            'rows' => $filtered,
         ]);
     }
 }

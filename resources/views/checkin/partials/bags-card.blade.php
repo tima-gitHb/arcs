@@ -10,7 +10,8 @@
 
 <x-panel>
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <h2 class="text-base font-semibold text-gray-900">Bags</h2>
+        <h2 class="text-base font-semibold text-gray-900">Bags & equipment</h2>
+        <span class="sr-only">Bags</span>
         @if ($passenger->bags->isNotEmpty())
             <a href="{{ route('checkin.passengers.bag-tags', $passenger) }}" target="_blank"
                class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">Print all tags</a>
@@ -110,7 +111,12 @@
                     @foreach ($passenger->bags as $bag)
                         <tr>
                             <td class="arcs-mono">{{ $bag->tag_no }}</td>
-                            <td>{{ $bag->weight_kg }} kg</td>
+                            <td>
+                                {{ $bag->weight_kg }} kg
+                                @if ((float) $bag->weight_kg > \App\Services\BagTagService::HEAVY_KG)
+                                    <span class="ml-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold uppercase" style="background:#F8E9C8;color:#B45309;">HEAVY</span>
+                                @endif
+                            </td>
                             <td>
                                 {{ $bag->type->label() }}
                                 @if (! $bag->type->countsTowardAllowance())
@@ -147,8 +153,15 @@
             @csrf
             <div>
                 <x-input-label for="bag-weight" value="Weight (kg)" />
-                <x-text-input id="bag-weight" name="weight_kg" type="number" step="0.1" min="0.1" max="99.9" class="mt-1 block w-28"
-                    :value="$bagErrors->any() ? old('weight_kg') : ''" required />
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                    <x-text-input id="bag-weight" name="weight_kg" type="number" step="0.1" min="0.1" max="99.9" class="block w-28"
+                        :value="$bagErrors->any() ? old('weight_kg') : ''" required />
+                    @foreach ([18, 23, 28] as $kg)
+                        <button type="button" class="rounded-full px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100"
+                            style="background: #EEF0F4;"
+                            onclick="document.getElementById('bag-weight').value = '{{ $kg }}'">+ {{ $kg }} kg</button>
+                    @endforeach
+                </div>
                 <x-input-error :messages="$bagErrors->get('weight_kg')" class="mt-2" />
             </div>
             <div>

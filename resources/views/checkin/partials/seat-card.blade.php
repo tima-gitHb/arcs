@@ -3,7 +3,7 @@
     and $flight: the flight the seat is for (B13b; a connection has a seat per flight).
     Booked: the map is open and a click assigns the seat.
     CheckedIn: "Change seat" opens the map, limited to the same cabin; the boarding pass is replaced.
-    The plane itself is rendered in the app-shell aside by the parent show view, on this step only.
+    The plane itself is rendered by the parent show view (shared seat-map), on this step only.
 --}}
 @php
     $flight ??= $passenger->reservation->flight;
