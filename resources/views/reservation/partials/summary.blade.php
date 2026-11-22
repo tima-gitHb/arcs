@@ -1,6 +1,11 @@
 <div class="rounded-[14px] border bg-white p-5 sm:p-6 shadow-sm" style="border-color: var(--arcs-border);">
     <p class="text-sm text-gray-500">PNR</p>
-    <p class="mt-1 arcs-mono text-3xl font-semibold tracking-[0.25em]" style="color: var(--arcs-accent-text);">{{ $reservation->pnr }}</p>
+    <p class="mt-1 arcs-mono text-3xl font-semibold tracking-[0.25em]" style="color: var(--arcs-accent-text);">
+        {{ $reservation->pnr }}
+        @if ($reservation->isGroup())
+            <span class="ml-2 align-middle rounded-full px-2 py-0.5 font-sans text-xs font-semibold uppercase tracking-wide text-white" style="background: var(--arcs-navy); letter-spacing: 0.06em;">Group</span>
+        @endif
+    </p>
 
     <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
         <div>

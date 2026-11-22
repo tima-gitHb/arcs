@@ -282,3 +282,50 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Cause: UI3CheckInShellTest used assertSee(..., false), so a Faker name like O'Reilly did not match the escaped HTML (O&#039;Reilly).
 - Fix: assertSee without false, so the expected text is escaped the same way. The app output was correct.
 - Status: Fixed
+
+## BUG-024 · Booking allowed while flight was Boarding
+- Date / who: 22 Nov 2026 · Auto (validation fix)
+- Card / branch: validation · feature/validation-seat-map
+- Where: StoreReservationRequest bookable filter · ReservationController create list · JourneyService
+- Steps: 1. Open check-in then start boarding 2. Book on that flight from reservation
+- Expected: boarding = board only (no booking)
+- Actual: Boarding flights appeared on the booking list and reservation.store accepted them
+- Status: Fixed
+- Fix: `FlightStatusGate` central matrix; bookable = Scheduled / CheckinOpen / Delayed only
+- Retested: ReservationRulesTest + R1CreateReservationTest · SQLite/MySQL 901
+
+## BUG-025 · Solo check-in could assign a seat outside the booked cabin
+- Date / who: 22 Nov 2026 · Auto (validation fix)
+- Where: SeatService::assign
+- Steps: POST a Business seat_id for an Economy passenger
+- Expected: refuse
+- Actual: seat assigned (UI filtered; server did not)
+- Status: Fixed
+- Fix: `assertCabinAllows` on assign (upgrade path still allows cabin change)
+- Retested: CheckinGateRulesTest
+
+## BUG-026 · Aircraft max seats only warned in Alpine; overlap not checked
+- Date / who: 22 Nov 2026 · Auto (validation fix)
+- Where: StoreAircraftRequest · StoreFlightRequest
+- Steps: Create aircraft with rows×seats_per_row &gt; 220; or two overlapping flights on one airframe
+- Expected: server refusal
+- Actual: aircraft created; overlapping flights accepted
+- Status: Fixed
+- Fix: server max seats; `FlightScheduleService` turnaround/overlap + aircraft downsize on `aircraft_id` change
+- Retested: ManagerRulesTest
+
+## BUG-027 · Gate boarded without verified documents
+- Date / who: 22 Nov 2026 · Auto (validation fix)
+- Where: StatusService::board
+- Steps: Check in (without Verify) then board
+- Expected: gate refuses unverified docs / unpaid excess
+- Actual: board succeeded on status alone
+- Status: Fixed
+- Fix: `assertReadyToBoard`; successful check-in stamps `verified_at`; unpaid excess still blocks
+- Retested: CheckinGateRulesTest · full suite 901
+
+## BUG-028 · B12 test failed after the seat-map legend changed order
+- Found: 22 Nov 2026, seat map V2 run
+- Cause: the B12 test expected the old legend order; the new legend lists the states in a different order.
+- Fix: test updated to the new legend order; seat-map behaviour unchanged.
+- Status: Fixed

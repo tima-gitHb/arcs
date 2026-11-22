@@ -29,7 +29,7 @@ class SettingSeeder extends Seeder
             'child_alone_min_age' => '16',
             'umnr_min_age' => '5',
             'max_infants_per_adult' => '1',
-            'max_passengers_per_booking' => '9',
+            'max_passengers_per_booking' => '60',
             'max_bag_kg' => '32',
             'max_aircraft_seats' => '220',
             'min_turnaround_minutes' => '45',

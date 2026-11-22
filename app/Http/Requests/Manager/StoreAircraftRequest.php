@@ -2,8 +2,10 @@
 
 namespace App\Http\Requests\Manager;
 
+use App\Support\Limits;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreAircraftRequest extends FormRequest
 {
@@ -39,6 +41,22 @@ class StoreAircraftRequest extends FormRequest
             'business_rows' => ['required', 'integer', 'min:0', 'lte:rows'],
             'premium_rows' => $premiumRules,
         ];
+    }
+
+    /**
+     * @return array<int, \Closure(Validator): void>
+     */
+    public function after(): array
+    {
+        return [function (Validator $validator): void {
+            $rows = (int) $this->input('rows');
+            $perRow = (int) $this->input('seats_per_row');
+            $max = Limits::maxAircraftSeats();
+
+            if ($rows > 0 && $perRow > 0 && ($rows * $perRow) > $max) {
+                $validator->errors()->add('rows', "Total seats cannot exceed {$max}.");
+            }
+        }];
     }
 
     /**

@@ -49,6 +49,7 @@ trait BuildsGateFlights
     {
         foreach ($passengers as $passenger) {
             app(StatusService::class)->checkIn($passenger, $this->checkinAgent);
+            $this->verifyPassengerDocuments($passenger, $this->checkinAgent);
         }
     }
 
@@ -60,6 +61,7 @@ trait BuildsGateFlights
     protected function board(Passenger ...$passengers): void
     {
         foreach ($passengers as $passenger) {
+            $this->verifyPassengerDocuments($passenger, $this->checkinAgent);
             app(StatusService::class)->board($passenger, $this->gateAgent);
         }
     }

@@ -3,12 +3,16 @@
 namespace App\Http\Requests\Reservation;
 
 use App\Enums\CabinClass;
-use App\Enums\FlightStatus;
 use App\Enums\PassengerType;
 use App\Models\Flight;
 use App\Models\Seat;
 use App\Models\SeatAssignment;
 use App\Services\CountryList;
+use App\Support\ExitRows;
+use App\Support\FlightAction;
+use App\Support\FlightStatusGate;
+use App\Support\Limits;
+use App\Support\Luhn;
 use App\Support\ReservationContactRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
@@ -98,11 +102,14 @@ class StoreReservationRequest extends FormRequest
      */
     public function rules(): array
     {
-        $bookable = fn ($query) => $query->whereNotIn('status', [
-            FlightStatus::Departed->value,
-            FlightStatus::Cancelled->value,
-            FlightStatus::Closed->value,
-        ]);
+        $bookableStatuses = array_map(
+            fn ($status) => $status->value,
+            FlightStatusGate::bookableStatuses(),
+        );
+
+        $bookable = fn ($query) => $query->whereIn('status', $bookableStatuses);
+
+        $maxPax = Limits::maxPassengersPerBooking();
 
         return [
             'journey_type' => ['required', Rule::in(['one_way', 'connection', 'round_trip'])],
@@ -111,7 +118,7 @@ class StoreReservationRequest extends FormRequest
             'return_flight_ids' => ['nullable', 'array', 'max:3'],
             'return_flight_ids.*' => ['integer', Rule::exists('flights', 'id')->where($bookable)],
             'flight_id' => ['nullable', 'integer'],
-            'passengers' => ['required', 'array', 'min:1'],
+            'passengers' => ['required', 'array', 'min:1', 'max:'.$maxPax],
             'passengers.*.first_name' => ['required', 'string', 'max:255'],
             'passengers.*.last_name' => ['required', 'string', 'max:255'],
             'passengers.*.type' => ['required', Rule::enum(PassengerType::class)],
@@ -130,6 +137,7 @@ class StoreReservationRequest extends FormRequest
             'card_number' => ['required', 'string', 'regex:/^[\d\s]{12,23}$/'],
             'card_expiry' => ['required', 'string', 'regex:/^(0[1-9]|1[0-2])\/\d{2}$/'],
             'card_cvc' => ['required', 'string', 'regex:/^\d{3,4}$/'],
+            'booking_token' => ['required', 'string', 'uuid'],
             ...ReservationContactRules::rules(),
         ];
     }
@@ -145,6 +153,7 @@ class StoreReservationRequest extends FormRequest
             'outbound_flight_ids.min' => 'Choose the outbound flight(s).',
             'passengers.required' => 'Add at least one passenger.',
             'passengers.min' => 'Add at least one passenger.',
+            'passengers.max' => 'A booking cannot have more than '.Limits::maxPassengersPerBooking().' passengers.',
             'passengers.*.first_name.required' => 'Enter a first name.',
             'passengers.*.last_name.required' => 'Enter a last name.',
             'passengers.*.type.required' => 'Choose Adult, Child, or Infant.',
@@ -161,6 +170,8 @@ class StoreReservationRequest extends FormRequest
             'card_expiry.regex' => 'Expiry must be MM/YY (e.g. 12/30).',
             'card_cvc.required' => 'Enter the CVC.',
             'card_cvc.regex' => 'CVC must be 3 or 4 digits.',
+            'booking_token.required' => 'Reload the page and try again.',
+            'booking_token.uuid' => 'Reload the page and try again.',
         ];
     }
 
@@ -182,6 +193,11 @@ class StoreReservationRequest extends FormRequest
                             'Card expiry must be this month or later (MM/YY). Today is '.now()->format('M Y').'.',
                         );
                     }
+                }
+
+                $cardDigits = preg_replace('/\D/', '', (string) $this->input('card_number', '')) ?? '';
+                if ($cardDigits !== '' && ! Luhn::passes($cardDigits)) {
+                    $validator->errors()->add('card_number', 'Enter a valid card number.');
                 }
 
                 $type = $this->input('journey_type');
@@ -207,7 +223,26 @@ class StoreReservationRequest extends FormRequest
                 }
 
                 $flightIds = array_values(array_unique([...$outboundIds, ...$returnIds]));
-                $flights = Flight::query()->whereIn('id', $flightIds)->get()->keyBy('id');
+                $flights = Flight::query()->whereIn('id', $flightIds)->with('aircraft.seats')->get()->keyBy('id');
+
+                foreach ($flights as $flightId => $flight) {
+                    if (! FlightStatusGate::allows($flight, FlightAction::Book)) {
+                        $validator->errors()->add(
+                            'outbound_flight_ids.0',
+                            "{$flight->flight_no} is {$flight->status->label()}: it cannot be booked.",
+                        );
+                    }
+                }
+
+                $travelDate = $flights->isEmpty()
+                    ? now()
+                    : $flights->sortBy(fn (Flight $f) => $f->departure_at->timestamp)->last()->departureDate();
+
+                $hasAdult = collect($passengers)->contains(
+                    fn ($p) => is_array($p) && ($p['type'] ?? null) === PassengerType::Adult->value,
+                );
+
+                $infantsPerAdult = [];
 
                 foreach ($passengers as $index => $passenger) {
                     if (! is_array($passenger)) {
@@ -215,8 +250,37 @@ class StoreReservationRequest extends FormRequest
                     }
 
                     $pType = $passenger['type'] ?? null;
+                    $dob = $passenger['date_of_birth'] ?? null;
                     $seats = is_array($passenger['seats'] ?? null) ? $passenger['seats'] : [];
                     $legacySeat = $passenger['seat_id'] ?? null;
+
+                    if (is_string($dob) && $dob !== '') {
+                        $expected = PassengerType::fromDateOfBirthOn(Carbon::parse($dob), $travelDate);
+                        if ($pType !== $expected->value) {
+                            $validator->errors()->add(
+                                "passengers.$index.type",
+                                "Passenger type must be {$expected->label()} for this date of birth on the travel date.",
+                            );
+                        }
+
+                        $age = PassengerType::ageOn(Carbon::parse($dob), $travelDate);
+                        if ($age < Limits::childAloneMinAge() && ! $hasAdult) {
+                            $validator->errors()->add(
+                                "passengers.$index.type",
+                                'Passengers under '.Limits::childAloneMinAge().' need an adult in the same booking.',
+                            );
+                        }
+                    }
+
+                    $passportExpiry = $passenger['passport']['expiry_date'] ?? null;
+                    if (is_string($passportExpiry) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $passportExpiry)) {
+                        if (Carbon::parse($passportExpiry)->startOfDay()->lt($travelDate->copy()->startOfDay())) {
+                            $validator->errors()->add(
+                                "passengers.$index.passport.expiry_date",
+                                'Passport must not be expired on the travel date.',
+                            );
+                        }
+                    }
 
                     if ($pType === PassengerType::Infant->value) {
                         $adultIndex = $passenger['accompanying_adult'] ?? null;
@@ -230,6 +294,8 @@ class StoreReservationRequest extends FormRequest
                                 "passengers.$index.accompanying_adult",
                                 'An infant must be linked to an adult on the same reservation.',
                             );
+                        } else {
+                            $infantsPerAdult[(int) $adultIndex] = ($infantsPerAdult[(int) $adultIndex] ?? 0) + 1;
                         }
 
                         foreach ([...array_values($seats), $legacySeat] as $seatId) {
@@ -280,6 +346,58 @@ class StoreReservationRequest extends FormRequest
                             $validator->errors()->add($errorKey, 'Choose a seat in that cabin class.');
                         } elseif (SeatAssignment::query()->where('flight_id', $flightId)->where('seat_id', (int) $seatId)->exists()) {
                             $validator->errors()->add($errorKey, 'Seat taken');
+                        } elseif (ExitRows::seatIsExit($seat->seat_no) && $pType !== PassengerType::Adult->value) {
+                            $validator->errors()->add($errorKey, 'Exit-row seats are only for adults.');
+                        }
+                    }
+                }
+
+                $maxInfants = Limits::maxInfantsPerAdult();
+                foreach ($infantsPerAdult as $adultIndex => $count) {
+                    if ($count > $maxInfants) {
+                        $validator->errors()->add(
+                            "passengers.$adultIndex.type",
+                            "An adult may accompany at most {$maxInfants} infant".($maxInfants === 1 ? '' : 's').'.',
+                        );
+                    }
+                }
+
+                // Cabin free seats (non-infants) must cover the party on every flight (#4).
+                foreach ($flightIds as $flightId) {
+                    $flight = $flights->get($flightId);
+                    if ($flight === null) {
+                        continue;
+                    }
+
+                    $needed = [];
+                    foreach ($passengers as $passenger) {
+                        if (! is_array($passenger) || ($passenger['type'] ?? null) === PassengerType::Infant->value) {
+                            continue;
+                        }
+                        $cabin = $passenger['cabin_class'] ?? null;
+                        if ($cabin === null || $cabin === '') {
+                            continue;
+                        }
+                        $needed[$cabin] = ($needed[$cabin] ?? 0) + 1;
+                    }
+
+                    foreach ($needed as $cabin => $count) {
+                        $capacity = Seat::query()
+                            ->where('aircraft_id', $flight->aircraft_id)
+                            ->where('cabin_class', $cabin)
+                            ->count();
+                        $sold = SeatAssignment::query()
+                            ->join('seats', 'seats.id', '=', 'seat_assignments.seat_id')
+                            ->where('seat_assignments.flight_id', $flightId)
+                            ->where('seats.cabin_class', $cabin)
+                            ->count();
+                        $free = $capacity - $sold;
+
+                        if ($count > $free) {
+                            $validator->errors()->add(
+                                'passengers',
+                                "Not enough free {$cabin} seats on {$flight->flight_no} ({$free} left, need {$count}).",
+                            );
                         }
                     }
                 }

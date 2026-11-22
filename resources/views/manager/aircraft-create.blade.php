@@ -59,7 +59,7 @@
 
             <div class="mt-6 flex flex-wrap gap-3">
                 <a href="{{ route('manager.aircraft.index') }}" class="arcs-btn-secondary">Cancel</a>
-                <x-primary-button>Create aircraft</x-primary-button>
+                <x-primary-button x-bind:disabled="totalSeats > maxSeats">Create aircraft</x-primary-button>
             </div>
         </x-panel>
 

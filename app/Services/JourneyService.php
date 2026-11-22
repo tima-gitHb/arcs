@@ -13,6 +13,8 @@ use App\Models\Passenger;
 use App\Models\Reservation;
 use App\Models\ReservationSegment;
 use App\Models\User;
+use App\Support\FlightAction;
+use App\Support\FlightStatusGate;
 use App\Support\Journey;
 use App\Support\Limits;
 use Illuminate\Database\Eloquent\Collection;
@@ -50,7 +52,7 @@ class JourneyService
             }
             $seen[$flight->id] = true;
 
-            if (in_array($flight->status, [FlightStatus::Cancelled, FlightStatus::Closed, FlightStatus::Departed], true)) {
+            if (! FlightStatusGate::allows($flight, FlightAction::Book)) {
                 throw new InvalidJourney("{$flight->flight_no} is {$flight->status->label()}: it cannot be booked.");
             }
         }

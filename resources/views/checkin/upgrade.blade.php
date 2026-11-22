@@ -78,22 +78,42 @@
 
         function paint() {
             const cabin = selectedCabin();
-            const offered = seats.filter((seat) => seat.cabin === cabin);
             const map = document.getElementById('seat-map');
             const hint = document.getElementById('seat-map-hint');
-            hint.textContent = `Free ${cabin} seats. Taken seats blocked.`;
+            hint.textContent = `Free ${cabin} seats. Whole cabin shown · other cabins not allowed.`;
 
-            window.ArcsSeatMap.draw(map, offered, (seat) => {
+            window.ArcsSeatMap.draw(map, seats, (seat) => {
                 const mine = seatInput.value === String(seat.id);
-                let style = window.ArcsSeatMap.cabinStyle({ ...seat, taken: false });
-                let disabled = seat.taken;
-                if (seat.taken) style = 'taken';
-                if (mine) style = 'mine';
-                return { style, disabled, onPick: (s) => {
-                    if (s.taken || s.cabin !== cabin) return;
-                    seatInput.value = seatInput.value === String(s.id) ? '' : String(s.id);
-                    paint();
-                }};
+
+                if (mine) {
+                    return { style: 'mine', disabled: false, onPick: (s) => {
+                        seatInput.value = '';
+                        paint();
+                    }};
+                }
+
+                if (seat.taken) {
+                    return { style: 'taken', disabled: true, title: `${seat.seat_no} · taken` };
+                }
+
+                if (cabin !== '' && seat.cabin !== cabin) {
+                    return {
+                        style: 'blocked',
+                        blocked: true,
+                        disabled: true,
+                        label: '',
+                        title: `${seat.seat_no} · ${seat.cabin} · not allowed`,
+                    };
+                }
+
+                return {
+                    style: window.ArcsSeatMap.cabinStyle(seat),
+                    disabled: false,
+                    onPick: (s) => {
+                        seatInput.value = String(s.id);
+                        paint();
+                    },
+                };
             });
         }
 

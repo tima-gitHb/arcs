@@ -30,6 +30,7 @@ use App\Services\PnrGenerator;
 use App\Services\ReservationService;
 use App\Services\SeatService;
 use App\Services\StatusService;
+use App\Support\FlightStatusGate;
 use App\Support\Journey;
 use App\Support\Money;
 use Database\Seeders\FareSeeder;
@@ -37,6 +38,7 @@ use Database\Seeders\SettingSeeder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\View\View;
 
@@ -44,17 +46,13 @@ class ReservationController extends Controller
 {
     public function create(): View
     {
-        // Hide past Scheduled flights left over from an old seed; keep Check-in open / Boarding / Delayed.
+        // Bookable statuses only (#41 / #7): Scheduled (future), Check-in open, Delayed — not Boarding.
+        $bookable = array_map(fn ($s) => $s->value, FlightStatusGate::bookableStatuses());
         $flights = Flight::query()
-            ->whereNotIn('status', [
-                FlightStatus::Departed->value,
-                FlightStatus::Cancelled->value,
-                FlightStatus::Closed->value,
-            ])
+            ->whereIn('status', $bookable)
             ->where(function ($query) {
                 $query->whereIn('status', [
                     FlightStatus::CheckinOpen->value,
-                    FlightStatus::Boarding->value,
                     FlightStatus::Delayed->value,
                 ])->orWhere(function ($scheduled) {
                     $scheduled->where('status', FlightStatus::Scheduled->value)
@@ -67,7 +65,6 @@ class ReservationController extends Controller
 
         $flightGroups = collect([
             FlightStatus::CheckinOpen,
-            FlightStatus::Boarding,
             FlightStatus::Delayed,
             FlightStatus::Scheduled,
         ])->mapWithKeys(fn (FlightStatus $status) => [
@@ -199,6 +196,20 @@ class ReservationController extends Controller
         $safeInput = fn () => $request->except(['card_number', 'card_cvc', 'card_expiry']);
 
         try {
+            $token = (string) $request->validated('booking_token');
+            $cacheKey = 'booking_token:'.$token;
+            if (! Cache::add($cacheKey, 'pending', now()->addHour())) {
+                $existingId = Cache::get($cacheKey.':reservation');
+                if (is_numeric($existingId)) {
+                    return redirect()->route('reservation.confirmation', $existingId)
+                        ->with('success', 'Reservation already created.');
+                }
+
+                return back()->withInput($safeInput())->withErrors([
+                    'booking_token' => 'This booking was already submitted. Wait a moment or reload the page.',
+                ]);
+            }
+
             $outboundIds = $request->outboundFlightIds();
             $returnIds = $request->returnFlightIds();
             $outbound = Flight::query()->whereIn('id', $outboundIds)->get()
@@ -224,6 +235,8 @@ class ReservationController extends Controller
                     $request->validated('card_cvc'),
                 ),
             );
+
+            Cache::put($cacheKey.':reservation', $reservation->id, now()->addHour());
         } catch (InvalidJourney $exception) {
             return back()->withInput($safeInput())->withErrors([
                 'outbound_flight_ids' => $exception->getMessage(),

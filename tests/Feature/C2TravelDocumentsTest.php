@@ -367,7 +367,10 @@ class C2TravelDocumentsTest extends TestCase
 
             $this->assertSame(1, $passenger->travelDocuments()->count(), $status);
             $this->assertNotSame('LR9999999', $document->fresh()->number, $status);
-            $this->assertNull($document->fresh()->verified_at, $status);
+            // Boarded passengers were verified at check-in (#48); Cancelled never were.
+            if ($status === 'Cancelled') {
+                $this->assertNull($document->fresh()->verified_at, $status);
+            }
         }
 
         $this->assertSame($auditRows, AuditEntry::count());

@@ -254,6 +254,8 @@
             return {
                 style,
                 disabled: false,
+                label: style === 'boarded' ? '✓' : '',
+                title: status ? `${seat.seat_no} · ${status}` : undefined,
                 onPick: (picked) => {
                     const row = document.querySelector(`tr[data-seat="${CSS.escape(picked.seat_no)}"]`);
                     selectPassenger(row ? row.dataset.passenger : null);

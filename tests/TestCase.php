@@ -14,6 +14,7 @@ use App\Services\StatusService;
 use Database\Seeders\FareSeeder;
 use Database\Seeders\SettingSeeder;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use Illuminate\Support\Str;
 
 abstract class TestCase extends BaseTestCase
 {
@@ -142,6 +143,60 @@ abstract class TestCase extends BaseTestCase
             'card_number' => '4242 4242 4242 4242',
             'card_expiry' => '12/30',
             'card_cvc' => '123',
+            'booking_token' => (string) Str::uuid(),
         ], $overrides);
+    }
+
+    /**
+     * Mark travel documents verified so gate boarding (#48) can succeed in tests.
+     */
+    protected function verifyPassengerDocuments(Passenger $passenger, ?User $by = null): void
+    {
+        $by ??= User::factory()->create(['role' => Role::Checkin]);
+
+        foreach ($passenger->travelDocuments()->get() as $document) {
+            if ($document->verified_at !== null) {
+                continue;
+            }
+
+            $document->forceFill([
+                'verified_at' => now(),
+                'verified_by' => $by->id,
+            ])->save();
+        }
+    }
+
+    /**
+     * @return list<int>
+     */
+    protected function seatsFor(Flight $flight, int $count, string $cabin = 'Economy'): array
+    {
+        $now = now();
+        $rows = [];
+        $letter = match ($cabin) {
+            'Business' => 'A',
+            'Premium' => 'C',
+            default => 'A',
+        };
+        $start = Seat::query()->where('aircraft_id', $flight->aircraft_id)->count() + 1;
+
+        for ($number = 0; $number < $count; $number++) {
+            $rows[] = [
+                'aircraft_id' => $flight->aircraft_id,
+                'seat_no' => ($start + $number).$letter,
+                'cabin_class' => $cabin,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        Seat::query()->insert($rows);
+
+        return Seat::query()
+            ->where('aircraft_id', $flight->aircraft_id)
+            ->whereIn('seat_no', array_column($rows, 'seat_no'))
+            ->orderBy('id')
+            ->pluck('id')
+            ->all();
     }
 }

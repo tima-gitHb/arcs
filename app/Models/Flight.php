@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\FlightStatus;
 use App\Models\Concerns\StoresTimesInUtc;
+use App\Services\FlightScheduleService;
 use App\Support\LocalTime;
 use DateTimeInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,6 +18,23 @@ use Illuminate\Support\Carbon;
 class Flight extends Model
 {
     use HasFactory, StoresTimesInUtc;
+
+    protected static function booted(): void
+    {
+        // Validation #28: cannot move onto a smaller cabin than seats already sold.
+        static::updating(function (Flight $flight) {
+            if (! $flight->isDirty('aircraft_id')) {
+                return;
+            }
+
+            $aircraft = Aircraft::query()->find($flight->aircraft_id);
+            if ($aircraft === null) {
+                return;
+            }
+
+            app(FlightScheduleService::class)->assertAircraftFitsSold($flight, $aircraft);
+        });
+    }
 
     /**
      * 'status' and 'boarding_closed_at' are deliberately not fillable:
