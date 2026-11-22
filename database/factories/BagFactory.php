@@ -18,7 +18,7 @@ class BagFactory extends Factory
     {
         return [
             'passenger_id' => Passenger::factory(),
-            'tag_no' => 'ME'.fake()->unique()->numerify('######'),
+            'tag_no' => config('arcs.airline.code').fake()->unique()->numerify('######'),
             'weight_kg' => 20.0,
         ];
     }

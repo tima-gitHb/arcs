@@ -255,7 +255,7 @@ class BagService
     }
 
     /**
-     * Tag number: the airline code of the flight (first 2 characters, e.g. ME) + 6 digits,
+     * Tag number: the airline code of the flight (first 2 characters of flight_no, e.g. config arcs.airline.code) + 6 digits,
      * unique in bags (SR-9). Retried on the rare collision, like the PNR.
      */
     private function newTag(Passenger $passenger, SegmentDirection $direction): string

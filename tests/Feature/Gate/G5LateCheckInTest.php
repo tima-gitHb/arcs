@@ -39,7 +39,7 @@ class G5LateCheckInTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->makeAgents();
         $this->manager = User::factory()->create(['role' => Role::Manager, 'name' => 'Hiba Daher', 'email' => 'boss@arcs.test']);
-        $this->flight = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => 'ME305']);
+        $this->flight = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => $this->flightNo('305')]);
     }
 
     private function late(Passenger $passenger, array $overrides = [])

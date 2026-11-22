@@ -63,7 +63,7 @@ class FlightListTest extends TestCase
         $this->checkinAgent = User::factory()->create(['role' => Role::Checkin, 'name' => 'Checkin Carl']);
         $this->gateAgent = User::factory()->create(['role' => Role::Gate, 'name' => 'Gate Gina']);
 
-        $this->flight = $this->newFlight('ME201');
+        $this->flight = $this->newFlight($this->flightNo('201'));
     }
 
     /**
@@ -174,23 +174,23 @@ class FlightListTest extends TestCase
         $adam = $this->addPassenger($this->flight, 'Adam', 'Zeidan', '2A', checkedIn: true);
         $lina = $this->addPassenger($this->flight, 'Lina', 'Karam', '2B', checkedIn: true);
 
-        $this->bag($lina, 'ME1001', BagType::Standard, BagHandling::Hold, 23.5);
-        $this->bag($lina, 'ME1002', BagType::Wheelchair, BagHandling::GateDelivery, 14.0);
-        $this->bag($adam, 'ME1003', BagType::Stroller, BagHandling::GateDelivery, 9.0);
-        $this->bag($adam, 'ME1004', BagType::SportsEquipment, BagHandling::Hold, 21.5, offloaded: true);
+        $this->bag($lina, $this->flightNo('1001'), BagType::Standard, BagHandling::Hold, 23.5);
+        $this->bag($lina, $this->flightNo('1002'), BagType::Wheelchair, BagHandling::GateDelivery, 14.0);
+        $this->bag($adam, $this->flightNo('1003'), BagType::Stroller, BagHandling::GateDelivery, 9.0);
+        $this->bag($adam, $this->flightNo('1004'), BagType::SportsEquipment, BagHandling::Hold, 21.5, offloaded: true);
 
         $this->openList($this->flight, 'baggage')
             ->assertSee('Tag', false) // this tab's own heading
             // tag, passenger, type, weight, handling, offloaded — wheelchair and stroller weights too.
-            ->assertSeeInOrder(['ME1001', 'Lina Karam', BagType::Standard->label(), '23.5', BagHandling::Hold->label(), 'No'])
-            ->assertSeeInOrder(['ME1002', 'Lina Karam', BagType::Wheelchair->label(), '14.0', BagHandling::GateDelivery->label(), 'No'])
-            ->assertSeeInOrder(['ME1003', 'Adam Zeidan', BagType::Stroller->label(), '9.0', BagHandling::GateDelivery->label(), 'No'])
-            ->assertSeeInOrder(['ME1004', 'Adam Zeidan', BagType::SportsEquipment->label(), '21.5', BagHandling::Hold->label(), 'Yes'])
+            ->assertSeeInOrder([$this->flightNo('1001'), 'Lina Karam', BagType::Standard->label(), '23.5', BagHandling::Hold->label(), 'No'])
+            ->assertSeeInOrder([$this->flightNo('1002'), 'Lina Karam', BagType::Wheelchair->label(), '14.0', BagHandling::GateDelivery->label(), 'No'])
+            ->assertSeeInOrder([$this->flightNo('1003'), 'Adam Zeidan', BagType::Stroller->label(), '9.0', BagHandling::GateDelivery->label(), 'No'])
+            ->assertSeeInOrder([$this->flightNo('1004'), 'Adam Zeidan', BagType::SportsEquipment->label(), '21.5', BagHandling::Hold->label(), 'Yes'])
             // Each row carries its tag and whether it was offloaded, like data-figure on the dashboard.
-            ->assertSee('data-bag="ME1001" data-offloaded="no"', false)
-            ->assertSee('data-bag="ME1002" data-offloaded="no"', false)
-            ->assertSee('data-bag="ME1003" data-offloaded="no"', false)
-            ->assertSee('data-bag="ME1004" data-offloaded="yes"', false);
+            ->assertSee('data-bag="'.$this->flightNo('1001').'" data-offloaded="no"', false)
+            ->assertSee('data-bag="'.$this->flightNo('1002').'" data-offloaded="no"', false)
+            ->assertSee('data-bag="'.$this->flightNo('1003').'" data-offloaded="no"', false)
+            ->assertSee('data-bag="'.$this->flightNo('1004').'" data-offloaded="yes"', false);
     }
 
     public function test_baggage_totals_line_shows_count_and_total_weight(): void
@@ -198,13 +198,13 @@ class FlightListTest extends TestCase
         $this->openList($this->flight, 'baggage')->assertSee('Total: 0 bags, 0.0 kg');
 
         $lina = $this->addPassenger($this->flight, 'Lina', 'Karam', '2B', checkedIn: true);
-        $this->bag($lina, 'ME1001', BagType::Standard, BagHandling::Hold, 15.5);
+        $this->bag($lina, $this->flightNo('1001'), BagType::Standard, BagHandling::Hold, 15.5);
 
         $this->openList($this->flight, 'baggage')->assertSee('Total: 1 bag, 15.5 kg');
 
-        $this->bag($lina, 'ME1002', BagType::Wheelchair, BagHandling::GateDelivery, 14.0);
-        $this->bag($lina, 'ME1003', BagType::Stroller, BagHandling::GateDelivery, 9.0);
-        $this->bag($lina, 'ME1004', BagType::SportsEquipment, BagHandling::Hold, 21.5, offloaded: true);
+        $this->bag($lina, $this->flightNo('1002'), BagType::Wheelchair, BagHandling::GateDelivery, 14.0);
+        $this->bag($lina, $this->flightNo('1003'), BagType::Stroller, BagHandling::GateDelivery, 9.0);
+        $this->bag($lina, $this->flightNo('1004'), BagType::SportsEquipment, BagHandling::Hold, 21.5, offloaded: true);
 
         // Every bag counts, free ones and offloaded ones too: 15.5 + 14.0 + 9.0 + 21.5.
         $this->openList($this->flight, 'baggage')->assertSee('Total: 4 bags, 60.0 kg');
@@ -226,37 +226,37 @@ class FlightListTest extends TestCase
 
     public function test_lists_only_show_the_chosen_flight(): void
     {
-        $other = $this->newFlight('ME305');
+        $other = $this->newFlight($this->flightNo('305'));
 
         $mine = $this->addPassenger($this->flight, 'Lina', 'Karam', '2B', checkedIn: true);
-        $this->bag($mine, 'ME1001', BagType::Standard, BagHandling::Hold, 20.0);
+        $this->bag($mine, $this->flightNo('1001'), BagType::Standard, BagHandling::Hold, 20.0);
         SpecialService::create(['passenger_id' => $mine->id, 'type' => SpecialServiceCode::PETC, 'details' => 'Parrot']);
 
         $theirs = $this->addPassenger($other, 'Sami', 'Otherflight', '2B', checkedIn: true);
-        $this->bag($theirs, 'ME2002', BagType::Standard, BagHandling::Hold, 18.0);
+        $this->bag($theirs, $this->flightNo('2002'), BagType::Standard, BagHandling::Hold, 18.0);
         SpecialService::create(['passenger_id' => $theirs->id, 'type' => SpecialServiceCode::MEDA, 'details' => 'Insulin']);
 
         $this->openList($this->flight, 'passengers')->assertSee('Lina Karam')->assertDontSee('Otherflight');
-        $this->openList($this->flight, 'baggage')->assertSee('ME1001')->assertDontSee('ME2002')->assertSee('Total: 1 bag, 20.0 kg');
+        $this->openList($this->flight, 'baggage')->assertSee($this->flightNo('1001'))->assertDontSee($this->flightNo('2002'))->assertSee('Total: 1 bag, 20.0 kg');
         $this->openList($this->flight, 'services')->assertSee('Parrot')->assertDontSee('Insulin');
 
         // And the other way round.
         $this->openList($other, 'passengers')->assertSee('Sami Otherflight')->assertDontSee('Karam');
-        $this->openList($other, 'baggage')->assertSee('ME2002')->assertDontSee('ME1001');
+        $this->openList($other, 'baggage')->assertSee($this->flightNo('2002'))->assertDontSee($this->flightNo('1001'));
         $this->openList($other, 'services')->assertSee('Insulin')->assertDontSee('Parrot');
     }
 
     public function test_no_flight_chosen_shows_the_picker_only(): void
     {
-        $this->newFlight('ME305');
+        $this->newFlight($this->flightNo('305'));
         $this->addPassenger($this->flight, 'Lina', 'Karam', '2B', checkedIn: true);
 
         // The picker lists every flight by number and date.
         $this->get(route('manager.home'))
             ->assertOk()
             ->assertSee('Flight lists')
-            ->assertSee('ME201 — 10 Nov 2026')
-            ->assertSee('ME305 — 10 Nov 2026')
+            ->assertSee($this->flightNo('201').' — 10 Nov 2026')
+            ->assertSee($this->flightNo('305').' — 10 Nov 2026')
             ->assertDontSee('Karam')
             ->assertDontSee('Special services')   // no tabs
             ->assertDontSee('window.print()', false);   // no Print button
@@ -264,23 +264,23 @@ class FlightListTest extends TestCase
         // An unknown flight id is treated the same way.
         $this->get(route('manager.home', ['flight' => 99999]))
             ->assertOk()
-            ->assertSee('ME201 — 10 Nov 2026')
+            ->assertSee($this->flightNo('201').' — 10 Nov 2026')
             ->assertDontSee('Special services');
     }
 
     public function test_default_and_unknown_tab_show_the_passenger_list_and_only_one_list_at_a_time(): void
     {
         $lina = $this->addPassenger($this->flight, 'Lina', 'Karam', '2B', checkedIn: true);
-        $this->bag($lina, 'ME1001', BagType::Standard, BagHandling::Hold, 20.0);
+        $this->bag($lina, $this->flightNo('1001'), BagType::Standard, BagHandling::Hold, 20.0);
 
         foreach ([null, 'bogus', 'passengers'] as $tab) {
             $this->openList($this->flight, $tab)
                 ->assertSee('Lina Karam')
                 ->assertSee('Checked in by', false)
-                ->assertDontSee('ME1001');
+                ->assertDontSee($this->flightNo('1001'));
         }
 
-        $this->openList($this->flight, 'baggage')->assertSee('ME1001')->assertDontSee('Checked in by', false);
+        $this->openList($this->flight, 'baggage')->assertSee($this->flightNo('1001'))->assertDontSee('Checked in by', false);
     }
 
     public function test_print_button_tabs_and_print_styles_are_on_the_page(): void
@@ -315,7 +315,7 @@ class FlightListTest extends TestCase
         $add = function (int $from, int $to) use ($seats) {
             for ($i = $from; $i < $to; $i++) {
                 $passenger = $this->addPassenger($this->flight, 'First'.$i, 'Last'.$i, $seats[$i], checkedIn: true);
-                $this->bag($passenger, 'ME9'.$i, BagType::Standard, BagHandling::Hold, 20.0);
+                $this->bag($passenger, $this->flightNo('9').$i, BagType::Standard, BagHandling::Hold, 20.0);
                 SpecialService::create(['passenger_id' => $passenger->id, 'type' => SpecialServiceCode::VGML]);
             }
         };

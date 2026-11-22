@@ -45,8 +45,8 @@ class B14MultiCityLegsTest extends TestCase
 
     public function test_B14_migration_backfill_sets_outbound_leg_1_and_return_leg_2(): void
     {
-        $out = $this->flight('ME201', 'BEY', 'CDG', '2026-11-15 08:00', '2026-11-15 12:45');
-        $back = $this->flight('ME204', 'CDG', 'BEY', '2026-11-18 10:00', '2026-11-18 14:15');
+        $out = $this->flight($this->flightNo('201'), 'BEY', 'CDG', '2026-11-15 08:00', '2026-11-15 12:45');
+        $back = $this->flight($this->flightNo('204'), 'CDG', 'BEY', '2026-11-18 10:00', '2026-11-18 14:15');
         $reservation = Reservation::factory()->create(['flight_id' => $out->id]);
         $this->journeys->addSegments($reservation, new Journey([$out], [$back]));
 
@@ -57,9 +57,9 @@ class B14MultiCityLegsTest extends TestCase
 
     public function test_B14_a_three_leg_trip_is_valid(): void
     {
-        $a = $this->flight('ME101', 'BEY', 'DXB', '2026-11-15 08:00', '2026-11-15 12:00');
-        $b = $this->flight('ME102', 'CAI', 'JED', '2026-11-17 08:00', '2026-11-17 12:00');
-        $c = $this->flight('ME103', 'RUH', 'AUH', '2026-11-19 08:00', '2026-11-19 14:00');
+        $a = $this->flight($this->flightNo('101'), 'BEY', 'DXB', '2026-11-15 08:00', '2026-11-15 12:00');
+        $b = $this->flight($this->flightNo('102'), 'CAI', 'JED', '2026-11-17 08:00', '2026-11-17 12:00');
+        $c = $this->flight($this->flightNo('103'), 'RUH', 'AUH', '2026-11-19 08:00', '2026-11-19 14:00');
 
         $this->journeys->validate(Journey::multiCity([[$a], [$b], [$c]]));
 
@@ -73,8 +73,8 @@ class B14MultiCityLegsTest extends TestCase
     public function test_B14_a_gap_under_the_minimum_connection_is_refused(): void
     {
         // IST MCT is 60 minutes.
-        $a = $this->flight('ME264', 'BEY', 'IST', '2026-11-15 08:00', '2026-11-15 10:00');
-        $b = $this->flight('ME216', 'IST', 'CDG', '2026-11-15 10:30', '2026-11-15 14:00');
+        $a = $this->flight($this->flightNo('264'), 'BEY', 'IST', '2026-11-15 08:00', '2026-11-15 10:00');
+        $b = $this->flight($this->flightNo('216'), 'IST', 'CDG', '2026-11-15 10:30', '2026-11-15 14:00');
 
         try {
             $this->journeys->validate(new Journey([$a, $b]));
@@ -86,8 +86,8 @@ class B14MultiCityLegsTest extends TestCase
 
     public function test_B14_a_leg_starting_before_the_previous_one_ends_is_refused(): void
     {
-        $a = $this->flight('ME101', 'BEY', 'DXB', '2026-11-15 08:00', '2026-11-15 18:00');
-        $b = $this->flight('ME102', 'CAI', 'JED', '2026-11-15 12:00', '2026-11-15 16:00');
+        $a = $this->flight($this->flightNo('101'), 'BEY', 'DXB', '2026-11-15 08:00', '2026-11-15 18:00');
+        $b = $this->flight($this->flightNo('102'), 'CAI', 'JED', '2026-11-15 12:00', '2026-11-15 16:00');
 
         try {
             $this->journeys->validate(Journey::multiCity([[$a], [$b]]));
@@ -126,8 +126,8 @@ class B14MultiCityLegsTest extends TestCase
 
     public function test_B14_a_gap_over_24_hours_counts_as_a_new_leg(): void
     {
-        $a = $this->flight('ME264', 'BEY', 'IST', '2026-11-15 08:00', '2026-11-15 10:00');
-        $b = $this->flight('ME216', 'IST', 'CDG', '2026-11-17 12:00', '2026-11-17 16:00');
+        $a = $this->flight($this->flightNo('264'), 'BEY', 'IST', '2026-11-15 08:00', '2026-11-15 10:00');
+        $b = $this->flight($this->flightNo('216'), 'IST', 'CDG', '2026-11-17 12:00', '2026-11-17 16:00');
 
         $this->journeys->validate(new Journey([$a, $b]));
 
@@ -140,8 +140,8 @@ class B14MultiCityLegsTest extends TestCase
 
     public function test_B14_legOf_and_legs_read_the_segment_leg(): void
     {
-        $out = $this->flight('ME201', 'BEY', 'CDG', '2026-11-15 08:00', '2026-11-15 12:45');
-        $back = $this->flight('ME204', 'CDG', 'BEY', '2026-11-18 10:00', '2026-11-18 14:15');
+        $out = $this->flight($this->flightNo('201'), 'BEY', 'CDG', '2026-11-15 08:00', '2026-11-15 12:45');
+        $back = $this->flight($this->flightNo('204'), 'CDG', 'BEY', '2026-11-18 10:00', '2026-11-18 14:15');
         $reservation = Reservation::factory()->create(['flight_id' => $out->id]);
         $this->journeys->addSegments($reservation, new Journey([$out], [$back]));
 

@@ -60,7 +60,7 @@ class C16CheckinPaymentSecurityTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-15 06:00', 'UTC'));
         $this->agent = $this->actingAsRole('checkin');
         $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME501',
+            'flight_no' => $this->flightNo('501'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
@@ -88,7 +88,7 @@ class C16CheckinPaymentSecurityTest extends TestCase
     private function connection(): array
     {
         $first = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME264',
+            'flight_no' => $this->flightNo('264'),
             'origin' => 'BEY',
             'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
@@ -97,7 +97,7 @@ class C16CheckinPaymentSecurityTest extends TestCase
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216',
+            'flight_no' => $this->flightNo('216'),
             'origin' => 'IST',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 11:30', 'UTC'),

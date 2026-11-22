@@ -27,7 +27,7 @@
 </head>
 <body>
     <div class="header">
-        <span class="brand">ARCS</span>
+        <span class="brand">{{ config('arcs.airline.name') }}</span>
         <span class="title">Boarding pass</span>
     </div>
 

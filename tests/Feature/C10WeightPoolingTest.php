@@ -40,7 +40,7 @@ class C10WeightPoolingTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->agent = $this->actingAsRole('checkin');
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME302']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('302')]);
         $this->seedBookingPrices();
         $this->bags = app(BagService::class);
     }
@@ -232,7 +232,7 @@ class C10WeightPoolingTest extends TestCase
     public function test_SR59_late_check_in_is_refused_while_excess_is_unpaid(): void
     {
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
-        $flight = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => 'ME303']);
+        $flight = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => $this->flightNo('303')]);
         $manager = User::factory()->create(['role' => Role::Manager, 'email' => 'boss@arcs.test']);
         $this->actingAsRole('gate');
 

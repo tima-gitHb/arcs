@@ -28,7 +28,7 @@ class ETicketMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'ARCS e-ticket '.$this->reservation->pnr,
+            subject: config('arcs.airline.name').' e-ticket '.$this->reservation->pnr,
         );
     }
 

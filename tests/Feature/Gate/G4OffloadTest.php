@@ -36,15 +36,15 @@ class G4OffloadTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-10 10:00', 'Asia/Beirut')); // staff are at BEY (B13a)
         $this->makeAgents();
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME305']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('305')]);
 
         $this->boarded = $this->passengerOn($this->flight);
         $this->noShow = $this->passengerOn($this->flight, null, ['first_name' => 'Ali', 'last_name' => 'Missing']);
         $this->checkIn($this->boarded, $this->noShow);
 
-        $this->first = Bag::factory()->for($this->noShow)->create(['tag_no' => 'ME100001']);
-        $this->second = Bag::factory()->for($this->noShow)->create(['tag_no' => 'ME100002']);
-        $this->boardedBag = Bag::factory()->for($this->boarded)->create(['tag_no' => 'ME100009']);
+        $this->first = Bag::factory()->for($this->noShow)->create(['tag_no' => $this->flightNo('100001')]);
+        $this->second = Bag::factory()->for($this->noShow)->create(['tag_no' => $this->flightNo('100002')]);
+        $this->boardedBag = Bag::factory()->for($this->boarded)->create(['tag_no' => $this->flightNo('100009')]);
 
         $this->startBoarding($this->flight);
         $this->board($this->boarded);
@@ -119,7 +119,7 @@ class G4OffloadTest extends TestCase
     {
         $this->confirm($this->first)
             ->assertRedirect(route('gate.flights.show', $this->flight))
-            ->assertSessionHas('success', 'Bag ME100001 offloaded.');
+            ->assertSessionHas('success', 'Bag '.$this->flightNo('100001').' offloaded.');
 
         $bag = $this->first->fresh();
         $this->assertSame($this->gateAgent->id, $bag->offloaded_by);
@@ -128,7 +128,7 @@ class G4OffloadTest extends TestCase
         $entry = AuditEntry::where('field', 'bag_offloaded')->sole();
         $this->assertSame($this->noShow->id, $entry->passenger_id);
         $this->assertNull($entry->old_value);
-        $this->assertSame('ME100001', $entry->new_value);
+        $this->assertSame($this->flightNo('100001'), $entry->new_value);
         $this->assertSame($this->gateAgent->id, $entry->user_id);
         $this->assertTrue($entry->changed_at->equalTo(now()));
     }
@@ -146,11 +146,11 @@ class G4OffloadTest extends TestCase
 
         $section = $this->offloadSection();
         $this->assertStringContainsString('1 of 2 bags offloaded', $section);
-        $this->assertStringContainsString('ME100001', $section); // stays on the list, as done
+        $this->assertStringContainsString($this->flightNo('100001'), $section); // stays on the list, as done
         $this->assertStringContainsString('Offloaded by Joe Saliba at 10:05', $section);
         $this->assertStringNotContainsString(route('gate.bags.offload', $this->first), $section);
         $this->assertStringContainsString(route('gate.bags.offload', $this->second), $section);
-        $this->assertStringNotContainsString('ME100009', $section);
+        $this->assertStringNotContainsString($this->flightNo('100009'), $section);
     }
 
     public function test_SR28_confirming_twice_is_refused(): void
@@ -159,7 +159,7 @@ class G4OffloadTest extends TestCase
         $firstTime = $this->first->fresh()->offloaded_at;
 
         $this->travelTo(now()->addMinutes(5));
-        $this->confirm($this->first)->assertSessionHas('error', 'Bag ME100001 is already offloaded.');
+        $this->confirm($this->first)->assertSessionHas('error', 'Bag '.$this->flightNo('100001').' is already offloaded.');
 
         $this->assertTrue($this->first->fresh()->offloaded_at->equalTo($firstTime));
         $this->assertSame(1, AuditEntry::where('field', 'bag_offloaded')->count());

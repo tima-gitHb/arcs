@@ -1,7 +1,7 @@
 {{-- One printable boarding pass card. Expects $passenger, $pass, $flight, $boardingTime, $barcodeSvg. --}}
 <div class="overflow-hidden rounded-[14px] border-2 bg-white" style="border-color: var(--arcs-bar);">
     <div class="flex items-center justify-between px-6 py-3 text-white" style="background: var(--arcs-bar);">
-        <span class="text-lg font-semibold tracking-wide">ARCS</span>
+        <span class="text-lg font-semibold tracking-wide">{{ config('arcs.airline.name') }}</span>
         <span class="text-sm uppercase tracking-[0.2em]">Boarding pass</span>
     </div>
 

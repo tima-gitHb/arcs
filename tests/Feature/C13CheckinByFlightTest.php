@@ -33,7 +33,7 @@ class C13CheckinByFlightTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->agent = $this->actingAsRole('checkin');
         $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
@@ -64,7 +64,7 @@ class C13CheckinByFlightTest extends TestCase
     {
         $this->get(route('checkin.home'))
             ->assertOk()
-            ->assertSee('ME201')
+            ->assertSee($this->flightNo('201'))
             ->assertSee(route('checkin.flights.show', $this->flight), false)
             ->assertSee('Check-in list', false);
     }
@@ -84,7 +84,7 @@ class C13CheckinByFlightTest extends TestCase
 
         $response = $this->get(route('checkin.flights.show', $this->flight))
             ->assertOk()
-            ->assertSee('ME201')
+            ->assertSee($this->flightNo('201'))
             ->assertSee('AAA111')
             ->assertSee('BBB222')
             ->assertSee('Rami Abboud')
@@ -117,7 +117,7 @@ class C13CheckinByFlightTest extends TestCase
     public function test_SR_a_flight_from_another_station_returns_403(): void
     {
         $other = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME900',
+            'flight_no' => $this->flightNo('900'),
             'origin' => 'IST',
             'destination' => 'CDG',
         ]);
@@ -149,7 +149,7 @@ class C13CheckinByFlightTest extends TestCase
 
     public function test_SR_flight_page_runs_a_fixed_number_of_queries(): void
     {
-        $small = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME100']);
+        $small = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('100')]);
         $this->reservationOn($small, 'SML001', [
             ['first_name' => 'A', 'last_name' => 'Small', 'type' => PassengerType::Adult],
         ]);

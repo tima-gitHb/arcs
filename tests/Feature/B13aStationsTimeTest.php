@@ -125,7 +125,7 @@ class B13aStationsTimeTest extends TestCase
         $aircraft = Aircraft::factory()->create();
 
         $this->post(route('manager.flights.store'), [
-            'flight_no' => 'ME205', 'origin' => 'ZZZ', 'destination' => 'QQQ', 'aircraft_id' => $aircraft->id,
+            'flight_no' => $this->flightNo('205'), 'origin' => 'ZZZ', 'destination' => 'QQQ', 'aircraft_id' => $aircraft->id,
             'departure_at' => '2026-11-11T14:00', 'checkin_opens_at' => '2026-11-11T11:00',
             'checkin_closes_at' => '2026-11-11T13:15', 'gate' => 'B4',
         ])->assertSessionHasErrors(['origin', 'destination']);
@@ -141,7 +141,7 @@ class B13aStationsTimeTest extends TestCase
 
         // Typed as Paris time (UTC+1 in November): stored one hour earlier in UTC.
         $this->post(route('manager.flights.store'), [
-            'flight_no' => 'ME202', 'origin' => 'CDG', 'destination' => 'BEY', 'aircraft_id' => $aircraft->id,
+            'flight_no' => $this->flightNo('202'), 'origin' => 'CDG', 'destination' => 'BEY', 'aircraft_id' => $aircraft->id,
             'departure_at' => '2026-11-11T14:00', 'checkin_opens_at' => '2026-11-11T11:00',
             'checkin_closes_at' => '2026-11-11T13:15', 'gate' => '',
         ])->assertSessionHasNoErrors();
@@ -288,11 +288,11 @@ class B13aStationsTimeTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-11-15 06:00', 'UTC'));
         $this->staff(Role::Manager, 'BEY');
-        Flight::factory()->create(['flight_no' => 'ME202', 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => '2026-11-15 09:00']);
-        Flight::factory()->create(['flight_no' => 'ME201', 'origin' => 'BEY', 'destination' => 'CDG', 'departure_at' => '2026-11-15 09:30']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('202'), 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => '2026-11-15 09:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('201'), 'origin' => 'BEY', 'destination' => 'CDG', 'departure_at' => '2026-11-15 09:30']);
 
         $this->blade('<x-todays-flights role="manager" />')
-            ->assertSeeInOrder(['ME202', 'CDG → BEY', '10:00', 'ME201', 'BEY → CDG', '11:30']);
+            ->assertSeeInOrder([$this->flightNo('202'), 'CDG → BEY', '10:00', $this->flightNo('201'), 'BEY → CDG', '11:30']);
     }
 
     public function test_SR8_boarding_pass_shows_departure_and_boarding_in_the_origin_local_time(): void
@@ -446,17 +446,17 @@ class B13aStationsTimeTest extends TestCase
 
     private function parisAndBeirutFlightsOn15November(): void
     {
-        Flight::factory()->create(['flight_no' => 'ME202', 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => '2026-11-15 10:00']);
-        Flight::factory()->create(['flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG', 'departure_at' => '2026-11-15 11:00']);
-        Flight::factory()->create(['flight_no' => 'ME201', 'origin' => 'BEY', 'destination' => 'CDG', 'departure_at' => '2026-11-15 12:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('202'), 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => '2026-11-15 10:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG', 'departure_at' => '2026-11-15 11:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('201'), 'origin' => 'BEY', 'destination' => 'CDG', 'departure_at' => '2026-11-15 12:00']);
     }
 
     public function test_departing_from_scope(): void
     {
         $this->parisAndBeirutFlightsOn15November();
 
-        $this->assertSame(['ME202'], Flight::departingFrom('CDG')->pluck('flight_no')->all());
-        $this->assertSame(['ME201'], Flight::departingFrom('BEY')->pluck('flight_no')->all());
+        $this->assertSame([$this->flightNo('202')], Flight::departingFrom('CDG')->pluck('flight_no')->all());
+        $this->assertSame([$this->flightNo('201')], Flight::departingFrom('BEY')->pluck('flight_no')->all());
     }
 
     public function test_SR41_check_in_and_gate_staff_see_only_their_stations_flights(): void
@@ -465,13 +465,13 @@ class B13aStationsTimeTest extends TestCase
         $this->parisAndBeirutFlightsOn15November();
 
         $this->staff(Role::Checkin, 'CDG');
-        $this->get(route('checkin.home'))->assertOk()->assertSee('ME202')->assertDontSee('ME201')->assertDontSee('ME216');
+        $this->get(route('checkin.home'))->assertOk()->assertSee($this->flightNo('202'))->assertDontSee($this->flightNo('201'))->assertDontSee($this->flightNo('216'));
 
         $this->staff(Role::Gate, 'BEY');
-        $this->get(route('gate.home'))->assertOk()->assertSee('ME201')->assertDontSee('ME202')->assertDontSee('ME216');
+        $this->get(route('gate.home'))->assertOk()->assertSee($this->flightNo('201'))->assertDontSee($this->flightNo('202'))->assertDontSee($this->flightNo('216'));
 
         $this->staff(Role::Gate, 'IST');
-        $this->get(route('gate.home'))->assertOk()->assertSee('ME216')->assertDontSee('ME201')->assertDontSee('ME202');
+        $this->get(route('gate.home'))->assertOk()->assertSee($this->flightNo('216'))->assertDontSee($this->flightNo('201'))->assertDontSee($this->flightNo('202'));
     }
 
     public function test_SR41_reservation_defaults_to_its_station_and_the_manager_sees_every_station(): void
@@ -480,10 +480,10 @@ class B13aStationsTimeTest extends TestCase
         $this->parisAndBeirutFlightsOn15November();
 
         $this->staff(Role::Reservation, 'CDG');
-        $this->blade('<x-todays-flights role="reservation" />')->assertSee('ME202')->assertDontSee('ME201');
+        $this->blade('<x-todays-flights role="reservation" />')->assertSee($this->flightNo('202'))->assertDontSee($this->flightNo('201'));
 
         $this->staff(Role::Manager, 'CDG');
-        $this->blade('<x-todays-flights role="manager" />')->assertSee('ME202')->assertSee('ME201')->assertSee('ME216');
+        $this->blade('<x-todays-flights role="manager" />')->assertSee($this->flightNo('202'))->assertSee($this->flightNo('201'))->assertSee($this->flightNo('216'));
     }
 
     public function test_SR41_today_means_today_at_the_staff_members_station(): void
@@ -491,22 +491,22 @@ class B13aStationsTimeTest extends TestCase
         // 23:30 UTC on the 14th: still the 14th in Paris (UTC+1)... until 23:00 UTC. It is 00:30 on the 15th.
         // In Beirut (UTC+2) it is 01:30 on the 15th. In New York (UTC-5) it is 18:30 on the 14th.
         $this->travelTo(Carbon::parse('2026-11-14 23:30', 'UTC'));
-        Flight::factory()->create(['flight_no' => 'ME202', 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => Carbon::parse('2026-11-15 07:00', 'Europe/Paris')]);
-        Flight::factory()->create(['flight_no' => 'ME200', 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => Carbon::parse('2026-11-14 21:00', 'Europe/Paris')]);
-        Flight::factory()->create(['flight_no' => 'ME901', 'origin' => 'JFK', 'destination' => 'CDG', 'departure_at' => Carbon::parse('2026-11-14 21:00', 'America/New_York')]);
+        Flight::factory()->create(['flight_no' => $this->flightNo('202'), 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => Carbon::parse('2026-11-15 07:00', 'Europe/Paris')]);
+        Flight::factory()->create(['flight_no' => $this->flightNo('200'), 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => Carbon::parse('2026-11-14 21:00', 'Europe/Paris')]);
+        Flight::factory()->create(['flight_no' => $this->flightNo('901'), 'origin' => 'JFK', 'destination' => 'CDG', 'departure_at' => Carbon::parse('2026-11-14 21:00', 'America/New_York')]);
 
         $this->staff(Role::Checkin, 'CDG');
-        $this->blade('<x-todays-flights role="checkin" />')->assertSee('ME202')->assertSee('07:00')->assertDontSee('ME200');
+        $this->blade('<x-todays-flights role="checkin" />')->assertSee($this->flightNo('202'))->assertSee('07:00')->assertDontSee($this->flightNo('200'));
 
         $this->staff(Role::Gate, 'JFK');
-        $this->blade('<x-todays-flights role="gate" />')->assertSee('ME901')->assertSee('21:00');
+        $this->blade('<x-todays-flights role="gate" />')->assertSee($this->flightNo('901'))->assertSee('21:00');
     }
 
     public function test_SR6_check_in_search_lists_only_flights_from_the_agents_station(): void
     {
         $this->travelTo(Carbon::parse('2026-11-15 08:00', 'UTC'));
-        $paris = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME202', 'origin' => 'CDG', 'destination' => 'BEY']);
-        $beirut = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME201', 'origin' => 'BEY', 'destination' => 'CDG']);
+        $paris = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('202'), 'origin' => 'CDG', 'destination' => 'BEY']);
+        $beirut = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('201'), 'origin' => 'BEY', 'destination' => 'CDG']);
         $this->passengerOn($paris, 'PAR234');
         $this->passengerOn($beirut, 'BEY234');
 
@@ -555,10 +555,10 @@ class B13aStationsTimeTest extends TestCase
     public function test_reservation_staff_can_book_a_flight_from_any_station(): void
     {
         $this->travelTo(Carbon::parse('2026-11-15 08:00', 'UTC'));
-        Flight::factory()->create(['flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG', 'departure_at' => '2026-11-16 09:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG', 'departure_at' => '2026-11-16 09:00']);
 
         $this->staff(Role::Reservation, 'BEY');
-        $this->get(route('reservation.create'))->assertOk()->assertSee('ME216')->assertSee('16 Nov 2026 12:00');
+        $this->get(route('reservation.create'))->assertOk()->assertSee($this->flightNo('216'))->assertSee('16 Nov 2026 12:00');
     }
 
     // --- 5. Seed data -----------------------------------------------------------------------
@@ -566,7 +566,7 @@ class B13aStationsTimeTest extends TestCase
     public function test_seeded_paris_demo_has_return_flights_with_passengers(): void
     {
         // A fixed morning: the seeder places flights relative to now, and late in the evening
-        // ME202 (departs in 4 hours) would already be tomorrow in Paris.
+        // '.$this->flightNo('202').' (departs in 4 hours) would already be tomorrow in Paris.
         $this->travelTo(Carbon::parse('2026-11-15 10:00', 'Europe/Paris'));
         $this->seed(DatabaseSeeder::class);
 
@@ -579,7 +579,7 @@ class B13aStationsTimeTest extends TestCase
 
         // The Paris check-in agent sees their flight, and can open its passengers.
         $this->actingAs(User::where('role', Role::Checkin)->where('airport_code', 'CDG')->sole());
-        $this->get(route('checkin.home'))->assertOk()->assertSee($toBeirut->flight_no)->assertDontSee('ME305');
+        $this->get(route('checkin.home'))->assertOk()->assertSee($toBeirut->flight_no)->assertDontSee($this->flightNo('305'));
         $this->get(route('checkin.passengers.show', $toBeirut->passengers()->first()))->assertOk();
     }
 }

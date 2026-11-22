@@ -9,7 +9,7 @@
     <div class="border-b border-navy/10 pb-5">
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
-                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-navy/70">ARCS e-ticket / receipt</p>
+                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-navy/70">{{ config('arcs.airline.name') }} e-ticket / receipt</p>
                 <p class="mt-2 text-3xl font-semibold tracking-[0.25em] text-navy">{{ $reservation->pnr }}</p>
                 <p class="mt-2 text-sm text-gray-500">Give this PNR to the passenger for check-in.</p>
             </div>

@@ -45,12 +45,12 @@ class R2FindReservationTest extends TestCase
         $this->actingAsRole('reservation');
 
         $paris = Flight::factory()->create([
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
         $rome = Flight::factory()->create([
-            'flight_no' => 'ME422',
+            'flight_no' => $this->flightNo('422'),
             'origin' => 'BEY',
             'destination' => 'FCO',
         ]);
@@ -65,7 +65,7 @@ class R2FindReservationTest extends TestCase
             'first_name' => 'Nour',
             'last_name' => 'Haddad',
         ]);
-        $onRome = Reservation::factory()->for($rome)->create(['pnr' => 'ROME22']);
+        $onRome = Reservation::factory()->for($rome)->create(['pnr' => 'RO'.$this->flightNo('22')]);
         Passenger::factory()->for($onRome)->create([
             'first_name' => 'Maya',
             'last_name' => 'Khoury',
@@ -73,23 +73,23 @@ class R2FindReservationTest extends TestCase
 
         $this->get(route('reservation.search'))
             ->assertOk()
-            ->assertSee('ME201')
-            ->assertSee('ME422')
+            ->assertSee($this->flightNo('201'))
+            ->assertSee($this->flightNo('422'))
             ->assertSee('Choose a flight to see its reservations.');
 
         $this->get(route('reservation.search', ['flight' => $paris->id]))
             ->assertOk()
-            ->assertSee('Reservations on ME201')
+            ->assertSee('Reservations on '.$this->flightNo('201'))
             ->assertSee('PARIS2')
             ->assertSee('PARIS3')
             ->assertSee('Rami')
             ->assertSee('Nour')
-            ->assertDontSee('ROME22')
+            ->assertDontSee('RO'.$this->flightNo('22'))
             ->assertDontSee('Maya');
 
         $this->get(route('reservation.search', ['flight' => $rome->id]))
             ->assertOk()
-            ->assertSee('ROME22')
+            ->assertSee('RO'.$this->flightNo('22'))
             ->assertSee('Maya')
             ->assertDontSee('PARIS2');
     }
@@ -98,11 +98,11 @@ class R2FindReservationTest extends TestCase
     {
         $this->actingAsRole('reservation');
 
-        $flight = Flight::factory()->create(['flight_no' => 'ME110']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('110')]);
 
         $this->get(route('reservation.search', ['flight' => $flight->id]))
             ->assertOk()
-            ->assertSee('ME110')
+            ->assertSee($this->flightNo('110'))
             ->assertSee('No reservations on this flight.');
     }
 
@@ -112,7 +112,7 @@ class R2FindReservationTest extends TestCase
 
         foreach (range(1, 40) as $number) {
             Flight::factory()->create([
-                'flight_no' => sprintf('ME%03d', $number),
+                'flight_no' => $this->flightNo(sprintf('%03d', $number)),
                 'destination' => 'CDG',
                 'departure_at' => now()->addDays($number)->setTime(8, 0),
             ]);
@@ -122,8 +122,8 @@ class R2FindReservationTest extends TestCase
             ->assertOk()
             ->assertSee('Filter flights')
             ->assertSee('max-h-80', false)
-            ->assertSee('ME001')
-            ->assertSee('ME040')
+            ->assertSee($this->flightNo('001'))
+            ->assertSee($this->flightNo('040'))
             ->assertSee('Choose a flight to see its reservations.');
     }
 

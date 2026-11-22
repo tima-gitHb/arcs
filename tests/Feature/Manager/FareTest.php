@@ -28,7 +28,7 @@ use Tests\TestCase;
  *                                                        type = adult|child|infant   (9 values)
  *                               fees[<FeeCode value>]    ExtraBag|ExcessKg|SportsEquipment|Pet   (4 values)
  * Menu item: 'Fares and fees' => 'manager.fares'.
- * Audit: field "fare Business Adult" / "fee ExtraBag", old and new as formatted dollars ("$750.00"),
+ * Audit: field "fare Business Adult" / "fee ExtraBag", old and new as formatted dollars ("$800.00"),
  * no passenger and no flight. Errors are under keys like fares.business.adult and fees.ExtraBag.
  */
 class FareTest extends TestCase
@@ -43,7 +43,7 @@ class FareTest extends TestCase
 
         $this->travelTo('2026-11-10 10:00:00');
 
-        // 9 fares and 4 fees, in cents: see FareSeeder (Business Adult 75000 = $750.00, Extra bag 5000 = $50.00).
+        // 9 fares and 4 fees, in cents: see FareSeeder (Business Adult 80000 = $800.00, Extra bag 5000 = $50.00).
         $this->seed(FareSeeder::class);
         $this->manager = $this->actingAsRole(Role::Manager);
     }
@@ -59,8 +59,8 @@ class FareTest extends TestCase
         return array_replace_recursive([
             'fares' => [
                 'economy' => ['adult' => '250.00', 'child' => '187.50', 'infant' => '25.00'],
-                'premium' => ['adult' => '420.00', 'child' => '315.00', 'infant' => '42.00'],
-                'business' => ['adult' => '750.00', 'child' => '562.50', 'infant' => '75.00'],
+                'premium' => ['adult' => '400.00', 'child' => '300.00', 'infant' => '40.00'],
+                'business' => ['adult' => '800.00', 'child' => '600.00', 'infant' => '80.00'],
             ],
             'fees' => [
                 'ExtraBag' => '50.00',
@@ -103,7 +103,7 @@ class FareTest extends TestCase
             ->assertSee('name="fares[business][infant]"', false)
             ->assertSee('value="250.00"', false)
             ->assertSee('value="187.50"', false)
-            ->assertSee('value="750.00"', false)
+            ->assertSee('value="800.00"', false)
             // 4 fees, labelled as in the FeeCode enum.
             ->assertSee('name="fees[ExtraBag]"', false)
             ->assertSee('name="fees[ExcessKg]"', false)
@@ -167,10 +167,10 @@ class FareTest extends TestCase
     {
         $before = $this->allCents();
 
-        $this->put(route('manager.fares.update'), $this->payload(['fares' => ['premium' => ['child' => '300.00']]]));
+        $this->put(route('manager.fares.update'), $this->payload(['fares' => ['premium' => ['child' => '310.00']]]));
 
         $expected = $before;
-        $expected['fare Premium Child'] = 30000;
+        $expected['fare Premium Child'] = 31000;
         $this->assertSame($expected, $this->allCents());
     }
 
@@ -326,7 +326,7 @@ class FareTest extends TestCase
 
         $entry = AuditEntry::sole();
         $this->assertSame('fare Business Adult', $entry->field);
-        $this->assertSame('$750.00', $entry->old_value);
+        $this->assertSame('$800.00', $entry->old_value);
         $this->assertSame('$760.00', $entry->new_value);
         $this->assertSame($this->manager->id, $entry->user_id);
         $this->assertEquals(now(), $entry->changed_at);
@@ -389,7 +389,7 @@ class FareTest extends TestCase
             ->assertOk()
             ->assertSee('data-audit-subject="fares"', false)
             ->assertSee('fare Business Adult')
-            ->assertSee('$750.00 → $760.00', false)
+            ->assertSee('$800.00 → $760.00', false)
             ->assertSee($this->manager->name)
             ->assertDontSee('Flight —');
     }
@@ -411,13 +411,13 @@ class FareTest extends TestCase
 
     public function test_the_audit_page_still_labels_a_flight_row_with_its_flight(): void
     {
-        $flight = Flight::factory()->create(['flight_no' => 'ME777']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('777')]);
         AuditEntry::forFlight($flight, 'status', 'Scheduled', 'CheckinOpen', $this->manager);
 
         $this->get(route('manager.audit'))
             ->assertOk()
             ->assertSee('data-audit-subject="flight"', false)
-            ->assertSee('Flight ME777')
+            ->assertSee('Flight '.$this->flightNo('777'))
             ->assertDontSee('data-audit-subject="fares"', false);
     }
 

@@ -65,7 +65,7 @@ class FlightTest extends TestCase
     private function validFlight(array $overrides = []): array
     {
         return $overrides + [
-            'flight_no' => 'ME205',
+            'flight_no' => $this->flightNo('205'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'aircraft_id' => Aircraft::factory()->create()->id,
@@ -154,14 +154,14 @@ class FlightTest extends TestCase
 
     public function test_flight_is_created_with_valid_data(): void
     {
-        $data = $this->validFlight(['flight_no' => 'me205']); // lower case: uppercased before validating
+        $data = $this->validFlight(['flight_no' => strtolower($this->airlineCode()).'205']); // lower case: uppercased before validating
 
         $response = $this->post(route('manager.flights.store'), $data)
             ->assertSessionHasNoErrors();
 
         $flight = Flight::sole();
         $response->assertRedirect(route('manager.flights.show', $flight));
-        $this->assertSame('ME205', $flight->flight_no);
+        $this->assertSame($this->flightNo('205'), $flight->flight_no);
         $this->assertSame('BEY', $flight->origin);
         $this->assertSame('CDG', $flight->destination);
         $this->assertSame($data['aircraft_id'], $flight->aircraft_id);
@@ -206,7 +206,7 @@ class FlightTest extends TestCase
 
         $this->get(route('manager.flights'))
             ->assertOk()
-            ->assertSee('ME205')
+            ->assertSee($this->flightNo('205'))
             ->assertSee('Scheduled');
     }
 

@@ -64,7 +64,7 @@ class FlightNotificationTest extends TestCase
         Mail::fake();
 
         $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'gate' => 'A3',
@@ -77,14 +77,14 @@ class FlightNotificationTest extends TestCase
 
         $this->patch(route('manager.flights.gate', $flight), ['gate' => 'B7'])
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', 'Gate for ME201 saved.');
+            ->assertSessionHas('success', 'Gate for '.$this->flightNo('201').' saved.');
 
         $this->assertSame('B7', $flight->fresh()->gate);
         Mail::assertNothingSent();
         Mail::assertQueuedCount(3);
 
         foreach (['family@example.com', 'solo@example.com', 'checked@example.com'] as $email) {
-            $this->assertQueuedTo($email, 'ME201 to Paris: new gate B7', function (string $html): void {
+            $this->assertQueuedTo($email, $this->flightNo('201').' to Paris: new gate B7', function (string $html): void {
                 $this->assertStringContainsString('B7', $html);
             });
         }
@@ -95,7 +95,7 @@ class FlightNotificationTest extends TestCase
         Mail::fake();
 
         $flight = Flight::factory()->create([
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'destination' => 'CDG',
             'gate' => 'A3',
         ]);
@@ -109,7 +109,7 @@ class FlightNotificationTest extends TestCase
 
         $this->patch(route('manager.flights.gate', $flight), ['gate' => ''])
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', 'Gate for ME201 saved.');
+            ->assertSessionHas('success', 'Gate for '.$this->flightNo('201').' saved.');
 
         $this->assertNull($flight->fresh()->gate);
         Mail::assertNothingQueued();
@@ -126,7 +126,7 @@ class FlightNotificationTest extends TestCase
             'status' => 'Delayed',
             'departure_at' => '2026-11-10T23:30',
         ])->assertSessionHasNoErrors()
-            ->assertSessionHas('success', 'Flight ME201 is now Delayed.');
+            ->assertSessionHas('success', 'Flight '.$this->flightNo('201').' is now Delayed.');
 
         $flight->refresh();
         $this->assertSame(FlightStatus::Delayed, $flight->status);
@@ -141,7 +141,7 @@ class FlightNotificationTest extends TestCase
 
         Mail::assertNothingSent();
         Mail::assertQueuedCount(1);
-        $this->assertQueuedTo('delay@example.com', 'ME201 to Beirut: delayed to 23:30', function (string $html): void {
+        $this->assertQueuedTo('delay@example.com', $this->flightNo('201').' to Beirut: delayed to 23:30', function (string $html): void {
             $this->assertStringContainsString('datetime="2026-11-10T22:30:00Z"', $html);
             $this->assertStringContainsString('Local time at CDG', $html);
             $this->assertStringContainsString('23:30', $html);
@@ -158,7 +158,7 @@ class FlightNotificationTest extends TestCase
 
         $this->patch(route('manager.flights.status', $flight), ['status' => 'Delayed'])
             ->assertSessionHasNoErrors()
-            ->assertSessionHas('success', 'Flight ME201 is now Delayed.');
+            ->assertSessionHas('success', 'Flight '.$this->flightNo('201').' is now Delayed.');
 
         $flight->refresh();
         $this->assertSame(FlightStatus::Delayed, $flight->status);
@@ -193,7 +193,7 @@ class FlightNotificationTest extends TestCase
         Mail::fake();
 
         $scheduled = $this->flightWithStatus(FlightStatus::Scheduled, [
-            'flight_no' => 'ME310',
+            'flight_no' => $this->flightNo('310'),
             'destination' => 'CDG',
             'gate' => 'A1',
         ]);
@@ -202,7 +202,7 @@ class FlightNotificationTest extends TestCase
         $this->book($scheduled, 'kept-booked@example.com');
 
         $boarding = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME311',
+            'flight_no' => $this->flightNo('311'),
             'destination' => 'CDG',
             'gate' => 'A1',
         ]);
@@ -212,7 +212,7 @@ class FlightNotificationTest extends TestCase
         app(StatusService::class)->board($boarded, $this->manager, $boarding);
 
         $closed = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME312',
+            'flight_no' => $this->flightNo('312'),
             'destination' => 'CDG',
             'gate' => 'A1',
         ]);
@@ -230,9 +230,9 @@ class FlightNotificationTest extends TestCase
         }
 
         Mail::assertQueuedCount(3);
-        $this->assertQueuedTo('kept-booked@example.com', 'ME310 to Paris: new gate B7');
-        $this->assertQueuedTo('kept-boarding@example.com', 'ME311 to Paris: new gate B7');
-        $this->assertQueuedTo('kept-closed@example.com', 'ME312 to Paris: new gate B7');
+        $this->assertQueuedTo('kept-booked@example.com', $this->flightNo('310').' to Paris: new gate B7');
+        $this->assertQueuedTo('kept-boarding@example.com', $this->flightNo('311').' to Paris: new gate B7');
+        $this->assertQueuedTo('kept-closed@example.com', $this->flightNo('312').' to Paris: new gate B7');
 
         foreach (['cancelled@example.com', 'boarded@example.com', 'noshow@example.com'] as $email) {
             Mail::assertNotQueued(FlightChangeMail::class, $email);
@@ -250,24 +250,24 @@ class FlightNotificationTest extends TestCase
         Mail::shouldReceive('to')->twice()->andThrow(new RuntimeException('mail down'));
 
         $gate = Flight::factory()->create([
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'destination' => 'CDG',
             'gate' => 'A3',
         ]);
         $this->book($gate, 'gate@example.com');
 
         $this->patch(route('manager.flights.gate', $gate), ['gate' => 'B7'])
-            ->assertSessionHas('success', 'Gate for ME201 saved.');
+            ->assertSessionHas('success', 'Gate for '.$this->flightNo('201').' saved.');
 
         $this->assertSame('B7', $gate->fresh()->gate);
 
-        $delayed = $this->parisDeparture('ME202');
+        $delayed = $this->parisDeparture($this->flightNo('202'));
         $this->book($delayed, 'delay@example.com');
 
         $this->patch(route('manager.flights.status', $delayed), [
             'status' => 'Delayed',
             'departure_at' => '2026-11-10T23:30',
-        ])->assertSessionHas('success', 'Flight ME202 is now Delayed.');
+        ])->assertSessionHas('success', 'Flight '.$this->flightNo('202').' is now Delayed.');
 
         $delayed->refresh();
         $this->assertSame(FlightStatus::Delayed, $delayed->status);
@@ -277,8 +277,8 @@ class FlightNotificationTest extends TestCase
             ->where('level', 'error')
             ->map(fn (MessageLogged $event) => (string) $event->message);
 
-        $this->assertTrue($messages->contains(fn (string $message) => str_contains($message, 'ME201')));
-        $this->assertTrue($messages->contains(fn (string $message) => str_contains($message, 'ME202')));
+        $this->assertTrue($messages->contains(fn (string $message) => str_contains($message, $this->flightNo('201'))));
+        $this->assertTrue($messages->contains(fn (string $message) => str_contains($message, $this->flightNo('202'))));
     }
 
     public function test_a_flight_change_email_is_retried_when_the_queue_fails(): void
@@ -318,10 +318,10 @@ class FlightNotificationTest extends TestCase
     /**
      * A CDG departure at 22:00 Paris (21:00 UTC). Status stays Scheduled, so Delayed is a legal move.
      */
-    private function parisDeparture(string $flightNo = 'ME201'): Flight
+    private function parisDeparture(?string $flightNo = null): Flight
     {
         return Flight::factory()->create([
-            'flight_no' => $flightNo,
+            'flight_no' => $flightNo ?? $this->flightNo('201'),
             'origin' => 'CDG',
             'destination' => 'BEY',
             'gate' => 'A1',

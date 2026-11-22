@@ -264,3 +264,21 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Fixed
 - Fix: shorten label to `trip BEY-CDG Economy Adult` (≤30); delete uses the same field with new_value "—" (no " removed" suffix)
 - Retested: 21 Nov 2026 — SQLite 883 + MySQL 883; Pint --test
+
+## BUG-022 · Arcs Air seed broke fee/route assertions and ME flight tags
+- Date / who: 22 Nov 2026 · Auto (SEED Arcs Air)
+- Card / branch: SEED · feature/UI1-global-layout
+- Where: FareSeeder fees · RouteFareSeeder · FlightFactory bag tags · B11 SSR count · tests using ME###
+- Steps: 1. Rewrite seeders for AR + new fare table 2. php artisan test
+- Expected: existing pricing/SSR/tag tests stay green
+- Actual: ExtraBag/ExcessKg amount mismatches; BEY–IST 190 vs 180; bag tags `/^ME\d{6}$/` failed on AR…; B11 expected 14 SSR codes after adding SPML
+- Screenshot: none — found by php artisan test / composer test:mysql
+- Status: Fixed
+- Fix: restore fee amounts 50/10/75/60; update route/default fare asserts; `$this->flightNo()` / airline-code tag regex; SPML enum + B11 count 15
+- Retested: 22 Nov 2026 — SQLite 887 + MySQL 887; Pint --test
+
+## BUG-023 · UI3 test failed on passenger names with an apostrophe
+- Found: 22 Nov 2026, full test run (882 of 883 passed)
+- Cause: UI3CheckInShellTest used assertSee(..., false), so a Faker name like O'Reilly did not match the escaped HTML (O&#039;Reilly).
+- Fix: assertSee without false, so the expected text is escaped the same way. The app output was correct.
+- Status: Fixed

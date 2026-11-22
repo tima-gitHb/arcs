@@ -49,7 +49,7 @@ class PlaneSeatMapTest extends TestCase
             ->assertSee('seat-map-sticky', false);
 
         $this->makeAgents();
-        $gateFlight = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => 'ME701']);
+        $gateFlight = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => $this->flightNo('701')]);
         $this->get(route('gate.flights.show', $gateFlight))
             ->assertOk()
             ->assertSee('id="seat-map-panel"', false)
@@ -63,7 +63,7 @@ class PlaneSeatMapTest extends TestCase
     public function test_gate_counts_json_returns_seat_states_without_names(): void
     {
         $this->makeAgents();
-        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME702']);
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('702')]);
         $passenger = $this->passengerOn($flight, null, ['first_name' => 'Secret', 'last_name' => 'Name']);
         $this->checkIn($passenger);
         $this->startBoarding($flight);
@@ -85,7 +85,7 @@ class PlaneSeatMapTest extends TestCase
     public function test_boarding_a_passenger_updates_that_seat_state_in_the_json(): void
     {
         $this->makeAgents();
-        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME703']);
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('703')]);
         $passenger = $this->passengerOn($flight);
         $this->checkIn($passenger);
         $this->startBoarding($flight);

@@ -61,7 +61,7 @@ class B13bSegmentsTest extends TestCase
     }
 
     /**
-     * ME264 BEY→IST (check-in open now, departs 08:00 UTC, lands 10:00) and ME216 IST→CDG,
+     * '.$this->flightNo('264').' BEY→IST (check-in open now, departs 08:00 UTC, lands 10:00) and ME216 IST→CDG,
      * departing $gap minutes after ME264 lands.
      *
      * @return array{0: Flight, 1: Flight}
@@ -69,14 +69,14 @@ class B13bSegmentsTest extends TestCase
     private function connection(int $gap): array
     {
         $first = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME264', 'origin' => 'BEY', 'destination' => 'IST',
+            'flight_no' => $this->flightNo('264'), 'origin' => 'BEY', 'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 10:00', 'UTC'),
             'checkin_opens_at' => Carbon::parse('2026-11-15 05:00', 'UTC'),
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 10:00', 'UTC')->addMinutes($gap),
             'arrives_at' => Carbon::parse('2026-11-15 13:45', 'UTC')->addMinutes($gap),
             'checkin_opens_at' => Carbon::parse('2026-11-15 07:00', 'UTC'),
@@ -87,21 +87,21 @@ class B13bSegmentsTest extends TestCase
     }
 
     /**
-     * ME201 BEY→CDG today (check-in open) and ME204 CDG→BEY in 3 days.
+     * '.$this->flightNo('201').' BEY→CDG today (check-in open) and ME204 CDG→BEY in 3 days.
      *
      * @return array{0: Flight, 1: Flight}
      */
     private function roundTrip(): array
     {
         $out = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME201', 'origin' => 'BEY', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('201'), 'origin' => 'BEY', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 12:45', 'UTC'),
             'checkin_opens_at' => Carbon::parse('2026-11-15 05:00', 'UTC'),
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $back = Flight::factory()->create([
-            'flight_no' => 'ME204', 'origin' => 'CDG', 'destination' => 'BEY',
+            'flight_no' => $this->flightNo('204'), 'origin' => 'CDG', 'destination' => 'BEY',
             'departure_at' => Carbon::parse('2026-11-18 10:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-18 14:15', 'UTC'),
             'checkin_opens_at' => Carbon::parse('2026-11-18 07:00', 'UTC'),
@@ -191,13 +191,13 @@ class B13bSegmentsTest extends TestCase
     {
         [$first] = $this->connection(gap: 90);
         $fromDubai = Flight::factory()->create([
-            'flight_no' => 'ME431', 'origin' => 'DXB', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('431'), 'origin' => 'DXB', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 13:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 20:00', 'UTC'),
         ]);
 
         $this->expectException(InvalidJourney::class);
-        $this->expectExceptionMessage('ME431 departs from DXB, but ME264 lands at IST.');
+        $this->expectExceptionMessage($this->flightNo('431').' departs from DXB, but '.$this->flightNo('264').' lands at IST.');
 
         app(JourneyService::class)->validate(new Journey([$first, $fromDubai]));
     }
@@ -206,13 +206,13 @@ class B13bSegmentsTest extends TestCase
     {
         [$out] = $this->roundTrip();
         $tooEarly = Flight::factory()->create([
-            'flight_no' => 'ME212', 'origin' => 'CDG', 'destination' => 'BEY',
-            'departure_at' => Carbon::parse('2026-11-15 12:00', 'UTC'), // ME201 lands at 12:45
+            'flight_no' => $this->flightNo('212'), 'origin' => 'CDG', 'destination' => 'BEY',
+            'departure_at' => Carbon::parse('2026-11-15 12:00', 'UTC'), // '.$this->flightNo('201').' lands at 12:45
             'arrives_at' => Carbon::parse('2026-11-15 16:15', 'UTC'),
         ]);
 
         $this->expectException(InvalidJourney::class);
-        $this->expectExceptionMessage('The return ME212 departs before the outbound lands at CDG.');
+        $this->expectExceptionMessage('The return '.$this->flightNo('212').' departs before the outbound lands at CDG.');
 
         app(JourneyService::class)->validate(new Journey([$out], [$tooEarly]));
     }
@@ -223,7 +223,7 @@ class B13bSegmentsTest extends TestCase
         $first->forceFill(['arrives_at' => null])->save();
 
         $this->expectException(InvalidJourney::class);
-        $this->expectExceptionMessage('Set the arrival time of ME264 first.');
+        $this->expectExceptionMessage('Set the arrival time of '.$this->flightNo('264').' first.');
 
         app(JourneyService::class)->validate(new Journey([$first, $second]));
     }
@@ -252,9 +252,9 @@ class B13bSegmentsTest extends TestCase
 
         try {
             app(StatusService::class)->checkIn($passenger, $this->agent);
-            $this->fail('Check-in without a seat on ME216 must be refused.');
+            $this->fail('Check-in without a seat on '.$this->flightNo('216').' must be refused.');
         } catch (InvalidStatusChange $e) {
-            $this->assertSame('Seat required on ME216', $e->getMessage());
+            $this->assertSame('Seat required on '.$this->flightNo('216'), $e->getMessage());
         }
 
         $this->assertSame(['Booked', 'Booked'], $this->statuses($passenger));
@@ -325,9 +325,9 @@ class B13bSegmentsTest extends TestCase
         $this->get(route('checkin.passengers.show', $passenger))
             ->assertOk()
             ->assertSee('Connection to CDG')
-            ->assertSee('Seat on ME216');
+            ->assertSee('Seat on '.$this->flightNo('216'));
 
-        $this->get(route('checkin.passengers.show', [$passenger, 'flight' => $second->id]))->assertOk()->assertSee('Seat on ME216');
+        $this->get(route('checkin.passengers.show', [$passenger, 'flight' => $second->id]))->assertOk()->assertSee('Seat on '.$this->flightNo('216'));
         $this->post(route('checkin.seats.assign', $passenger), ['seat_id' => $seat->id, 'flight_id' => $second->id])
             ->assertRedirect(route('checkin.passengers.show', [$passenger, 'flight' => $second->id]))
             ->assertSessionHas('success', 'Seat 20C assigned.');
@@ -347,8 +347,8 @@ class B13bSegmentsTest extends TestCase
 
         $this->get(route('checkin.passengers.show', $passenger))
             ->assertOk()
-            ->assertSee('ME204 · CDG → BEY')
-            ->assertDontSee('ME201 · BEY → CDG');
+            ->assertSee($this->flightNo('204').' · CDG → BEY')
+            ->assertDontSee($this->flightNo('201').' · BEY → CDG');
         $this->get(route('checkin.home', ['q' => $passenger->reservation->pnr]))->assertOk()->assertSee($passenger->last_name);
     }
 
@@ -470,12 +470,12 @@ class B13bSegmentsTest extends TestCase
 
         $this->get(route('checkin.passengers.upgrade', $passenger))
             ->assertOk()
-            ->assertSee('ME264')
-            ->assertSee('ME216');
+            ->assertSee($this->flightNo('264'))
+            ->assertSee($this->flightNo('216'));
 
         $this->get(route('checkin.passengers.upgrade', [$passenger, 'flight' => $second->id]))
             ->assertOk()
-            ->assertSee('ME216');
+            ->assertSee($this->flightNo('216'));
     }
 
     public function test_SR65_segments_added_explicitly_give_no_duplicate_from_the_model_events(): void
@@ -502,7 +502,7 @@ class B13bSegmentsTest extends TestCase
     {
         $this->actingAs(User::factory()->create(['role' => Role::Manager]));
         $form = [
-            'flight_no' => 'ME219', 'origin' => 'BEY', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('219'), 'origin' => 'BEY', 'destination' => 'CDG',
             'aircraft_id' => Aircraft::factory()->create()->id,
             'departure_at' => '2026-11-20T10:00', // Beirut, 08:00 UTC
             'checkin_opens_at' => '2026-11-20T07:00', 'checkin_closes_at' => '2026-11-20T09:15',
@@ -510,19 +510,19 @@ class B13bSegmentsTest extends TestCase
 
         // Lands 12:45 Paris = 11:45 UTC: 3 h 45 after departure.
         $this->post(route('manager.flights.store'), $form + ['arrives_at' => '2026-11-20T12:45'])->assertSessionHasNoErrors();
-        $flight = Flight::where('flight_no', 'ME219')->sole();
+        $flight = Flight::where('flight_no', $this->flightNo('219'))->sole();
         $this->assertSame('2026-11-20 11:45', $flight->arrives_at->format('Y-m-d H:i'));
         $this->assertSame('2026-11-20 12:45', $flight->arrivalLocal()->format('Y-m-d H:i'));
 
         // 09:30 Paris = 08:30 UTC is after 08:00 UTC: accepted although "09:30" < "10:00" as text.
-        $this->post(route('manager.flights.store'), ['flight_no' => 'ME221', 'arrives_at' => '2026-11-20T09:30'] + $form)->assertSessionHasNoErrors();
+        $this->post(route('manager.flights.store'), ['flight_no' => $this->flightNo('221'), 'arrives_at' => '2026-11-20T09:30'] + $form)->assertSessionHasNoErrors();
 
         // 08:45 Paris = 07:45 UTC lands before it leaves: refused.
-        $this->post(route('manager.flights.store'), ['flight_no' => 'ME223', 'arrives_at' => '2026-11-20T08:45'] + $form)
+        $this->post(route('manager.flights.store'), ['flight_no' => $this->flightNo('223'), 'arrives_at' => '2026-11-20T08:45'] + $form)
             ->assertSessionHasErrors(['arrives_at' => 'The arrival must be after the departure.']);
 
         // Optional: flights without an arrival time can still be created.
-        $this->post(route('manager.flights.store'), ['flight_no' => 'ME225'] + $form)->assertSessionHasNoErrors();
+        $this->post(route('manager.flights.store'), ['flight_no' => $this->flightNo('225')] + $form)->assertSessionHasNoErrors();
     }
 
     // --- Seed data ----------------------------------------------------------------------------
@@ -535,13 +535,23 @@ class B13bSegmentsTest extends TestCase
         $routes = fn (Reservation $reservation) => $reservation->segments
             ->map(fn ($segment) => $segment->direction->value.' '.$segment->flight->flight_no)->all();
 
-        $connection = Reservation::whereHas('segments.flight', fn ($flight) => $flight->where('flight_no', 'ME264'))->sole();
-        $this->assertSame(['Outbound ME264', 'Outbound ME216'], $routes($connection));
-        $this->assertSame(3, $connection->passengers()->count());
+        $connection = Reservation::query()
+            ->whereHas('segments.flight', fn ($flight) => $flight->where('flight_no', $this->flightNo('264')))
+            ->with(['segments.flight', 'passengers'])
+            ->get()
+            ->first(fn (Reservation $reservation) => $reservation->passengers->count() === 3
+                && $reservation->segments->every(fn ($segment) => $segment->direction->value === 'Outbound'));
+        $this->assertNotNull($connection);
+        $this->assertSame(['Outbound '.$this->flightNo('264'), 'Outbound '.$this->flightNo('216')], $routes($connection));
 
-        $roundTrip = Reservation::whereHas('segments.flight', fn ($flight) => $flight->where('flight_no', 'ME204'))->sole();
-        $this->assertSame(['Outbound ME203', 'Return ME204'], $routes($roundTrip));
-        $this->assertSame(2, $roundTrip->passengers()->count());
+        $roundTrip = Reservation::query()
+            ->whereHas('segments.flight', fn ($flight) => $flight->where('flight_no', $this->flightNo('204')))
+            ->with(['segments.flight', 'passengers'])
+            ->get()
+            ->first(fn (Reservation $reservation) => $reservation->segments->contains(fn ($segment) => $segment->direction->value === 'Return')
+                && $reservation->passengers->count() === 2);
+        $this->assertNotNull($roundTrip);
+        $this->assertSame(['Outbound '.$this->flightNo('203'), 'Return '.$this->flightNo('204')], $routes($roundTrip));
 
         // Every seeded flight has an arrival time; every passenger has a coupon per segment.
         $this->assertSame(0, Flight::whereNull('arrives_at')->count());

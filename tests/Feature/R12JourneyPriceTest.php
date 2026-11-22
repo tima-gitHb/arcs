@@ -28,7 +28,7 @@ class R12JourneyPriceTest extends TestCase
     {
         parent::setUp();
         $this->seedBookingPrices();
-        $this->seed(RouteFareSeeder::class); // BEY→IST Economy adult 180.00
+        $this->seed(RouteFareSeeder::class); // BEY→IST Economy adult 190.00
         $this->travelTo(Carbon::parse('2026-11-15 06:00', 'UTC'));
     }
 
@@ -50,7 +50,7 @@ class R12JourneyPriceTest extends TestCase
         );
 
         $this->assertNotNull($route);
-        $this->assertSame(18000, $route['cents']);
+        $this->assertSame(19000, $route['cents']);
 
         $page->assertSee('Each segment uses its route fare')
             ->assertSee('id="price-lines"', false);
@@ -95,20 +95,20 @@ class R12JourneyPriceTest extends TestCase
 
         $response->assertRedirect(route('reservation.confirmation', $reservation));
 
-        // BEY→IST 180 + IST→CDG 210 + extra bag 50 + 2 kg × 10 = 460
+        // BEY→IST 190 + IST→CDG 210 + extra bag 50 + 2 kg × 10 = 470
         $this->assertSame(PaymentStatus::Succeeded, $payment->status);
-        $this->assertSame(18000 + 21000 + 5000 + 2000, $payment->amount_cents);
+        $this->assertSame(19000 + 21000 + 5000 + 2000, $payment->amount_cents);
 
         $this->followRedirects($response)
             ->assertOk()
-            ->assertSee(Money::format(46000));
+            ->assertSee(Money::format(47000));
     }
 
     public function test_SR69_one_way_uses_the_route_fare_when_the_route_has_one(): void
     {
         $this->actingAsRole('reservation');
         $flight = Flight::factory()->create([
-            'flight_no' => 'ME264',
+            'flight_no' => $this->flightNo('264'),
             'origin' => 'BEY',
             'destination' => 'IST',
         ]);
@@ -123,16 +123,17 @@ class R12JourneyPriceTest extends TestCase
             ...$this->paidBookingFields(),
         ])->assertRedirect();
 
-        $this->assertSame(18000, Reservation::query()->sole()->payments()->sole()->amount_cents);
+        $this->assertSame(19000, Reservation::query()->sole()->payments()->sole()->amount_cents);
     }
 
     public function test_SR69_one_way_falls_back_to_the_default_fare_when_the_route_has_none(): void
     {
         $this->actingAsRole('reservation');
+        // GVA has no published route fare in RouteFareSeeder.
         $flight = Flight::factory()->create([
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
-            'destination' => 'CDG',
+            'destination' => 'GVA',
         ]);
         $seatId = $this->economySeat($flight);
 
@@ -153,7 +154,7 @@ class R12JourneyPriceTest extends TestCase
     private function connection(int $gap): array
     {
         $first = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME264',
+            'flight_no' => $this->flightNo('264'),
             'origin' => 'BEY',
             'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
@@ -162,7 +163,7 @@ class R12JourneyPriceTest extends TestCase
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216',
+            'flight_no' => $this->flightNo('216'),
             'origin' => 'IST',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 10:00', 'UTC')->addMinutes($gap),

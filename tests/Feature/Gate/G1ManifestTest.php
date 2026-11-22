@@ -28,7 +28,7 @@ class G1ManifestTest extends TestCase
         // flightWithStatus(): check-in 09:00–11:15, departure 12:00 today.
         $this->travelTo(Carbon::parse('2026-11-10 10:00', 'Asia/Beirut')); // staff are at BEY (B13a)
         $this->makeAgents();
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME305', 'destination' => 'DXB', 'gate' => 'B7']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('305'), 'destination' => 'DXB', 'gate' => 'B7']);
     }
 
     /**
@@ -58,7 +58,7 @@ class G1ManifestTest extends TestCase
 
         $this->get(route('gate.flights.show', $this->flight))
             ->assertOk()
-            ->assertSee('ME305')
+            ->assertSee($this->flightNo('305'))
             ->assertSee('BEY → DXB')
             ->assertSee('12:00')
             ->assertSee('Gate B7')
@@ -116,29 +116,29 @@ class G1ManifestTest extends TestCase
     {
         $passenger = $this->passengerOn($this->flight);
         SpecialService::create(['passenger_id' => $passenger->id, 'type' => SpecialServiceCode::WCHR]);
-        Bag::factory()->for($passenger)->create(['tag_no' => 'ME900001', 'type' => BagType::Wheelchair, 'handling' => BagHandling::GateDelivery]);
-        Bag::factory()->for($passenger)->create(['tag_no' => 'ME900002', 'type' => BagType::Standard, 'handling' => BagHandling::Hold]);
+        Bag::factory()->for($passenger)->create(['tag_no' => $this->flightNo('900001'), 'type' => BagType::Wheelchair, 'handling' => BagHandling::GateDelivery]);
+        Bag::factory()->for($passenger)->create(['tag_no' => $this->flightNo('900002'), 'type' => BagType::Standard, 'handling' => BagHandling::Hold]);
 
         $response = $this->get(route('gate.flights.show', $this->flight))->assertOk();
 
         preg_match('/<tr[^>]*data-passenger="'.$passenger->id.'"[\s\S]*?<\/tr>/', $response->getContent(), $row);
         $this->assertStringContainsString('WCHR', $row[0]);
-        $this->assertStringContainsString('ME900001', $row[0]);   // wheelchair: back at the door
+        $this->assertStringContainsString($this->flightNo('900001'), $row[0]);   // wheelchair: back at the door
         $this->assertStringContainsString('Wheelchair', $row[0]);
-        $this->assertStringNotContainsString('ME900002', $row[0]); // hold bag: not a gate item
+        $this->assertStringNotContainsString($this->flightNo('900002'), $row[0]); // hold bag: not a gate item
     }
 
     public function test_SR41_gate_home_shows_todays_flights_with_a_manifest_link(): void
     {
-        Flight::factory()->create(['flight_no' => 'ME900', 'departure_at' => '2026-11-09 18:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('900'), 'departure_at' => '2026-11-09 18:00']);
 
         $this->get(route('gate.home'))
             ->assertOk()
             ->assertSee("Today's flights", false)
             ->assertSee('data-role="gate"', false)
-            ->assertSee('ME305')
+            ->assertSee($this->flightNo('305'))
             ->assertSee(route('gate.flights.show', $this->flight), false)
-            ->assertDontSee('ME900');
+            ->assertDontSee($this->flightNo('900'));
     }
 
     public function test_a_180_seat_flight_runs_a_fixed_number_of_queries(): void

@@ -28,7 +28,7 @@ class G3CloseBoardingTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->makeAgents();
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME305']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('305')]);
 
         // 2 boarded, 3 checked in but missing, 1 never checked in.
         $this->people = [
@@ -100,20 +100,20 @@ class G3CloseBoardingTest extends TestCase
     public function test_SR9_the_no_shows_bags_appear_on_the_offload_list(): void
     {
         [$ali, $bea] = $this->people['missing'];
-        Bag::factory()->for($ali)->create(['tag_no' => 'ME100001', 'weight_kg' => 18.0]);
-        Bag::factory()->for($ali)->create(['tag_no' => 'ME100002', 'weight_kg' => 9.0, 'type' => BagType::Stroller]);
-        Bag::factory()->for($bea)->create(['tag_no' => 'ME100003', 'weight_kg' => 23.0]);
-        Bag::factory()->for($this->people['boarded'][0])->create(['tag_no' => 'ME100009']);
+        Bag::factory()->for($ali)->create(['tag_no' => $this->flightNo('100001'), 'weight_kg' => 18.0]);
+        Bag::factory()->for($ali)->create(['tag_no' => $this->flightNo('100002'), 'weight_kg' => 9.0, 'type' => BagType::Stroller]);
+        Bag::factory()->for($bea)->create(['tag_no' => $this->flightNo('100003'), 'weight_kg' => 23.0]);
+        Bag::factory()->for($this->people['boarded'][0])->create(['tag_no' => $this->flightNo('100009')]);
 
         $this->closeBoarding()->assertSessionHas('success', 'Boarding closed: 3 no-shows, 3 bags to offload.');
 
         $section = $this->offloadSection();
         $this->assertStringContainsString('Bags to offload', $section);
         $aliSeat = $ali->seatAssignment->seat->seat_no;
-        foreach (['ME100001', '18.0 kg', 'ME100002', 'Stroller', 'ME100003', '23.0 kg', 'Ali Missing', $aliSeat] as $text) {
+        foreach ([$this->flightNo('100001'), '18.0 kg', $this->flightNo('100002'), 'Stroller', $this->flightNo('100003'), '23.0 kg', 'Ali Missing', $aliSeat] as $text) {
             $this->assertStringContainsString($text, $section);
         }
-        $this->assertStringNotContainsString('ME100009', $section); // boarded passenger's bag stays on
+        $this->assertStringNotContainsString($this->flightNo('100009'), $section); // boarded passenger's bag stays on
     }
 
     public function test_closing_needs_an_on_page_confirmation_step(): void

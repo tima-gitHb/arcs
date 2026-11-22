@@ -99,9 +99,9 @@ class FareRouteTest extends TestCase
 
     public function test_SR69_each_route_has_its_own_fare_and_the_default_is_unchanged(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
-        $this->flight('ME264', 'BEY', 'IST');
-        $this->flight('ME110', 'BEY', 'LHR');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
+        $this->flight($this->flightNo('264'), 'BEY', 'IST');
+        $this->flight($this->flightNo('110'), 'BEY', 'LHR');
 
         $this->save('BEY-CDG', ['economy' => ['adult' => '300.00']])
             ->assertSessionHasNoErrors()
@@ -134,9 +134,9 @@ class FareRouteTest extends TestCase
 
     public function test_the_selector_lists_default_first_then_flown_and_priced_routes(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
-        $this->flight('ME202', 'BEY', 'CDG');
-        $this->flight('ME305', 'BEY', 'DXB');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
+        $this->flight($this->flightNo('202'), 'BEY', 'CDG');
+        $this->flight($this->flightNo('305'), 'BEY', 'DXB');
         Fare::create([
             'origin_airport_code' => 'CDG',
             'destination_airport_code' => 'BEY',
@@ -166,7 +166,7 @@ class FareRouteTest extends TestCase
 
     public function test_a_route_without_its_own_fare_shows_an_empty_input_and_the_default_as_placeholder(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
 
         $page = $this->get(route('manager.fares', ['route' => 'BEY-CDG']))->assertOk();
 
@@ -178,7 +178,7 @@ class FareRouteTest extends TestCase
 
     public function test_typing_a_price_creates_only_that_route_fare(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
 
         $this->save('BEY-CDG', ['economy' => ['adult' => '300.00']])->assertSessionHasNoErrors();
 
@@ -197,7 +197,7 @@ class FareRouteTest extends TestCase
 
     public function test_changing_a_route_price_audits_the_old_and_new_amounts(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
         $this->save('BEY-CDG', ['economy' => ['adult' => '300.00']])->assertSessionHasNoErrors();
 
         $this->save('BEY-CDG', ['economy' => ['adult' => '320.00']])->assertSessionHasNoErrors();
@@ -214,7 +214,7 @@ class FareRouteTest extends TestCase
 
     public function test_clearing_a_route_price_deletes_it_and_audits_default(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
         $this->save('BEY-CDG', ['economy' => ['adult' => '300.00']])->assertSessionHasNoErrors();
 
         $this->save('BEY-CDG', ['economy' => ['adult' => '']])->assertSessionHasNoErrors();
@@ -250,7 +250,7 @@ class FareRouteTest extends TestCase
     #[DataProvider('badAmounts')]
     public function test_a_bad_route_amount_is_rejected_and_nothing_is_saved(string $bad): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
 
         $this->save('BEY-CDG', [
             'economy' => ['adult' => $bad, 'child' => '10.00'],
@@ -264,7 +264,7 @@ class FareRouteTest extends TestCase
 
     public function test_a_bad_fee_on_the_route_form_is_rejected_and_the_empty_fare_is_not(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
 
         $payload = $this->routePayload('BEY-CDG', ['economy' => ['adult' => '300.00']]);
         $payload['fees']['ExtraBag'] = 'abc';
@@ -279,7 +279,7 @@ class FareRouteTest extends TestCase
 
     public function test_an_invalid_route_is_refused_and_writes_nothing(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
 
         foreach (['XXX-YYY', 'BEY-BEY', 'BEY', 'BEYCDG'] as $route) {
             $this->save($route, ['economy' => ['adult' => '300.00']])
@@ -298,7 +298,7 @@ class FareRouteTest extends TestCase
 
     public function test_a_non_manager_cannot_open_or_save_a_route(): void
     {
-        $this->flight('ME201', 'BEY', 'CDG');
+        $this->flight($this->flightNo('201'), 'BEY', 'CDG');
 
         foreach ([Role::Reservation, Role::Checkin, Role::Gate] as $role) {
             $this->actingAsRole($role);

@@ -47,7 +47,7 @@ class B13bMigrationTest extends TestCase
         DB::table('seat_assignments')->insert(['flight_id' => $flight->id, 'seat_id' => $seatId, 'passenger_id' => $boarded]);
         DB::table('boarding_passes')->insert(['passenger_id' => $boarded, 'barcode' => 'K7M2NP-'.$boarded.'-1', 'issued_at' => '2026-11-15 05:30:00']);
         DB::table('gate_overrides')->insert(['passenger_id' => $boarded, 'approved_by' => $agent->id, 'reason' => 'Late', 'approved_at' => '2026-11-15 06:00:00']);
-        DB::table('bags')->insert(['passenger_id' => $boarded, 'tag_no' => 'ME000001', 'weight_kg' => 20, 'type' => 'Standard', 'handling' => 'Hold']);
+        DB::table('bags')->insert(['passenger_id' => $boarded, 'tag_no' => $this->flightNo('000001'), 'weight_kg' => 20, 'type' => 'Standard', 'handling' => 'Hold']);
         DB::table('audit_log')->insert(['passenger_id' => $boarded, 'field' => 'status', 'old_value' => 'Booked', 'new_value' => 'CheckedIn', 'user_id' => $agent->id, 'changed_at' => '2026-11-15 05:30:00']);
         DB::table('audit_log')->insert(['flight_id' => $flight->id, 'field' => 'gate', 'old_value' => 'A1', 'new_value' => 'A2', 'user_id' => $agent->id, 'changed_at' => '2026-11-15 05:00:00']);
 

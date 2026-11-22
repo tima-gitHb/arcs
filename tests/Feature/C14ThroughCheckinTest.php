@@ -55,14 +55,14 @@ class C14ThroughCheckinTest extends TestCase
     private function connection(int $gap = 90): array
     {
         $first = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME264', 'origin' => 'BEY', 'destination' => 'IST',
+            'flight_no' => $this->flightNo('264'), 'origin' => 'BEY', 'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 10:00', 'UTC'),
             'checkin_opens_at' => Carbon::parse('2026-11-15 05:00', 'UTC'),
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 10:00', 'UTC')->addMinutes($gap),
             'arrives_at' => Carbon::parse('2026-11-15 13:45', 'UTC')->addMinutes($gap),
             'checkin_opens_at' => Carbon::parse('2026-11-15 07:00', 'UTC'),
@@ -78,14 +78,14 @@ class C14ThroughCheckinTest extends TestCase
     private function roundTrip(): array
     {
         $out = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME201', 'origin' => 'BEY', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('201'), 'origin' => 'BEY', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 12:45', 'UTC'),
             'checkin_opens_at' => Carbon::parse('2026-11-15 05:00', 'UTC'),
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $back = Flight::factory()->create([
-            'flight_no' => 'ME204', 'origin' => 'CDG', 'destination' => 'BEY',
+            'flight_no' => $this->flightNo('204'), 'origin' => 'CDG', 'destination' => 'BEY',
             'departure_at' => Carbon::parse('2026-11-18 10:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-18 14:15', 'UTC'),
             'checkin_opens_at' => Carbon::parse('2026-11-18 07:00', 'UTC'),
@@ -170,8 +170,8 @@ class C14ThroughCheckinTest extends TestCase
 
         $this->get(route('checkin.passengers.show', $passenger))
             ->assertOk()
-            ->assertSee('ME264')
-            ->assertSee('ME216')
+            ->assertSee($this->flightNo('264'))
+            ->assertSee($this->flightNo('216'))
             ->assertSee('BEY → IST', false)
             ->assertSee('IST → CDG', false)
             ->assertSee('Connection', false);
@@ -255,7 +255,7 @@ class C14ThroughCheckinTest extends TestCase
 
         $this->get(route('checkin.passengers.upgrade', [$passenger, 'flight' => $second->id]))
             ->assertOk()
-            ->assertSee('ME216')
+            ->assertSee($this->flightNo('216'))
             ->assertDontSee('Upgrade is not available for connecting journeys yet');
 
         $this->post(route('checkin.passengers.upgrade.store', $passenger), [
@@ -296,7 +296,7 @@ class C14ThroughCheckinTest extends TestCase
     public function test_SR66_one_flight_passengers_unchanged(): void
     {
         $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME301', 'origin' => 'BEY', 'destination' => 'DXB',
+            'flight_no' => $this->flightNo('301'), 'origin' => 'BEY', 'destination' => 'DXB',
         ]);
         $reservation = Reservation::factory()->for($flight)->create();
         $passenger = Passenger::factory()->for($reservation)->create(['cabin_class' => CabinClass::Economy]);

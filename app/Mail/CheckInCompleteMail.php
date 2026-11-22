@@ -31,7 +31,7 @@ class CheckInCompleteMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'ARCS check-in complete '.$this->passenger->reservation->pnr,
+            subject: config('arcs.airline.name').' check-in complete '.$this->passenger->reservation->pnr,
         );
     }
 

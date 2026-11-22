@@ -140,28 +140,28 @@ class R1CreateReservationTest extends TestCase
     {
         $this->actingAsRole('reservation');
 
-        $closed = $this->flightWithStatus(FlightStatus::Closed, ['flight_no' => 'ME701']);
-        $checkin = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME702']);
-        $boarding = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => 'ME703']);
-        $departed = $this->flightWithStatus(FlightStatus::Departed, ['flight_no' => 'ME704']);
-        $cancelled = $this->flightWithStatus(FlightStatus::Cancelled, ['flight_no' => 'ME705']);
+        $closed = $this->flightWithStatus(FlightStatus::Closed, ['flight_no' => $this->flightNo('701')]);
+        $checkin = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('702')]);
+        $boarding = $this->flightWithStatus(FlightStatus::Boarding, ['flight_no' => $this->flightNo('703')]);
+        $departed = $this->flightWithStatus(FlightStatus::Departed, ['flight_no' => $this->flightNo('704')]);
+        $cancelled = $this->flightWithStatus(FlightStatus::Cancelled, ['flight_no' => $this->flightNo('705')]);
 
         $page = $this->get(route('reservation.create'));
 
         $page->assertOk()
-            ->assertSee('ME702')
-            ->assertSee('ME703')
+            ->assertSee($this->flightNo('702'))
+            ->assertSee($this->flightNo('703'))
             ->assertSee('Check-in open')
             ->assertSee('Boarding');
 
         preg_match('/const allFlights = (\[.*?\]);/s', $page->getContent(), $bookingList);
 
         $this->assertArrayHasKey(1, $bookingList);
-        $this->assertStringContainsString('ME702', $bookingList[1]);
-        $this->assertStringContainsString('ME703', $bookingList[1]);
-        $this->assertStringNotContainsString('ME701', $bookingList[1]);
-        $this->assertStringNotContainsString('ME704', $bookingList[1]);
-        $this->assertStringNotContainsString('ME705', $bookingList[1]);
+        $this->assertStringContainsString($this->flightNo('702'), $bookingList[1]);
+        $this->assertStringContainsString($this->flightNo('703'), $bookingList[1]);
+        $this->assertStringNotContainsString($this->flightNo('701'), $bookingList[1]);
+        $this->assertStringNotContainsString($this->flightNo('704'), $bookingList[1]);
+        $this->assertStringNotContainsString($this->flightNo('705'), $bookingList[1]);
 
         foreach ([$checkin, $boarding] as $flight) {
             $seatIds = $this->seatsFor($flight, 1);

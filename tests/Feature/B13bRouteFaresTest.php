@@ -77,11 +77,11 @@ class B13bRouteFaresTest extends TestCase
         $this->routeFare('IST', 'CDG', 21000);
 
         $first = Flight::factory()->create([
-            'flight_no' => 'ME264', 'origin' => 'BEY', 'destination' => 'IST',
+            'flight_no' => $this->flightNo('264'), 'origin' => 'BEY', 'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'), 'arrives_at' => Carbon::parse('2026-11-15 10:00', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 11:30', 'UTC'), 'arrives_at' => Carbon::parse('2026-11-15 15:15', 'UTC'),
         ]);
         $reservation = Reservation::factory()->create(['flight_id' => $first->id]);
@@ -115,8 +115,13 @@ class B13bRouteFaresTest extends TestCase
         $this->seed(DatabaseSeeder::class);
 
         $this->assertSame(9, Fare::query()->defaults()->count());
-        $route = Fare::query()->where('origin_airport_code', 'BEY')->where('destination_airport_code', 'IST')->sole();
-        $this->assertSame([CabinClass::Economy, PassengerType::Adult], [$route->cabin_class, $route->passenger_type]);
+        $route = Fare::query()
+            ->where('origin_airport_code', 'BEY')
+            ->where('destination_airport_code', 'IST')
+            ->where('cabin_class', CabinClass::Economy)
+            ->where('passenger_type', PassengerType::Adult)
+            ->sole();
+        $this->assertSame(19000, $route->amount_cents);
         $this->assertLessThan(25000, $route->amount_cents);
     }
 

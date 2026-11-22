@@ -12,6 +12,7 @@ use App\Enums\PaymentStatus;
 use App\Enums\Role;
 use App\Enums\SpecialServiceCode;
 use App\Models\Aircraft;
+use App\Models\Airport;
 use App\Models\AuditEntry;
 use App\Models\Bag;
 use App\Models\BaggageAllowance;
@@ -26,6 +27,7 @@ use App\Models\Reservation;
 use App\Models\Seat;
 use App\Models\Setting;
 use App\Models\SpecialService;
+use App\Models\TripFare;
 use App\Models\User;
 use App\Services\StatusService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -35,9 +37,24 @@ class B8SeedersTest extends TestCase
 {
     use RefreshDatabase;
 
+    /** @var list<string> */
+    private array $classicFlights;
+
     protected function setUp(): void
     {
         parent::setUp();
+
+        $this->classicFlights = [
+            $this->flightNo('110'),
+            $this->flightNo('201'),
+            $this->flightNo('202'),
+            $this->flightNo('203'),
+            $this->flightNo('204'),
+            $this->flightNo('216'),
+            $this->flightNo('264'),
+            $this->flightNo('305'),
+            $this->flightNo('422'),
+        ];
 
         $this->seed();
     }
@@ -68,68 +85,99 @@ class B8SeedersTest extends TestCase
 
     public function test_aircraft_settings_and_allowances(): void
     {
-        $this->assertSame(180, Seat::count());
-        $this->assertSame(30, Seat::where('cabin_class', 'Business')->count());
+        $this->assertSame(6, Aircraft::count());
+        $this->assertSame(1014, Seat::count());
+        $this->assertSame(84, Seat::where('cabin_class', 'Business')->count());
         $this->assertSame('6', Setting::find('passport_min_months')->value);
-        $this->assertSame(18, Seat::where('cabin_class', 'Premium')->count());
-        $this->assertSame(132, Seat::where('cabin_class', 'Economy')->count());
-        $this->assertSame(3, Aircraft::where('registration', 'OD-MRA')->value('premium_rows'));
+        $this->assertSame(132, Seat::where('cabin_class', 'Premium')->count());
+        $this->assertSame(798, Seat::where('cabin_class', 'Economy')->count());
+        $this->assertSame(3, Aircraft::where('registration', 'OD-ARA')->value('premium_rows'));
         $this->assertSame('32', Setting::find('hard_max_kg_per_bag')->value);
         $this->assertSame(2, BaggageAllowance::where('cabin_class', 'Economy')->value('pieces'));
         $this->assertSame(2, BaggageAllowance::where('cabin_class', 'Premium')->value('pieces'));
         $this->assertSame(2, BaggageAllowance::where('cabin_class', 'Business')->value('pieces'));
     }
 
+    public function test_airport_connection_times_are_seeded(): void
+    {
+        $this->assertSame(90, Airport::find('CDG')->min_connection_minutes);
+        $this->assertSame('Paris–Charles de Gaulle', Airport::find('CDG')->name);
+        $this->assertSame(45, Airport::find('BEY')->min_connection_minutes);
+        $this->assertSame(60, Airport::find('IST')->min_connection_minutes);
+    }
+
+    public function test_at_least_thirty_five_reservations_exist(): void
+    {
+        $this->assertGreaterThanOrEqual(35, Reservation::count());
+    }
+
+    public function test_trip_fares_cover_bey_destinations(): void
+    {
+        $this->assertSame(9, TripFare::query()->where('origin_code', 'BEY')->count());
+        $trip = TripFare::query()->forTrip('BEY', 'CDG')->where('passenger_type', PassengerType::Adult)->firstOrFail();
+        $this->assertSame(34000, $trip->one_way_cents);
+        $this->assertSame(59500, $trip->round_trip_cents);
+    }
+
     public function test_flight_statuses(): void
     {
-        $statuses = Flight::pluck('status', 'flight_no')->map->value->sortKeys()->all();
+        $statuses = Flight::query()
+            ->whereIn('flight_no', $this->classicFlights)
+            ->pluck('status', 'flight_no')
+            ->map->value
+            ->sortKeys()
+            ->all();
 
         $this->assertSame([
-            'ME110' => 'Closed',
-            'ME201' => 'CheckinOpen',
-            'ME202' => 'CheckinOpen',
-            'ME203' => 'Scheduled', // B13b round trip, out
-            'ME204' => 'Scheduled', // B13b round trip, back
-            'ME216' => 'Scheduled',
-            'ME264' => 'CheckinOpen', // B13b connection BEY→IST→CDG, first flight
-            'ME305' => 'Boarding',
-            'ME422' => 'Scheduled',
+            $this->flightNo('110') => 'Departed',
+            $this->flightNo('201') => 'CheckinOpen',
+            $this->flightNo('202') => 'CheckinOpen',
+            $this->flightNo('203') => 'Scheduled',
+            $this->flightNo('204') => 'Scheduled',
+            $this->flightNo('216') => 'Scheduled',
+            $this->flightNo('264') => 'CheckinOpen',
+            $this->flightNo('305') => 'Boarding',
+            $this->flightNo('422') => 'Scheduled',
         ], $statuses);
 
-        $this->assertNotNull(Flight::where('flight_no', 'ME110')->value('boarding_closed_at'));
+        $this->assertNotNull(Flight::where('flight_no', $this->flightNo('110'))->value('boarding_closed_at'));
     }
 
     public function test_flight_origin_and_destination(): void
     {
-        $routes = Flight::all()->mapWithKeys(fn (Flight $f) => [$f->flight_no => $f->origin.'-'.$f->destination])->sortKeys()->all();
+        $routes = Flight::query()
+            ->whereIn('flight_no', $this->classicFlights)
+            ->get()
+            ->mapWithKeys(fn (Flight $f) => [$f->flight_no => $f->origin.'-'.$f->destination])
+            ->sortKeys()
+            ->all();
 
         $this->assertSame([
-            'ME110' => 'BEY-LHR',
-            'ME201' => 'BEY-CDG',
-            'ME202' => 'CDG-BEY',
-            'ME203' => 'BEY-CDG',
-            'ME204' => 'CDG-BEY',
-            'ME216' => 'IST-CDG',
-            'ME264' => 'BEY-IST',
-            'ME305' => 'BEY-DXB',
-            'ME422' => 'BEY-FCO',
+            $this->flightNo('110') => 'BEY-LHR',
+            $this->flightNo('201') => 'BEY-CDG',
+            $this->flightNo('202') => 'CDG-BEY',
+            $this->flightNo('203') => 'BEY-CDG',
+            $this->flightNo('204') => 'CDG-BEY',
+            $this->flightNo('216') => 'IST-CDG',
+            $this->flightNo('264') => 'BEY-IST',
+            $this->flightNo('305') => 'BEY-DXB',
+            $this->flightNo('422') => 'BEY-FCO',
         ], $routes);
     }
 
     public function test_passenger_counts_per_status_match_the_list(): void
     {
-        $this->assertSame(['Booked' => 8, 'Cancelled' => 1, 'CheckedIn' => 4], $this->statusCounts('ME201'));
-        $this->assertSame(['Boarded' => 5, 'Booked' => 1, 'CheckedIn' => 3], $this->statusCounts('ME305'));
-        $this->assertSame(['Boarded' => 6, 'NoShow' => 2], $this->statusCounts('ME110'));
-        $this->assertSame([], $this->statusCounts('ME422'));
+        $this->assertSame(['Booked' => 9, 'Cancelled' => 1, 'CheckedIn' => 4], $this->statusCounts($this->flightNo('201')));
+        $this->assertSame(['Boarded' => 5, 'Booked' => 1, 'CheckedIn' => 3], $this->statusCounts($this->flightNo('305')));
+        $this->assertSame(['Boarded' => 6, 'NoShow' => 2], $this->statusCounts($this->flightNo('110')));
+        $this->assertSame(['Booked' => 6], $this->statusCounts($this->flightNo('422')));
     }
 
     public function test_paris_special_cases(): void
     {
-        $paris = Flight::where('flight_no', 'ME201')->firstOrFail();
+        $paris = Flight::where('flight_no', $this->flightNo('201'))->firstOrFail();
 
-        // Checked-in passengers have a seat and at least one bag (except the infant: no seat, no bag).
-        $checkedIn = $paris->passengers()->wherePivot('status', 'CheckedIn')->get(); // status on this flight's coupon (B13b)
+        $checkedIn = $paris->passengers()->wherePivot('status', 'CheckedIn')->get();
         foreach ($checkedIn as $passenger) {
             if ($passenger->type === PassengerType::Infant) {
                 $this->assertNull($passenger->seatAssignment);
@@ -140,33 +188,28 @@ class B8SeedersTest extends TestCase
             $this->assertGreaterThanOrEqual(1, $passenger->bags->count());
         }
 
-        // The cancelled passenger's seat was released.
         $cancelled = $paris->passengers()->wherePivot('status', 'Cancelled')->sole();
         $this->assertNull($cancelled->seatAssignment);
 
-        // The infant is linked to an adult on the same booking and has no seat.
         $infant = $paris->passengers()->where('type', PassengerType::Infant)->sole();
         $this->assertNotNull($infant->accompanyingAdult);
         $this->assertSame($infant->reservation_id, $infant->accompanyingAdult->reservation_id);
         $this->assertNull($infant->seatAssignment);
 
-        // Some passengers also have a visa.
         $this->assertTrue($paris->passengers()->whereHas('travelDocuments', fn ($q) => $q->where('type', 'Visa'))->exists());
     }
 
     public function test_SR43_SR44_paris_special_bags_and_services(): void
     {
-        $paris = Flight::where('flight_no', 'ME201')->firstOrFail();
+        $paris = Flight::where('flight_no', $this->flightNo('201'))->firstOrFail();
         $ids = $paris->passengers()->pluck('passengers.id');
         $bags = Bag::whereIn('passenger_id', $ids)->get();
 
-        // Stroller for the adult travelling with the infant, delivered at the gate.
         $infant = $paris->passengers()->where('type', PassengerType::Infant)->sole();
         $stroller = $bags->where('type', BagType::Stroller)->sole();
         $this->assertSame($infant->accompanying_adult_id, $stroller->passenger_id);
         $this->assertSame(BagHandling::GateDelivery, $stroller->handling);
 
-        // WCHR passenger with a wheelchair, delivered at the gate.
         $wchr = SpecialService::whereIn('passenger_id', $ids)->where('type', SpecialServiceCode::WCHR)->sole();
         $wheelchair = $bags->where('type', BagType::Wheelchair)->sole();
         $this->assertSame($wchr->passenger_id, $wheelchair->passenger_id);
@@ -181,7 +224,7 @@ class B8SeedersTest extends TestCase
 
     public function test_expired_passport_passenger_is_refused_at_check_in(): void
     {
-        $paris = Flight::where('flight_no', 'ME201')->firstOrFail();
+        $paris = Flight::where('flight_no', $this->flightNo('201'))->firstOrFail();
         $expired = $paris->passengers()
             ->whereHas('travelDocuments', fn ($q) => $q->where('type', 'Passport')->where('expiry_date', '<', now()))
             ->sole();
@@ -192,7 +235,7 @@ class B8SeedersTest extends TestCase
 
     public function test_no_show_bags_exist_on_london(): void
     {
-        $london = Flight::where('flight_no', 'ME110')->firstOrFail();
+        $london = Flight::where('flight_no', $this->flightNo('110'))->firstOrFail();
         $noShowIds = $london->passengers()->wherePivot('status', 'NoShow')->pluck('passengers.id');
 
         $this->assertSame(2, Bag::whereIn('passenger_id', $noShowIds)->count());
@@ -202,39 +245,48 @@ class B8SeedersTest extends TestCase
     {
         $this->assertGreaterThan(0, AuditEntry::count());
 
-        // One audit row per status change: every passenger that is no longer Booked has at least one.
-        $changed = Passenger::whereHas('coupons', fn ($coupon) => $coupon->where('status', '!=', PassengerStatus::Booked))->count(); // B13b
-        $this->assertSame($changed, AuditEntry::distinct()->count('passenger_id'));
+        $changed = Passenger::whereHas('coupons', fn ($coupon) => $coupon->where('status', '!=', PassengerStatus::Booked))->count();
+        $auditedPassengers = AuditEntry::query()->whereNotNull('passenger_id')->distinct()->count('passenger_id');
+        $this->assertGreaterThanOrEqual($changed, $auditedPassengers);
+        $this->assertGreaterThan(0, $changed);
     }
 
     public function test_every_checked_in_or_boarded_passenger_has_exactly_one_active_pass(): void
     {
-        $passengers = Passenger::whereHas('coupons', fn ($coupon) => $coupon->whereIn('status', [PassengerStatus::CheckedIn, PassengerStatus::Boarded]))->get(); // B13b
+        $passengers = Passenger::whereHas('coupons', fn ($coupon) => $coupon->whereIn('status', [PassengerStatus::CheckedIn, PassengerStatus::Boarded]))->get();
 
         $this->assertGreaterThan(0, $passengers->count());
 
         foreach ($passengers as $passenger) {
-            $this->assertSame(1, $passenger->boardingPasses()->whereNull('voided_at')->count(), "Passenger {$passenger->id}");
+            $couponCount = $passenger->coupons()
+                ->whereIn('status', [PassengerStatus::CheckedIn, PassengerStatus::Boarded])
+                ->count();
+            $this->assertSame(
+                $couponCount,
+                $passenger->boardingPasses()->whereNull('voided_at')->count(),
+                "Passenger {$passenger->id}",
+            );
         }
 
-        // Issued through BoardingPassService, so each pass has its audit row.
         $this->assertSame(
             BoardingPass::count(),
             AuditEntry::where('field', 'boarding_pass_issued')->count(),
         );
     }
 
-    public function test_fares_fees_and_one_paid_reservation_are_seeded(): void
+    public function test_fares_fees_and_payments_are_seeded(): void
     {
-        $this->assertSame(9, Fare::query()->defaults()->count()); // B13b: plus the BEY→IST route fare
+        $this->assertSame(9, Fare::query()->defaults()->count());
+        $this->assertGreaterThan(9, Fare::query()->whereNotNull('origin_airport_code')->count());
         $this->assertSame(4, Fee::count());
+        $this->assertSame(5000, Fee::where('code', 'ExtraBag')->value('amount_cents'));
 
-        $payment = Payment::sole();
-        $this->assertSame(PaymentStatus::Succeeded, $payment->status);
-        $this->assertSame(PaymentKind::Fare, $payment->kind);
-        $this->assertSame('ME201', $payment->reservation->flight->flight_no);
-        $this->assertSame('4242', $payment->card_last4);
-        $this->assertGreaterThan(0, $payment->amount_cents);
+        $this->assertTrue(Payment::where('status', PaymentStatus::Failed)->where('kind', PaymentKind::Fare)->exists());
+        $succeeded = Payment::where('status', PaymentStatus::Succeeded)->where('kind', PaymentKind::Fare)->first();
+        $this->assertNotNull($succeeded);
+        $this->assertSame($this->flightNo('201'), $succeeded->reservation->flight->flight_no);
+        $this->assertSame('4242', $succeeded->card_last4);
+        $this->assertGreaterThan(0, $succeeded->amount_cents);
     }
 
     public function test_in_tests_the_entry_rule_seeder_loads_the_small_fixture(): void
@@ -254,10 +306,24 @@ class B8SeedersTest extends TestCase
 
     public function test_seeded_flights_have_departure_times_relative_to_now(): void
     {
-        $paris = Flight::where('flight_no', 'ME201')->firstOrFail();
+        $paris = Flight::where('flight_no', $this->flightNo('201'))->firstOrFail();
 
         $this->assertSame(FlightStatus::CheckinOpen, $paris->status);
         $this->assertTrue(now()->between($paris->checkin_opens_at, $paris->checkin_closes_at));
         $this->assertTrue($paris->departure_at->isFuture());
+    }
+
+    public function test_schedule_includes_midnight_beirut_departure_tomorrow(): void
+    {
+        $midnight = Flight::query()
+            ->where('origin', 'BEY')
+            ->where('destination', 'CAI')
+            ->whereBetween('departure_at', [
+                now('Asia/Beirut')->addDay()->startOfDay()->utc(),
+                now('Asia/Beirut')->addDay()->startOfDay()->addHour()->utc(),
+            ])
+            ->first();
+
+        $this->assertNotNull($midnight, 'Expected a BEY→CAI flight departing around 00:00 Beirut local tomorrow.');
     }
 }

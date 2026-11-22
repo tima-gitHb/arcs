@@ -55,7 +55,7 @@ class FlightAuditTest extends TestCase
     {
         $joe = $this->actingAsRole(Role::Gate);
         $joe->update(['name' => 'Joe Saliba']);
-        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME305']);
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('305')]);
 
         $this->post(route('gate.flights.start-boarding', $flight))
             ->assertRedirect(route('gate.flights.show', $flight));
@@ -72,7 +72,7 @@ class FlightAuditTest extends TestCase
         $this->actingAsRole(Role::Manager);
         $this->get(route('manager.audit'))
             ->assertOk()
-            ->assertSee('Flight ME305')
+            ->assertSee('Flight '.$this->flightNo('305'))
             ->assertSee('Check-in open → Boarding')
             ->assertSee('Joe Saliba')
             ->assertSee('10 Nov 2026 10:00');
@@ -81,7 +81,7 @@ class FlightAuditTest extends TestCase
     public function test_SR55_close_boarding_records_the_flight_row_before_the_no_show_rows(): void
     {
         $joe = User::factory()->create(['role' => Role::Gate, 'name' => 'Joe Saliba']);
-        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME110']);
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('110')]);
         $missing = $this->checkedInPassenger($flight, ['first_name' => 'Nour', 'last_name' => 'Aoun']);
 
         app(StatusService::class)->setFlightStatus($flight, FlightStatus::Boarding, $joe);
@@ -122,7 +122,7 @@ class FlightAuditTest extends TestCase
     public function test_SR55_changing_the_gate_records_old_and_new(): void
     {
         $manager = $this->actingAsRole(Role::Manager);
-        $flight = Flight::factory()->create(['flight_no' => 'ME201', 'gate' => 'A3']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('201'), 'gate' => 'A3']);
 
         $this->patch(route('manager.flights.gate', $flight), ['gate' => 'B7'])
             ->assertSessionHasNoErrors();
@@ -139,14 +139,14 @@ class FlightAuditTest extends TestCase
 
         $this->get(route('manager.audit'))
             ->assertOk()
-            ->assertSee('Flight ME201')
+            ->assertSee('Flight '.$this->flightNo('201'))
             ->assertSee('A3 → B7');
     }
 
     public function test_SR55_clearing_the_gate_is_recorded_and_shown_as_a_dash(): void
     {
         $manager = $this->actingAsRole(Role::Manager);
-        $flight = Flight::factory()->create(['flight_no' => 'ME201', 'gate' => 'A3']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('201'), 'gate' => 'A3']);
 
         $this->patch(route('manager.flights.gate', $flight), ['gate' => ''])
             ->assertSessionHasNoErrors();
@@ -178,16 +178,16 @@ class FlightAuditTest extends TestCase
     public function test_SR55_the_flight_filter_shows_the_flight_row_and_the_passenger_row(): void
     {
         $this->actingAsRole(Role::Manager);
-        $flightA = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME901']);
-        $flightB = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME902']);
+        $flightA = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('901')]);
+        $flightB = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('902')]);
         $onA = $this->checkedInPassenger($flightA, ['first_name' => 'Rami', 'last_name' => 'Hadad']);
         $onB = $this->checkedInPassenger($flightB, ['first_name' => 'Lina', 'last_name' => 'Karam']);
 
         $entries = $this->get(route('manager.audit', ['flight_id' => $flightA->id]))
             ->assertOk()
-            ->assertSee('Flight ME901')
+            ->assertSee('Flight '.$this->flightNo('901'))
             ->assertSee('Rami Hadad')
-            ->assertDontSee('Flight ME902')
+            ->assertDontSee('Flight '.$this->flightNo('902'))
             ->assertDontSee('Lina Karam')
             ->viewData('entries');
 

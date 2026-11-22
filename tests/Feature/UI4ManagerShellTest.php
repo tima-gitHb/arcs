@@ -30,7 +30,7 @@ class UI4ManagerShellTest extends TestCase
 
     public function test_dashboard_kpis_show_money_and_period_label_changes(): void
     {
-        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME901']);
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('901')]);
         $reservation = Reservation::factory()->for($flight)->create();
         $agent = User::factory()->create(['role' => Role::Checkin]);
         app(PaymentService::class)->charge(
@@ -56,7 +56,7 @@ class UI4ManagerShellTest extends TestCase
     public function test_dashboard_kpi_delta_compares_to_previous_period(): void
     {
         $yesterday = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME800',
+            'flight_no' => $this->flightNo('800'),
             'departure_at' => now()->subDay()->setTime(12, 0),
         ]);
         $yRes = Reservation::factory()->for($yesterday)->create();
@@ -69,7 +69,7 @@ class UI4ManagerShellTest extends TestCase
             $yRes,
         );
 
-        $todayFlight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME801']);
+        $todayFlight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('801')]);
         $tRes = Reservation::factory()->for($todayFlight)->create();
         app(PaymentService::class)->charge(
             new CardDetails('4242 4242 4242 4242', '12/30', '123'),
@@ -98,7 +98,7 @@ class UI4ManagerShellTest extends TestCase
 
         $aircraft = Aircraft::factory()->create();
         $response = $this->post(route('manager.flights.store'), [
-            'flight_no' => 'ME205',
+            'flight_no' => $this->flightNo('205'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'aircraft_id' => $aircraft->id,
@@ -108,7 +108,7 @@ class UI4ManagerShellTest extends TestCase
             'gate' => 'B4',
         ])->assertSessionHasNoErrors();
 
-        $flight = Flight::where('flight_no', 'ME205')->sole();
+        $flight = Flight::where('flight_no', $this->flightNo('205'))->sole();
         $response->assertRedirect(route('manager.flights.show', $flight));
     }
 
