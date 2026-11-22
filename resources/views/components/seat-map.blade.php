@@ -1,34 +1,34 @@
 {{--
     Plane seat map (R1 / C3 / G6+). Drawn by window.ArcsSeatMap.draw() into #seat-map.
     <x-seat-map hint="..." mode="booking|gate" />
-    Navy panel + white fuselage — keep seat-map-panel / seat-map-sticky / plane-fuselage for PlaneSeatMapTest.
+    Navy panel + fuselage — keep seat-map-panel / seat-map-sticky / plane-fuselage for PlaneSeatMapTest.
 --}}
 @props(['hint' => '', 'mode' => 'booking'])
 
+@php
+    $seatDataAttrs = [
+        'data-seats',
+        'data-selected-seat',
+        'data-cabin',
+        'data-seat-states',
+        'data-pax-type',
+        'data-pax-initials',
+    ];
+@endphp
+
 <aside id="seat-map-panel"
-    {{ $attributes->except(['data-seats', 'data-selected-seat', 'data-cabin', 'data-seat-states'])->merge([
+    {{ $attributes->except($seatDataAttrs)->merge([
         'class' => 'seat-map-sticky plane-panel arcs-seat-map-panel lg:sticky lg:top-4',
     ]) }}
-    style="background: var(--arcs-seat-panel);">
-    <div class="mb-4 text-center">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.22em]" style="color: var(--arcs-seat-muted);">Cabin</p>
-        <h2 class="mt-1 text-lg font-semibold text-white">Seat map</h2>
-        <p id="seat-map-hint" class="mt-1 text-xs" style="color: var(--arcs-seat-muted);">{{ $hint }}</p>
-    </div>
-
-    {{ $slot }}
-
-    <div class="plane-fuselage arcs-plane-fuselage mx-auto">
-        <div class="plane-nose arcs-plane-nose" aria-hidden="true"></div>
-        <div class="plane-body arcs-plane-body">
-            <div id="seat-map" {{ $attributes->only(['data-seats', 'data-selected-seat', 'data-cabin', 'data-seat-states'])->merge([
-                'class' => 'plane-slide-in arcs-seat-map-scroll',
-                'data-mode' => $mode,
-            ]) }}></div>
+    style="background: linear-gradient(160deg, #1B2440, #24325A);">
+    <div class="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h2 class="text-base font-semibold text-white">Seat map</h2>
+            <p id="seat-map-hint" class="mt-0.5 text-xs text-white/70">{{ $hint }}</p>
         </div>
     </div>
 
-    <div class="arcs-seat-legend mt-5 flex flex-wrap justify-center gap-2">
+    <div class="arcs-seat-legend mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
         @if ($mode === 'gate')
             <span class="arcs-seat-legend-pill arcs-seat-legend-available">Free</span>
             <span class="arcs-seat-legend-pill arcs-seat-legend-booked">Booked</span>
@@ -43,8 +43,24 @@
             <span class="arcs-seat-legend-pill arcs-seat-legend-business">Business</span>
             <span class="arcs-seat-legend-pill arcs-seat-legend-selected">Selected</span>
             <span class="arcs-seat-legend-pill arcs-seat-legend-taken">Taken</span>
+            <span class="arcs-seat-legend-pill arcs-seat-legend-selected">This passenger</span>
+            <span class="arcs-seat-legend-pill arcs-seat-legend-party">Others in booking</span>
             <span class="arcs-seat-legend-pill arcs-seat-legend-legroom">Extra legroom</span>
+            <span class="arcs-seat-legend-pill arcs-seat-legend-blocked">Not allowed</span>
         @endif
+    </div>
+
+    {{ $slot }}
+
+    <div class="plane-fuselage arcs-plane-fuselage mx-auto">
+        <div class="plane-nose arcs-plane-nose" aria-hidden="true"></div>
+        <div class="plane-body arcs-plane-body">
+            <div id="seat-map" {{ $attributes->only($seatDataAttrs)->merge([
+                'class' => 'plane-slide-in arcs-seat-map-scroll arcs-seat-map-h',
+                'data-mode' => $mode,
+                'data-layout' => 'horizontal',
+            ]) }}></div>
+        </div>
     </div>
 </aside>
 

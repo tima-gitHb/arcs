@@ -25,8 +25,14 @@
                 <input type="hidden" name="seat_id" id="seat-input" value="{{ old('seat_id') }}">
                 <x-input-error :messages="$errors->get('seat_id')" class="mt-2" />
 
-                <div class="mt-4 max-w-sm">
-                    <x-seat-map hint="Click a free seat for this passenger." data-seats="{{ $seatMap->toJson() }}" />
+                <div class="mt-4 min-w-0">
+                    <p id="seat-pick-error" class="arcs-seat-pick-error hidden mb-2" role="status"></p>
+                    <x-seat-map
+                        hint="Click a free seat for this passenger. Other cabins and exit rows for non-adults are not allowed."
+                        data-seats="{{ $seatMap->toJson() }}"
+                        data-cabin="{{ $passenger->cabin_class?->value ?? '' }}"
+                        data-pax-type="{{ $passenger->type->value }}"
+                    />
                 </div>
             </x-panel>
 
@@ -35,19 +41,57 @@
                 const seats = JSON.parse(map.dataset.seats);
                 const input = document.getElementById('seat-input');
                 const choice = document.getElementById('seat-choice');
+                const cabin = map.dataset.cabin || '';
+                const paxType = map.dataset.paxType || 'Adult';
+                const err = document.getElementById('seat-pick-error');
+
+                function showErr(message) {
+                    if (! err) return;
+                    err.textContent = message;
+                    err.classList.toggle('hidden', ! message);
+                }
 
                 function paint() {
                     const chosen = seats.find((seat) => String(seat.id) === input.value);
                     choice.textContent = chosen ? chosen.seat_no : 'none';
 
-                    window.ArcsSeatMap.draw(map, seats, (seat) => ({
-                        style: seat === chosen ? 'mine' : window.ArcsSeatMap.cabinStyle(seat),
-                        disabled: seat.taken,
-                        onPick: (picked) => {
-                            input.value = picked.id;
-                            paint();
-                        },
-                    }));
+                    window.ArcsSeatMap.draw(map, seats, (seat) => {
+                        if (seat === chosen) {
+                            return { style: 'mine', disabled: true };
+                        }
+
+                        if (seat.taken) {
+                            return { style: 'taken', disabled: true, title: `${seat.seat_no} · taken` };
+                        }
+
+                        const exitBlocked = Boolean(seat.exit) && paxType !== 'Adult';
+                        const wrongCabin = cabin !== '' && seat.cabin !== cabin;
+
+                        if (wrongCabin || exitBlocked) {
+                            return {
+                                style: 'blocked',
+                                blocked: true,
+                                disabled: true,
+                                label: '',
+                                title: exitBlocked
+                                    ? `${seat.seat_no} · exit row · not allowed`
+                                    : `${seat.seat_no} · ${seat.cabin} · not allowed`,
+                                onPick: () => showErr(exitBlocked
+                                    ? 'Exit-row seats are only for adults.'
+                                    : `${seat.seat_no} is in ${seat.cabin}. This passenger is in ${cabin}.`),
+                            };
+                        }
+
+                        return {
+                            style: window.ArcsSeatMap.cabinStyle(seat),
+                            disabled: false,
+                            onPick: (picked) => {
+                                showErr('');
+                                input.value = picked.id;
+                                paint();
+                            },
+                        };
+                    });
                 }
 
                 paint();

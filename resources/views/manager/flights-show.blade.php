@@ -92,9 +92,13 @@
                 window.ArcsSeatMap.draw(map, seats, (seat) => {
                     if (seat.taken) {
                         const status = states[seat.seat_no];
+                        const style = status ? window.ArcsSeatMap.statusToStyle(status) : 'taken';
+
                         return {
-                            style: status ? window.ArcsSeatMap.statusToStyle(status) : 'taken',
+                            style,
                             disabled: true,
+                            label: style === 'boarded' ? '✓' : '',
+                            title: `${seat.seat_no} · ${status || 'taken'}`,
                         };
                     }
 

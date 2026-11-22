@@ -182,36 +182,49 @@
             const hint = document.getElementById('seat-map-hint');
             const active = rows().find((row) => row.dataset.passengerId === activeId);
             const cabin = active?.dataset.cabin || '';
-            const offered = seatData.filter((seat) => seat.cabin === cabin);
+            const paxType = active?.dataset.type || 'Adult';
             const chosen = chosenSeats();
 
             hint.textContent = !active || active.dataset.type === 'Infant'
                 ? 'Select a non-infant passenger to assign a seat.'
-                : `Assigning ${cabin} for ${active.querySelector('.font-medium').textContent.trim()}.`;
+                : `Assigning ${cabin} for ${active.querySelector('.font-medium').textContent.trim()} · whole cabin.`;
 
-            if (!active || active.dataset.type === 'Infant' || offered.length === 0) {
+            if (!active || active.dataset.type === 'Infant' || seatData.length === 0) {
                 map.replaceChildren();
                 return;
             }
 
-            window.ArcsSeatMap.draw(map, offered, (seat) => {
+            window.ArcsSeatMap.draw(map, seatData, (seat) => {
                 const owner = chosen.get(String(seat.id));
                 const mine = owner === activeId;
+                const exitBlocked = Boolean(seat.exit) && paxType !== 'Adult';
+                const wrongCabin = cabin !== '' && seat.cabin !== cabin;
                 let style = window.ArcsSeatMap.cabinStyle({ ...seat, taken: false });
                 let disabled = false;
+                let blocked = false;
+                let label = seat.letter;
+                let title = '';
 
-                if (seat.taken || (owner && !mine)) {
-                    style = 'taken';
+                if (seat.taken || (owner && ! mine)) {
+                    style = owner && ! mine ? 'party' : 'taken';
                     disabled = true;
-                }
-                if (mine) {
+                    label = '';
+                    title = `${seat.seat_no} · taken`;
+                } else if (mine) {
                     style = 'mine';
                     disabled = false;
-                } else if (owner) {
-                    style = 'selected';
+                    title = `${seat.seat_no} · this passenger`;
+                } else if (wrongCabin || exitBlocked) {
+                    style = 'blocked';
+                    blocked = true;
+                    disabled = true;
+                    label = '';
+                    title = exitBlocked
+                        ? `${seat.seat_no} · exit row · not allowed`
+                        : `${seat.seat_no} · ${seat.cabin} · not allowed`;
                 }
 
-                return { style, disabled, onPick: pickSeat };
+                return { style, disabled, blocked, label, title, onPick: pickSeat };
             });
         }
 

@@ -374,12 +374,26 @@
                     </div>
 
                     @if ($showSeatMap)
-                        <div class="min-w-0">
+                        <div class="min-w-0 space-y-3">
+                            <div class="arcs-seat-select-bar">
+                                <div class="arcs-seat-pax-chips">
+                                    <span class="arcs-seat-pax-chip is-active" role="listitem">
+                                        <span class="arcs-seat-pax-avatar">{{ strtoupper(substr($passenger->first_name, 0, 1).substr($passenger->last_name, 0, 1)) }}</span>
+                                        <span class="arcs-seat-pax-meta">
+                                            <span>{{ $passenger->first_name }} {{ $passenger->last_name }}</span>
+                                            <small>{{ $currentSeat?->seat_no ?? '—' }}</small>
+                                        </span>
+                                    </span>
+                                </div>
+                            </div>
+                            <p id="seat-pick-error" class="arcs-seat-pick-error hidden" role="status"></p>
                             <x-seat-map-dock
-                                :hint="$picking ? 'Click a free seat to assign it. Taken seats stay blocked.' : 'Click a free seat in the same cabin. A new boarding pass replaces the old one.'"
+                                :hint="$picking ? 'Click a free seat in this passenger’s cabin. Other cabins and restricted exit seats are not allowed.' : 'Click a free seat in the same cabin. A new boarding pass replaces the old one.'"
                                 data-seats="{{ $seatMap->toJson() }}"
                                 data-selected-seat="{{ $currentSeat?->id }}"
-                                data-cabin="{{ $picking ? '' : $currentSeat->cabin_class->value }}"
+                                data-cabin="{{ $picking ? ($passenger->cabin_class?->value ?? '') : $currentSeat->cabin_class->value }}"
+                                data-pax-type="{{ $passenger->type->value }}"
+                                data-pax-initials="{{ strtoupper(substr($passenger->first_name, 0, 1).substr($passenger->last_name, 0, 1)) }}"
                                 data-seat-states="{{ json_encode($seatStates) }}"
                             />
                         </div>
@@ -511,26 +525,59 @@
             const seats = JSON.parse(map.dataset.seats);
             const selected = map.dataset.selectedSeat;
             const cabin = map.dataset.cabin;
+            const paxType = map.dataset.paxType || 'Adult';
+            const initials = map.dataset.paxInitials || '';
             const states = map.dataset.seatStates ? JSON.parse(map.dataset.seatStates) : {};
             const form = document.getElementById('seat-form');
+            const err = document.getElementById('seat-pick-error');
+
+            function showErr(message) {
+                if (! err) return;
+                err.textContent = message;
+                err.classList.toggle('hidden', ! message);
+            }
 
             window.ArcsSeatMap.draw(map, seats, (seat) => {
                 if (String(seat.id) === selected) {
-                    return { style: 'mine', disabled: true };
+                    return { style: 'mine', disabled: true, label: initials };
                 }
 
                 if (seat.taken) {
                     const status = states[seat.seat_no];
+                    const style = status ? window.ArcsSeatMap.statusToStyle(status) : 'taken';
+
                     return {
-                        style: status ? window.ArcsSeatMap.statusToStyle(status) : 'taken',
+                        style,
                         disabled: true,
+                        label: style === 'boarded' ? '✓' : '',
+                        title: `${seat.seat_no} · taken`,
+                        onPick: () => showErr(`${seat.seat_no} is taken.`),
+                    };
+                }
+
+                const exitBlocked = Boolean(seat.exit) && paxType !== 'Adult';
+                const wrongCabin = cabin !== '' && seat.cabin !== cabin;
+
+                if (wrongCabin || exitBlocked) {
+                    return {
+                        style: 'blocked',
+                        blocked: true,
+                        disabled: true,
+                        label: '',
+                        title: exitBlocked
+                            ? `${seat.seat_no} · exit row · not allowed`
+                            : `${seat.seat_no} · ${seat.cabin} · not allowed`,
+                        onPick: () => showErr(exitBlocked
+                            ? 'Exit-row seats are only for adults.'
+                            : `${seat.seat_no} is in ${seat.cabin}. This passenger is in ${cabin}.`),
                     };
                 }
 
                 return {
                     style: window.ArcsSeatMap.cabinStyle(seat),
-                    disabled: cabin !== '' && seat.cabin !== cabin,
+                    disabled: false,
                     onPick: (picked) => {
+                        showErr('');
                         document.getElementById('seat-input').value = picked.id;
                         form.submit();
                     },

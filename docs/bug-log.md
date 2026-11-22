@@ -323,3 +323,9 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Fixed
 - Fix: `assertReadyToBoard`; successful check-in stamps `verified_at`; unpaid excess still blocks
 - Retested: CheckinGateRulesTest · full suite 901
+
+## BUG-028 · B12 test failed after the seat-map legend changed order
+- Found: 22 Nov 2026, seat map V2 run
+- Cause: the B12 test expected the old legend order; the new legend lists the states in a different order.
+- Fix: test updated to the new legend order; seat-map behaviour unchanged.
+- Status: Fixed

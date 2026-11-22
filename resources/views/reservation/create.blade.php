@@ -237,17 +237,41 @@
             </div>
 
             <div class="min-w-0 space-y-4 order-1" x-show="step === 2">
-                <x-seat-map-dock hint="Pick the flight above → select passenger → assign a free seat in that cabin on that flight.">
+                <div>
+                    <h2 class="text-[22px] font-bold text-gray-900">Seats</h2>
+                    <p class="mt-1 text-sm text-gray-600">Pick a passenger, then click a seat. The next passenger is selected automatically.</p>
+                </div>
+
+                <div class="arcs-seat-select-bar">
                     <x-input-label for="active-seat-flight" value="Seat map flight" class="sr-only" />
                     <select id="active-seat-flight" class="sr-only">
                         <option value="">Select flights first…</option>
                     </select>
                     <div id="seat-flight-tabs" class="arcs-seat-flight-tabs" role="tablist" aria-label="Seat map flight"></div>
-                    <x-input-error :messages="$errors->get('seat')" class="mt-3" />
-                </x-seat-map-dock>
-                <div class="flex flex-wrap items-center justify-between gap-3">
-                    <button type="button" class="arcs-btn-ghost" @click="go(1)">← Back</button>
-                    <button type="button" class="arcs-btn-primary" @click="go(3)">Continue to extras →</button>
+                    <div id="seat-pax-chips" class="arcs-seat-pax-chips" role="list" aria-label="Passengers"></div>
+                </div>
+                <p id="seat-pick-error" class="arcs-seat-pick-error hidden" role="status"></p>
+                <x-input-error :messages="$errors->get('seat')" class="mt-1" />
+
+                <x-seat-map-dock hint="Whole cabin · other cabins and restricted exit seats are shown as not allowed." />
+
+                <div class="arcs-seat-footer">
+                    <div class="arcs-seat-current-card">
+                        <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Current passenger</p>
+                        <p id="seat-current-code" class="mt-2 arcs-mono text-3xl font-bold tracking-wide text-gray-900">—</p>
+                        <p id="seat-current-name" class="mt-1 text-sm font-semibold text-gray-800">Select a passenger</p>
+                        <p id="seat-current-hint" class="mt-1 text-xs text-gray-500">click any free seat (solid colour)</p>
+                    </div>
+                    <div class="arcs-seat-progress-card flex flex-col justify-between gap-4">
+                        <div>
+                            <p class="text-[11px] font-semibold uppercase tracking-wider text-gray-400">Seats chosen</p>
+                            <p id="seat-progress-label" class="mt-2 text-sm font-semibold text-gray-900">0 of 0</p>
+                        </div>
+                        <div class="flex flex-wrap items-center justify-between gap-3">
+                            <button type="button" class="arcs-btn-ghost" @click="go(1)">← Back</button>
+                            <button type="button" class="arcs-btn-primary" @click="go(3)">Continue to extras →</button>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -346,6 +370,12 @@
         const addReturnBtn = document.getElementById('add-return-leg');
         const activeFlightSelect = document.getElementById('active-seat-flight');
         const seatFlightTabs = document.getElementById('seat-flight-tabs');
+        const seatPaxChips = document.getElementById('seat-pax-chips');
+        const seatPickError = document.getElementById('seat-pick-error');
+        const seatCurrentCode = document.getElementById('seat-current-code');
+        const seatCurrentName = document.getElementById('seat-current-name');
+        const seatCurrentHint = document.getElementById('seat-current-hint');
+        const seatProgressLabel = document.getElementById('seat-progress-label');
         const allowances = @json($allowances);
         const fares = @json($fares);
         const fees = @json($fees);
@@ -696,16 +726,132 @@
             });
         }
 
+        function passengerInitials(row) {
+            const first = row.querySelector('.passenger-first')?.value?.trim() || '';
+            const last = row.querySelector('.passenger-last')?.value?.trim() || '';
+            const a = (first[0] || '').toUpperCase();
+            const b = (last[0] || '').toUpperCase();
+
+            return (a + b) || 'P';
+        }
+
+        function passengerDisplayName(row) {
+            const first = row.querySelector('.passenger-first')?.value?.trim() || '';
+            const last = row.querySelector('.passenger-last')?.value?.trim() || '';
+
+            return [first, last].filter(Boolean).join(' ') || `Passenger ${Number(row.dataset.index) + 1}`;
+        }
+
+        function showSeatPickError(message) {
+            if (! seatPickError) {
+                return;
+            }
+            seatPickError.textContent = message;
+            seatPickError.classList.toggle('hidden', ! message);
+        }
+
         function refreshPassengerCompactLabels() {
             rows().forEach((row) => {
-                const first = row.querySelector('.passenger-first')?.value?.trim() || '';
-                const last = row.querySelector('.passenger-last')?.value?.trim() || '';
                 const short = row.querySelector('.passenger-name-short');
                 if (short) {
-                    short.textContent = [first, last].filter(Boolean).join(' ') || `Passenger ${Number(row.dataset.index) + 1}`;
+                    short.textContent = passengerDisplayName(row);
                 }
                 row.classList.toggle('is-active-pax', String(row.dataset.index) === String(activeIndex));
             });
+            refreshSeatPaxChips();
+            refreshSeatFooter();
+        }
+
+        function refreshSeatPaxChips() {
+            if (! seatPaxChips) {
+                return;
+            }
+
+            const flightId = activeFlightId();
+            seatPaxChips.replaceChildren();
+
+            rows().forEach((row) => {
+                const type = row.querySelector('.passenger-type')?.value || 'Adult';
+                const chip = document.createElement('button');
+                chip.type = 'button';
+                chip.className = 'arcs-seat-pax-chip';
+                chip.dataset.index = row.dataset.index;
+                if (String(row.dataset.index) === String(activeIndex) && type !== 'Infant') {
+                    chip.classList.add('is-active');
+                }
+
+                const seatInput = seatInputFor(row, flightId);
+                const seat = seatData.find((item) => String(item.id) === seatInput?.value);
+                let seatLabel = '—';
+                if (type === 'Infant') {
+                    seatLabel = 'lap';
+                    chip.classList.add('is-infant');
+                    chip.disabled = true;
+                } else if (seat) {
+                    seatLabel = seat.seat_no;
+                }
+
+                chip.innerHTML = `
+                    <span class="arcs-seat-pax-avatar">${passengerInitials(row)}</span>
+                    <span class="arcs-seat-pax-meta">
+                        <span>${passengerDisplayName(row)}</span>
+                        <small>${seatLabel}</small>
+                    </span>
+                `;
+
+                if (type !== 'Infant') {
+                    chip.addEventListener('click', () => {
+                        activeIndex = row.dataset.index;
+                        showSeatPickError('');
+                        refreshPassengerCompactLabels();
+                        paintMap();
+                    });
+                }
+
+                seatPaxChips.appendChild(chip);
+            });
+        }
+
+        function refreshSeatFooter() {
+            const flightId = activeFlightId();
+            const flight = flightById[flightId];
+            const seatedRows = rows().filter((row) => row.querySelector('.passenger-type')?.value !== 'Infant');
+            const chosenCount = seatedRows.filter((row) => seatInputFor(row, flightId)?.value).length;
+            const activeRow = rows().find((row) => row.dataset.index === activeIndex);
+            const activeType = activeRow?.querySelector('.passenger-type')?.value || 'Adult';
+            const seat = seatData.find((item) => String(item.id) === seatInputFor(activeRow, flightId)?.value);
+
+            if (seatProgressLabel) {
+                seatProgressLabel.textContent = `${chosenCount} of ${seatedRows.length} seats chosen`;
+            }
+
+            if (seatCurrentCode) {
+                seatCurrentCode.textContent = activeType === 'Infant' ? 'lap' : (seat?.seat_no || '—');
+            }
+            if (seatCurrentName) {
+                const name = activeRow ? passengerDisplayName(activeRow) : 'Select a passenger';
+                seatCurrentName.textContent = activeRow ? `${name} · ${activeType}` : name;
+            }
+            if (seatCurrentHint) {
+                seatCurrentHint.textContent = activeType === 'Infant'
+                    ? 'Infants travel on an adult’s lap — no seat.'
+                    : 'click any free seat (solid colour)';
+            }
+        }
+
+        function selectNextPassengerWithoutSeat() {
+            const flightId = activeFlightId();
+            const next = rows().find((row) => {
+                if (row.querySelector('.passenger-type')?.value === 'Infant') {
+                    return false;
+                }
+
+                return ! seatInputFor(row, flightId)?.value;
+            });
+
+            if (next) {
+                activeIndex = next.dataset.index;
+            }
         }
 
         function syncSeatInputs() {
@@ -1093,57 +1239,83 @@
 
             const activeRow = rows().find((row) => row.dataset.index === activeIndex);
             const cabin = activeRow?.querySelector('.passenger-cabin')?.value || '';
-            const offered = seatData.filter((seat) => seat.cabin === cabin);
+            const paxType = activeRow?.querySelector('.passenger-type')?.value || 'Adult';
             const flight = flightById[flightId];
 
             hint.textContent = cabin === ''
                 ? 'Set cabin class, then assign a free seat.'
-                : `Assigning ${cabin} on ${flight?.flight_no || 'flight'} for passenger ${Number(activeIndex) + 1}.`;
+                : `Assigning ${cabin} on ${flight?.flight_no || 'flight'} · whole cabin shown.`;
 
-            if (offered.length === 0) {
-                hint.textContent = cabin === ''
-                    ? 'Set cabin class, then assign a free seat.'
-                    : `No ${cabin} seats on this aircraft.`;
-
-                return;
-            }
-
-            window.ArcsSeatMap.draw(map, offered, (seat) => {
+            window.ArcsSeatMap.draw(map, seatData, (seat) => {
                 const owner = chosen.get(String(seat.id));
                 const mine = owner === activeIndex;
+                const exitBlocked = Boolean(seat.exit) && paxType !== 'Adult';
+                const wrongCabin = cabin !== '' && seat.cabin !== cabin;
                 let style = window.ArcsSeatMap.cabinStyle({ ...seat, taken: false });
                 let disabled = false;
+                let blocked = false;
+                let label = seat.letter;
+                let title = '';
 
-                if (seat.taken || (owner && !mine)) {
-                    style = 'taken';
+                if (seat.taken || (owner && ! mine)) {
+                    style = owner && ! mine ? 'party' : 'taken';
                     disabled = true;
-                }
-
-                if (mine) {
+                    label = owner && ! mine ? passengerInitials(rows().find((r) => r.dataset.index === owner) || activeRow) : '';
+                    title = seat.taken ? `${seat.seat_no} · taken` : `${seat.seat_no} · other passenger in this booking`;
+                } else if (mine) {
                     style = 'mine';
-                    disabled = false;
-                } else if (owner) {
-                    style = 'selected';
+                    label = passengerInitials(activeRow);
+                    title = `${seat.seat_no} · ${seat.cabin} · this passenger`;
+                } else if (wrongCabin || exitBlocked || paxType === 'Infant') {
+                    style = 'blocked';
+                    blocked = true;
+                    disabled = true;
+                    label = '';
+                    title = exitBlocked
+                        ? `${seat.seat_no} · exit row · not allowed for ${paxType}`
+                        : `${seat.seat_no} · ${seat.cabin} · not allowed`;
                 }
 
-                return { style, disabled, onPick: pickSeat };
+                return {
+                    style,
+                    disabled,
+                    blocked,
+                    label,
+                    title,
+                    onPick: pickSeat,
+                };
             });
         }
 
         function pickSeat(seat) {
-            if (seat.taken) {
-                return;
-            }
+            showSeatPickError('');
 
             const row = rows().find((item) => item.dataset.index === activeIndex);
 
-            if (!row || row.querySelector('.passenger-type').value === 'Infant') {
+            if (! row || row.querySelector('.passenger-type').value === 'Infant') {
+                showSeatPickError('Select an adult or child passenger first.');
+
+                return;
+            }
+
+            if (seat.taken) {
+                showSeatPickError(`${seat.seat_no} is taken.`);
+
                 return;
             }
 
             const cabin = row.querySelector('.passenger-cabin').value;
+            const paxType = row.querySelector('.passenger-type').value;
 
-            if (seat.cabin !== cabin) {
+            if (cabin !== '' && seat.cabin !== cabin) {
+                showSeatPickError(`${seat.seat_no} is in ${seat.cabin}. This passenger is booked in ${cabin}.`);
+
+                return;
+            }
+
+            if (seat.exit && paxType !== 'Adult') {
+                showSeatPickError(`Exit-row seats are only for adults.`);
+
                 return;
             }
 
@@ -1156,10 +1328,18 @@
             const owner = chosenSeats().get(String(seat.id));
 
             if (owner && owner !== activeIndex) {
+                showSeatPickError(`${seat.seat_no} is already assigned in this booking.`);
+
                 return;
             }
 
-            input.value = input.value === String(seat.id) ? '' : String(seat.id);
+            const clearing = input.value === String(seat.id);
+            input.value = clearing ? '' : String(seat.id);
+
+            if (! clearing) {
+                selectNextPassengerWithoutSeat();
+            }
+
             paintMap();
         }
 
