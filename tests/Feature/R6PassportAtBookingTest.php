@@ -8,7 +8,6 @@ use App\Models\AuditEntry;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
-use App\Models\Seat;
 use App\Models\TravelDocument;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -178,33 +177,5 @@ class R6PassportAtBookingTest extends TestCase
         }
 
         return $row;
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function seatsFor(Flight $flight, int $count): array
-    {
-        $now = now();
-        $rows = [];
-
-        for ($number = 1; $number <= $count; $number++) {
-            $rows[] = [
-                'aircraft_id' => $flight->aircraft_id,
-                'seat_no' => $number.'A',
-                'cabin_class' => 'Economy',
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
-
-        Seat::query()->insert($rows);
-
-        return Seat::query()
-            ->where('aircraft_id', $flight->aircraft_id)
-            ->orderBy('id')
-            ->pluck('id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
     }
 }

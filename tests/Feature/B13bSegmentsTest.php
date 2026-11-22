@@ -514,6 +514,9 @@ class B13bSegmentsTest extends TestCase
         $this->assertSame('2026-11-20 11:45', $flight->arrives_at->format('Y-m-d H:i'));
         $this->assertSame('2026-11-20 12:45', $flight->arrivalLocal()->format('Y-m-d H:i'));
 
+        // Fresh aircraft each time: turnaround rules (#27) block the same airframe overlapping.
+        $form['aircraft_id'] = Aircraft::factory()->create()->id;
+
         // 09:30 Paris = 08:30 UTC is after 08:00 UTC: accepted although "09:30" < "10:00" as text.
         $this->post(route('manager.flights.store'), ['flight_no' => $this->flightNo('221'), 'arrives_at' => '2026-11-20T09:30'] + $form)->assertSessionHasNoErrors();
 
@@ -522,6 +525,7 @@ class B13bSegmentsTest extends TestCase
             ->assertSessionHasErrors(['arrives_at' => 'The arrival must be after the departure.']);
 
         // Optional: flights without an arrival time can still be created.
+        $form['aircraft_id'] = Aircraft::factory()->create()->id;
         $this->post(route('manager.flights.store'), ['flight_no' => $this->flightNo('225')] + $form)->assertSessionHasNoErrors();
     }
 

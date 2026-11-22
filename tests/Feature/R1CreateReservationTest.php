@@ -7,7 +7,6 @@ use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
 use App\Models\Flight;
 use App\Models\Reservation;
-use App\Models\Seat;
 use App\Models\SeatAssignment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -150,34 +149,39 @@ class R1CreateReservationTest extends TestCase
 
         $page->assertOk()
             ->assertSee($this->flightNo('702'))
-            ->assertSee($this->flightNo('703'))
-            ->assertSee('Check-in open')
-            ->assertSee('Boarding');
+            ->assertSee('Check-in open');
 
         preg_match('/const allFlights = (\[.*?\]);/s', $page->getContent(), $bookingList);
 
         $this->assertArrayHasKey(1, $bookingList);
         $this->assertStringContainsString($this->flightNo('702'), $bookingList[1]);
-        $this->assertStringContainsString($this->flightNo('703'), $bookingList[1]);
+        $this->assertStringNotContainsString($this->flightNo('703'), $bookingList[1]);
         $this->assertStringNotContainsString($this->flightNo('701'), $bookingList[1]);
         $this->assertStringNotContainsString($this->flightNo('704'), $bookingList[1]);
         $this->assertStringNotContainsString($this->flightNo('705'), $bookingList[1]);
 
-        foreach ([$checkin, $boarding] as $flight) {
-            $seatIds = $this->seatsFor($flight, 1);
+        $seatIds = $this->seatsFor($checkin, 1);
+        $this->post(route('reservation.store'), [
+            'flight_id' => $checkin->id,
+            'passengers' => [
+                $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12', seatId: $seatIds[0]),
+            ],
+            ...$this->paidBookingFields(),
+        ])->assertRedirect();
 
-            $this->post(route('reservation.store'), [
-                'flight_id' => $flight->id,
+        $this->assertTrue(Reservation::query()->where('flight_id', $checkin->id)->exists());
+
+        $boardingSeat = $this->seatsFor($boarding, 1)[0];
+        $this->from(route('reservation.create'))
+            ->post(route('reservation.store'), [
+                'flight_id' => $boarding->id,
                 'passengers' => [
-                    $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12', seatId: $seatIds[0]),
+                    $this->passenger('Rami', 'Haddad', 'Adult', '1985-04-12', seatId: $boardingSeat),
                 ],
                 ...$this->paidBookingFields(),
-            ])->assertRedirect();
-
-            $this->assertTrue(
-                Reservation::query()->where('flight_id', $flight->id)->exists(),
-            );
-        }
+            ])
+            ->assertRedirect(route('reservation.create'))
+            ->assertSessionHasErrors('outbound_flight_ids.0');
 
         $closedSeat = $this->seatsFor($closed, 1)[0];
         $this->from(route('reservation.create'))
@@ -199,7 +203,8 @@ class R1CreateReservationTest extends TestCase
             ...$this->paidBookingFields(),
         ])->assertSessionHasErrors('outbound_flight_ids.0');
 
-        $this->assertSame(2, Reservation::count());
+        $this->assertSame(1, Reservation::count());
+        $this->assertFalse(Reservation::query()->where('flight_id', $boarding->id)->exists());
         $this->assertFalse(Reservation::query()->where('flight_id', $closed->id)->exists());
         $this->assertFalse(Reservation::query()->where('flight_id', $cancelled->id)->exists());
     }
@@ -231,33 +236,5 @@ class R1CreateReservationTest extends TestCase
         }
 
         return $row;
-    }
-
-    /**
-     * @return list<int>
-     */
-    private function seatsFor(Flight $flight, int $count): array
-    {
-        $now = now();
-        $rows = [];
-
-        for ($number = 1; $number <= $count; $number++) {
-            $rows[] = [
-                'aircraft_id' => $flight->aircraft_id,
-                'seat_no' => $number.'A',
-                'cabin_class' => 'Economy',
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
-
-        Seat::query()->insert($rows);
-
-        return Seat::query()
-            ->where('aircraft_id', $flight->aircraft_id)
-            ->orderBy('id')
-            ->pluck('id')
-            ->map(fn ($id): int => (int) $id)
-            ->all();
     }
 }

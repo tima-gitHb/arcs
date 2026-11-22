@@ -141,7 +141,7 @@ export function drawSeatMap(map, seats, cellFor) {
 
             const cell = cellFor(seat);
             let style = cell.style;
-            if ((style === 'economy' || style === 'legroom') && EXIT_ROWS.has(rowNo) && ! seat.taken) {
+            if ((style === 'economy' || style === 'legroom') && (seat.exit || EXIT_ROWS.has(rowNo)) && ! seat.taken) {
                 style = 'legroom';
             }
             button.disabled = Boolean(cell.disabled);

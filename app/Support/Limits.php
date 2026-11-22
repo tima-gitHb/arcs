@@ -24,9 +24,19 @@ final class Limits
         return self::int('max_infants_per_adult', 1);
     }
 
+    /**
+     * Safety maximum passengers on one booking (not a commercial party-size limit).
+     * Cabin free-seat checks enforce real capacity; 10+ passengers are shown as a Group.
+     */
     public static function maxPassengersPerBooking(): int
     {
-        return self::int('max_passengers_per_booking', 9);
+        return self::int('max_passengers_per_booking', 60);
+    }
+
+    /** Display-only: bookings with this many passengers (or more) show a Group badge. */
+    public static function groupBookingMinPassengers(): int
+    {
+        return 10;
     }
 
     public static function maxBagKg(): int

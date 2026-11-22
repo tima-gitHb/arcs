@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\FlightStatus;
 use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
+use App\Enums\SpecialServiceCode;
 use App\Exceptions\SeatNotAllowed;
 use App\Exceptions\SeatTaken;
 use App\Models\AuditEntry;
@@ -14,6 +15,9 @@ use App\Models\Passenger;
 use App\Models\Seat;
 use App\Models\SeatAssignment;
 use App\Models\User;
+use App\Support\ExitRows;
+use App\Support\FlightAction;
+use App\Support\FlightStatusGate;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -27,6 +31,14 @@ use Illuminate\Support\Facades\DB;
  */
 class SeatService
 {
+    /** @var list<SpecialServiceCode> */
+    private const EXIT_BLOCKED_SSR = [
+        SpecialServiceCode::WCHR,
+        SpecialServiceCode::WCHS,
+        SpecialServiceCode::WCHC,
+        SpecialServiceCode::UMNR,
+    ];
+
     public function __construct(
         private BagService $bags,
         private BoardingPassService $passes,
@@ -37,7 +49,7 @@ class SeatService
      * Every seat of the flight's aircraft, in row order (2A before 10A), with "taken"
      * set when another passenger holds it. Drawn by resources/js/seat-map.js.
      *
-     * @return Collection<int, array{id: int, seat_no: string, row: int, letter: string, cabin: string, taken: bool}>
+     * @return Collection<int, array{id: int, seat_no: string, row: int, letter: string, cabin: string, taken: bool, exit: bool}>
      */
     public function seatMap(Flight $flight): Collection
     {
@@ -66,6 +78,7 @@ class SeatService
                     'letter' => $matches[2] ?? '',
                     'cabin' => $seat->cabin_class->value,
                     'taken' => isset($taken[$seat->id]),
+                    'exit' => ExitRows::seatIsExit($seat->seat_no),
                 ];
             });
     }
@@ -92,6 +105,14 @@ class SeatService
                 throw new SeatNotAllowed('The seat can only be changed for a booked or checked-in passenger.');
             }
 
+            // Late check-in (SR-29) may assign a seat while the flight is already Boarding.
+            if (! FlightStatusGate::allows($coupon->flight, FlightAction::ChangeSeat)
+                && ! ($coupon->flight->status === FlightStatus::Boarding && $coupon->status === PassengerStatus::Booked)) {
+                $this->assertFlightAllowsSeatChange($coupon->flight);
+            }
+
+            $this->assertCabinAllows($passenger, $seat, allowUpgrade: false);
+            $this->assertExitAllows($passenger, $seat);
             $this->replaceSeat($passenger, $coupon, $seat, $by);
         });
     }
@@ -113,6 +134,9 @@ class SeatService
                 throw new SeatNotAllowed('The seat can only be changed for a booked or checked-in passenger.');
             }
 
+            $this->assertFlightAllowsSeatChange($coupon->flight);
+
+            $this->assertExitAllows($passenger, $seat);
             $this->replaceSeat($passenger, $coupon, $seat, $by);
         });
     }
@@ -139,6 +163,9 @@ class SeatService
             if ($flight->isBoardingClosed()) {
                 throw new SeatNotAllowed('Boarding is closed for this flight.');
             }
+
+            $this->assertFlightAllowsSeatChange($flight);
+
             if ($coupon->status !== PassengerStatus::CheckedIn) {
                 throw new SeatNotAllowed('The seat can only be changed for a checked-in passenger.');
             }
@@ -152,9 +179,54 @@ class SeatService
                 throw new SeatNotAllowed('Different cabin class');
             }
 
+            $this->assertExitAllows($passenger, $seat);
             $this->replaceSeat($passenger, $coupon, $seat, $by);
             $this->passes->issue($passenger, $by, $flight);
         });
+    }
+
+    private function assertFlightAllowsSeatChange(Flight $flight): void
+    {
+        if (! FlightStatusGate::allows($flight, FlightAction::ChangeSeat)) {
+            $label = ($flight->status ?? FlightStatus::Scheduled)->label();
+            throw new SeatNotAllowed("{$flight->flight_no} is {$label}: the seat cannot be changed.");
+        }
+    }
+
+    /**
+     * Cabin must match the passenger's booked class unless this is a paid upgrade (#19).
+     */
+    public function assertCabinAllows(Passenger $passenger, Seat $seat, bool $allowUpgrade = false): void
+    {
+        if ($allowUpgrade || $passenger->cabin_class === null) {
+            return;
+        }
+
+        if ($seat->cabin_class !== $passenger->cabin_class) {
+            throw new SeatNotAllowed('Choose a seat in the passenger\'s cabin.');
+        }
+    }
+
+    /**
+     * Exit rows: adults only; no UMNR or wheelchair / mobility SSR (#18).
+     */
+    public function assertExitAllows(Passenger $passenger, Seat $seat): void
+    {
+        if (! ExitRows::seatIsExit($seat->seat_no)) {
+            return;
+        }
+
+        if ($passenger->type !== PassengerType::Adult) {
+            throw new SeatNotAllowed('Exit-row seats are only for adults.');
+        }
+
+        $passenger->loadMissing('specialServices');
+
+        foreach ($passenger->specialServices as $ssr) {
+            if (in_array($ssr->type, self::EXIT_BLOCKED_SSR, true)) {
+                throw new SeatNotAllowed('Exit-row seats cannot be used with '.$ssr->type->value.'.');
+            }
+        }
     }
 
     /**

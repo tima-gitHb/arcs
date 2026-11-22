@@ -110,9 +110,10 @@ class C12GroupCheckinTest extends TestCase
             ->assertSee('id="seat-map"', false)
             ->assertSee('Confirm all', false);
 
-        $s1 = $this->seatFor('14A');
-        $s2 = $this->seatFor('14B');
-        $s3 = $this->seatFor('14C');
+        // Exit rows 14–15 are adults-only (#18); use non-exit seats for the child.
+        $s1 = $this->seatFor('12A');
+        $s2 = $this->seatFor('12B');
+        $s3 = $this->seatFor('12C');
 
         $this->assignGroupSeats([
             $adult1->id => $s1->id,
@@ -145,9 +146,9 @@ class C12GroupCheckinTest extends TestCase
         ]);
 
         $this->assignGroupSeats([
-            $adult1->id => $this->seatFor('15A')->id,
-            $adult2->id => $this->seatFor('15B')->id,
-            $child->id => $this->seatFor('15C')->id,
+            $adult1->id => $this->seatFor('12A')->id,
+            $adult2->id => $this->seatFor('12B')->id,
+            $child->id => $this->seatFor('12C')->id,
         ]);
 
         $this->confirmAll()->assertSessionHas('group_results');

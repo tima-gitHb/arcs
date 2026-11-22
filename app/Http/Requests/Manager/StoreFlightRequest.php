@@ -3,9 +3,11 @@
 namespace App\Http\Requests\Manager;
 
 use App\Models\Airport;
+use App\Services\FlightScheduleService;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Validator;
 
 class StoreFlightRequest extends FormRequest
@@ -59,13 +61,26 @@ class StoreFlightRequest extends FormRequest
     public function after(): array
     {
         return [function (Validator $validator) {
-            if ($validator->errors()->isNotEmpty() || ! $this->filled('arrives_at')) {
+            if ($validator->errors()->isNotEmpty()) {
                 return;
             }
 
             $data = $this->flightData();
-            if ($data['arrives_at']->lte($data['departure_at'])) {
+
+            if ($data['arrives_at'] !== null && $data['arrives_at']->lte($data['departure_at'])) {
                 $validator->errors()->add('arrives_at', 'The arrival must be after the departure.');
+
+                return;
+            }
+
+            try {
+                app(FlightScheduleService::class)->assertNoOverlap($data);
+            } catch (ValidationException $e) {
+                foreach ($e->errors() as $key => $messages) {
+                    foreach ($messages as $message) {
+                        $validator->errors()->add($key, $message);
+                    }
+                }
             }
         }];
     }

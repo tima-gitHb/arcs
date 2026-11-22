@@ -21,6 +21,7 @@ use App\Models\SeatAssignment;
 use App\Models\User;
 use App\Services\Payments\CardDetails;
 use App\Support\Journey;
+use App\Support\Limits;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -271,6 +272,8 @@ class ReservationService
      */
     private function guardInfants(array $passengers): void
     {
+        $perAdult = [];
+
         foreach ($passengers as $index => $row) {
             if (PassengerType::from($row['type']) !== PassengerType::Infant) {
                 continue;
@@ -284,6 +287,15 @@ class ReservationService
 
             if (! $linkedToAdult) {
                 throw new InvalidArgumentException('An infant must be linked to an adult on the same reservation.');
+            }
+
+            $perAdult[(int) $adultIndex] = ($perAdult[(int) $adultIndex] ?? 0) + 1;
+        }
+
+        $max = Limits::maxInfantsPerAdult();
+        foreach ($perAdult as $count) {
+            if ($count > $max) {
+                throw new InvalidArgumentException("An adult may accompany at most {$max} infant".($max === 1 ? '' : 's').'.');
             }
         }
     }

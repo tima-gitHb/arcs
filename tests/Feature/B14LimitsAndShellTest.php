@@ -27,7 +27,7 @@ class B14LimitsAndShellTest extends TestCase
         $this->assertSame(16, Limits::childAloneMinAge());
         $this->assertSame(5, Limits::umnrMinAge());
         $this->assertSame(1, Limits::maxInfantsPerAdult());
-        $this->assertSame(9, Limits::maxPassengersPerBooking());
+        $this->assertSame(60, Limits::maxPassengersPerBooking());
         $this->assertSame(32, Limits::maxBagKg());
         $this->assertSame(220, Limits::maxAircraftSeats());
         $this->assertSame(45, Limits::minTurnaroundMinutes());

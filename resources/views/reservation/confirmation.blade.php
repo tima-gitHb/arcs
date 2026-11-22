@@ -14,7 +14,12 @@
                 <div class="flex items-start gap-4">
                     <span class="flex h-14 w-14 items-center justify-center rounded-full text-2xl font-bold text-white" style="background: var(--arcs-boarded);" aria-hidden="true">✓</span>
                     <div>
-                        <h2 class="text-[26px] font-bold text-gray-900">Booking confirmed</h2>
+                        <h2 class="text-[26px] font-bold text-gray-900">
+                            Booking confirmed
+                            @if ($reservation->isGroup())
+                                <span class="ml-2 align-middle rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-white" style="background: var(--arcs-navy);">Group</span>
+                            @endif
+                        </h2>
                         <p class="mt-1 text-sm text-gray-500">
                             @if ($payment)
                                 Paid with {{ $payment->card_brand }} ••••{{ $payment->card_last4 }}

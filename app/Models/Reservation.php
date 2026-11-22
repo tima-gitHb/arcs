@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
 use App\Enums\SegmentDirection;
+use App\Support\Limits;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -80,5 +81,13 @@ class Reservation extends Model
             ->where('status', PaymentStatus::Succeeded)
             ->sortByDesc('id')
             ->first();
+    }
+
+    /**
+     * Display-only: 10+ passengers show a Group badge (validation #4).
+     */
+    public function isGroup(): bool
+    {
+        return $this->passengers()->count() >= Limits::groupBookingMinPassengers();
     }
 }

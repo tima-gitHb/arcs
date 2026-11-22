@@ -198,6 +198,7 @@ class B7StatusServiceTest extends TestCase
 
         $this->assertRefused('Passenger not checked in', fn () => $this->status->board($booked, $this->agent));
 
+        $this->verifyPassengerDocuments($checkedIn, $this->agent);
         $this->status->board($checkedIn, $this->agent);
         $checkedIn->refresh();
         $this->assertSame(PassengerStatus::Boarded, $checkedIn->status);
@@ -217,6 +218,7 @@ class B7StatusServiceTest extends TestCase
         $missingBags = Bag::factory()->count(2)->for($missing)->create();
 
         $this->status->setFlightStatus($flight, FlightStatus::Boarding, $this->agent);
+        $this->verifyPassengerDocuments($boarded, $this->agent);
         $this->status->board($boarded, $this->agent);
 
         $bags = $this->status->closeBoarding($flight, $this->agent);

@@ -18,6 +18,8 @@ use App\Models\Passenger;
 use App\Models\SeatAssignment;
 use App\Models\Setting;
 use App\Models\User;
+use App\Support\FlightAction;
+use App\Support\FlightStatusGate;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -60,7 +62,8 @@ class StatusService
 
             $flight = $coupons->first()->flight;
 
-            if ($flight->status !== FlightStatus::CheckinOpen || ! $flight->isCheckinWindowOpen()) {
+            FlightStatusGate::assertAllows($flight, FlightAction::CheckIn);
+            if (! $flight->isCheckinWindowOpen()) {
                 throw new InvalidStatusChange('Check-in closed');
             }
 
@@ -139,6 +142,15 @@ class StatusService
             $this->ensureValidDocument($passenger, $coupon->flight);
         }
 
+        // Accepting the passenger for check-in records document verification for the gate (#48).
+        $passenger->travelDocuments()
+            ->whereIn('type', [DocumentType::Passport, DocumentType::IdCard])
+            ->whereNull('verified_at')
+            ->update([
+                'verified_at' => now(),
+                'verified_by' => $by->id,
+            ]);
+
         if ($passenger->type !== PassengerType::Infant) {
             $seated = SeatAssignment::query()->whereIn('coupon_id', $coupons->modelKeys())->pluck('coupon_id')->all();
 
@@ -202,14 +214,37 @@ class StatusService
             if ($coupon->status !== PassengerStatus::CheckedIn) {
                 throw new InvalidStatusChange('Passenger not checked in');
             }
-            if ($coupon->flight->status !== FlightStatus::Boarding) {
-                throw new InvalidStatusChange('Boarding has not started');
-            }
+
+            FlightStatusGate::assertAllows($coupon->flight, FlightAction::Board);
+
+            $this->assertReadyToBoard($passenger, $coupon);
 
             $this->changeCouponStatus($coupon, PassengerStatus::Boarded, $by, ['boarded_at' => now()]);
 
             $passenger->unsetRelation('coupon');
         });
+    }
+
+    /**
+     * Gate boarding: excess baggage paid and travel documents verified (#48).
+     */
+    private function assertReadyToBoard(Passenger $passenger, Coupon $coupon): void
+    {
+        $coupon->loadMissing('segment');
+        $direction = $coupon->segment?->direction;
+
+        $due = app(BagService::class)->excessDueCents($passenger, $direction);
+        if ($due > 0) {
+            throw new InvalidStatusChange('Excess baggage is unpaid');
+        }
+
+        $documents = $passenger->travelDocuments()
+            ->whereIn('type', [DocumentType::Passport, DocumentType::IdCard])
+            ->get();
+
+        if ($documents->isEmpty() || ! $documents->contains(fn ($doc) => $doc->verified_at !== null)) {
+            throw new InvalidStatusChange('Travel documents are not verified');
+        }
     }
 
     /**

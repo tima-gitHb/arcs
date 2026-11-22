@@ -79,6 +79,7 @@
 
     <form method="POST" action="{{ route('reservation.store') }}" autocomplete="off" id="booking-form">
         @csrf
+        <input type="hidden" name="booking_token" value="{{ old('booking_token', (string) \Illuminate\Support\Str::uuid()) }}">
 
         @if (! $pricesReady)
             <div class="mb-4 arcs-card px-4 py-3 text-sm text-amber-900" style="background: #FFF8E8;" role="alert">
