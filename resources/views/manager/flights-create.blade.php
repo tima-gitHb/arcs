@@ -20,7 +20,7 @@
                 <div class="grid gap-4 sm:grid-cols-2">
                     <div>
                         <x-input-label for="flight_no" value="Flight number" />
-                        <x-text-input id="flight_no" name="flight_no" type="text" class="mt-1 block w-full uppercase" :value="old('flight_no')" placeholder="ME205" required x-model="flightNo" />
+                        <x-text-input id="flight_no" name="flight_no" type="text" class="mt-1 block w-full uppercase" :value="old('flight_no')" placeholder="{{ config('arcs.airline.code') }}205" required x-model="flightNo" />
                         <x-input-error :messages="$errors->get('flight_no')" class="mt-2" />
                     </div>
                     <div>
@@ -100,7 +100,7 @@
 
         <aside class="rounded-[22px] border bg-white p-5 shadow-sm xl:sticky xl:top-6" style="border-color: var(--arcs-border);">
             <p class="text-[10px] font-semibold uppercase tracking-wider text-gray-400">Preview</p>
-            <p class="mt-2 text-2xl font-bold arcs-mono" x-text="flightNo || 'ME…'"></p>
+            <p class="mt-2 text-2xl font-bold arcs-mono" x-text="flightNo || '{{ config('arcs.airline.code') }}…'"></p>
             <p class="mt-1 text-sm text-gray-600">
                 <span x-text="(origin || '—').toUpperCase()"></span> → <span x-text="(destination || '—').toUpperCase()"></span>
             </p>

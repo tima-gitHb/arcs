@@ -39,7 +39,7 @@ class B3ModelsTest extends TestCase
         ]);
 
         $flight = Flight::create([
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'aircraft_id' => $aircraft->id,
@@ -62,7 +62,7 @@ class B3ModelsTest extends TestCase
 
         $bag = Bag::create([
             'passenger_id' => $passenger->id,
-            'tag_no' => 'ME000001',
+            'tag_no' => $this->flightNo('000001'),
             'weight_kg' => 18.5,
         ]);
 
@@ -144,7 +144,7 @@ class B3ModelsTest extends TestCase
         ['aircraft' => $aircraft] = $this->makeChain();
 
         $flight = Flight::create([
-            'flight_no' => 'ME202',
+            'flight_no' => $this->flightNo('202'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'aircraft_id' => $aircraft->id,

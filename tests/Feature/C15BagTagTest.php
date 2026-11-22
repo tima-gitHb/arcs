@@ -44,7 +44,7 @@ class C15BagTagTest extends TestCase
         $this->travelTo(Carbon::parse('2026-11-15 06:00', 'UTC'));
         $this->agent = $this->actingAsRole('checkin');
         $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
@@ -70,7 +70,7 @@ class C15BagTagTest extends TestCase
     private function connection(): array
     {
         $first = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME264',
+            'flight_no' => $this->flightNo('264'),
             'origin' => 'BEY',
             'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
@@ -79,7 +79,7 @@ class C15BagTagTest extends TestCase
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216',
+            'flight_no' => $this->flightNo('216'),
             'origin' => 'IST',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 11:30', 'UTC'),
@@ -183,7 +183,7 @@ class C15BagTagTest extends TestCase
         $this->assertPdfContains(
             $this->get(route('checkin.bags.tag', $bag)),
             'CDG',
-            'ME201',
+            $this->flightNo('201'),
             'BEY',
             $bag->tag_no,
             '18.5',
@@ -201,8 +201,8 @@ class C15BagTagTest extends TestCase
         $this->assertPdfContains(
             $this->get(route('checkin.bags.tag', $bag)),
             'CDG',
-            'ME264',
-            'ME216',
+            $this->flightNo('264'),
+            $this->flightNo('216'),
             'BEY',
             'IST',
             $bag->tag_no,

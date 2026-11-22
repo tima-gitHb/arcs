@@ -40,7 +40,7 @@ class C13CabinUpgradeTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->agent = $this->actingAsRole('checkin');
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME601']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('601')]);
         $this->seedBookingPrices();
     }
 

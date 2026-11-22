@@ -49,12 +49,12 @@ class B14TripFaresTest extends TestCase
         $this->tripFare('BEY', 'CDG', 40000);
 
         $first = Flight::factory()->create([
-            'flight_no' => 'ME264', 'origin' => 'BEY', 'destination' => 'IST',
+            'flight_no' => $this->flightNo('264'), 'origin' => 'BEY', 'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 10:00', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 11:30', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 15:15', 'UTC'),
         ]);
@@ -72,12 +72,12 @@ class B14TripFaresTest extends TestCase
         $this->tripFare('BEY', 'CDG', 40000, 70000);
 
         $out = Flight::factory()->create([
-            'flight_no' => 'ME201', 'origin' => 'BEY', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('201'), 'origin' => 'BEY', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 12:45', 'UTC'),
         ]);
         $back = Flight::factory()->create([
-            'flight_no' => 'ME204', 'origin' => 'CDG', 'destination' => 'BEY',
+            'flight_no' => $this->flightNo('204'), 'origin' => 'CDG', 'destination' => 'BEY',
             'departure_at' => Carbon::parse('2026-11-18 10:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-18 14:15', 'UTC'),
         ]);
@@ -93,12 +93,12 @@ class B14TripFaresTest extends TestCase
     public function test_B14_without_a_trip_fare_the_per_route_sum_is_used(): void
     {
         $first = Flight::factory()->create([
-            'flight_no' => 'ME264', 'origin' => 'BEY', 'destination' => 'IST',
+            'flight_no' => $this->flightNo('264'), 'origin' => 'BEY', 'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 10:00', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 11:30', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 15:15', 'UTC'),
         ]);

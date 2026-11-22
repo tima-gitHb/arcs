@@ -59,7 +59,7 @@ class R9PaidBookingTest extends TestCase
 
         $this->actingAsRole('reservation');
         $flight = Flight::factory()->create([
-            'flight_no' => 'ME900',
+            'flight_no' => $this->flightNo('900'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
@@ -94,7 +94,7 @@ class R9PaidBookingTest extends TestCase
         $page = $this->followRedirects($response);
         $page->assertOk()
             ->assertSee($reservation->pnr)
-            ->assertSee('ME900')
+            ->assertSee($this->flightNo('900'))
             ->assertSee('BEY')
             ->assertSee('CDG')
             ->assertSee('Economy')
@@ -102,7 +102,7 @@ class R9PaidBookingTest extends TestCase
             ->assertSee($payment->gateway_reference)
             ->assertSee('••••4242')
             ->assertSee('Print receipt')
-            ->assertSee('ARCS e-ticket');
+            ->assertSee(config('arcs.airline.name').' e-ticket');
 
         Mail::assertSent(ETicketMail::class, function (ETicketMail $mail) use ($reservation): bool {
             return $mail->hasTo('rami@example.com')

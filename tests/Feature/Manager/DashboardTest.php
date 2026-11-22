@@ -58,14 +58,14 @@ class DashboardTest extends TestCase
 
     public function test_SR47_dashboard_shows_checked_in_percentage(): void
     {
-        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME901']);
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('901')]);
         $this->addPassengers($flight, total: 10, checkedIn: 8);
 
         $this->actingAsRole('manager');
 
         $this->get('/manager/dashboard')
             ->assertOk()
-            ->assertSee('ME901')
+            ->assertSee($this->flightNo('901'))
             ->assertSee('80 %');
     }
 
@@ -74,7 +74,7 @@ class DashboardTest extends TestCase
         $service = app(StatusService::class);
         $gate = User::factory()->create(['role' => Role::Gate]);
 
-        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME901']);
+        $flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('901')]);
         [$p1, $p2, $p3, $p4, $p5] = $this->addPassengers($flight, total: 5, checkedIn: 5);
 
         // 4 bags: two for one passenger, and one for a passenger who will become NoShow.
@@ -103,17 +103,17 @@ class DashboardTest extends TestCase
 
     public function test_SR41_only_todays_flights_appear(): void
     {
-        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => 'ME901']);
-        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => 'ME902', 'departure_at' => now()->subDay()]);
-        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => 'ME903', 'departure_at' => now()->addDay()]);
+        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => $this->flightNo('901')]);
+        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => $this->flightNo('902'), 'departure_at' => now()->subDay()]);
+        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => $this->flightNo('903'), 'departure_at' => now()->addDay()]);
 
         $this->actingAsRole('manager');
 
         $this->get('/manager/dashboard')
             ->assertOk()
-            ->assertSee('ME901')
-            ->assertDontSee('ME902')
-            ->assertDontSee('ME903');
+            ->assertSee($this->flightNo('901'))
+            ->assertDontSee($this->flightNo('902'))
+            ->assertDontSee($this->flightNo('903'));
     }
 
     public function test_non_manager_cannot_open_dashboard(): void

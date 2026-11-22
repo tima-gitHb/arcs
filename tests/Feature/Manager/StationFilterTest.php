@@ -62,20 +62,20 @@ class StationFilterTest extends TestCase
 
         $dashboard = $this->open('manager.dashboard', 'CDG');
         $this->assertSame('CDG', session('manager_station'));
-        $this->assertSame(1, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME801")]'));
-        $this->assertSame(0, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME802")]'));
-        $this->assertSame(1, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME801")]'));
-        $this->assertSame(0, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "ME802")]'));
+        $this->assertSame(1, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "'.$this->flightNo('801').'")]'));
+        $this->assertSame(0, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "'.$this->flightNo('802').'")]'));
+        $this->assertSame(1, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "'.$this->flightNo('801').'")]'));
+        $this->assertSame(0, $this->countNodes($dashboard, '//*[@data-role="manager"]//td[contains(., "'.$this->flightNo('802').'")]'));
         $this->assertSeeIndicator($dashboard, 'CDG');
 
         $flights = $this->open('manager.flights');
-        $flights->assertSee('ME801')->assertDontSee('ME802');
+        $flights->assertSee($this->flightNo('801'))->assertDontSee($this->flightNo('802'));
         $this->assertSeeIndicator($flights, 'CDG');
 
         $lists = $this->open('manager.home', null, ['flight' => $bey->id]);
-        $lists->assertDontSee('ME802')->assertDontSee('Rami Bey');
+        $lists->assertDontSee($this->flightNo('802'))->assertDontSee('Rami Bey');
         $this->open('manager.home', null, ['flight' => $cdg->id])
-            ->assertSee('ME801')
+            ->assertSee($this->flightNo('801'))
             ->assertSee('Nora Cdg')
             ->assertDontSee('Rami Bey');
 
@@ -94,12 +94,12 @@ class StationFilterTest extends TestCase
 
         $payments = $this->open('manager.payments');
         $this->assertSame(1, $this->countNodes($payments, '//tr[@data-payment]'));
-        $payments->assertSee('ME801')->assertDontSee('ME802');
+        $payments->assertSee($this->flightNo('801'))->assertDontSee($this->flightNo('802'));
 
         $sales = $this->open('manager.sales');
-        $this->assertSame(1, $this->countNodes($sales, '//section[@data-flight="ME801"]'));
-        $this->assertSame(0, $this->countNodes($sales, '//section[@data-flight="ME802"]'));
-        $this->assertSame(0, $this->countNodes($sales, '//select[@name="flight"]/option[contains(., "ME802")]'));
+        $this->assertSame(1, $this->countNodes($sales, '//section[@data-flight="'.$this->flightNo('801').'"]'));
+        $this->assertSame(0, $this->countNodes($sales, '//section[@data-flight="'.$this->flightNo('802').'"]'));
+        $this->assertSame(0, $this->countNodes($sales, '//select[@name="flight"]/option[contains(., "'.$this->flightNo('802').'")]'));
     }
 
     public function test_all_stations_is_the_default_and_shows_every_row(): void
@@ -111,7 +111,7 @@ class StationFilterTest extends TestCase
         $this->assertNull(session('manager_station'));
 
         $dashboard = $this->get(route('manager.dashboard'))->assertOk();
-        $dashboard->assertSee('ME801')->assertSee('ME802');
+        $dashboard->assertSee($this->flightNo('801'))->assertSee($this->flightNo('802'));
         $dashboard->assertDontSee('Show all stations', false);
 
         $this->get(route('manager.audit'))->assertOk()
@@ -151,19 +151,19 @@ class StationFilterTest extends TestCase
         $page = $this->get(route('manager.dashboard'))->assertOk();
 
         // The manager works at BEY. With nothing saved, today's CDG departure is still listed.
-        $this->assertSame(1, $this->countNodes($page, '//*[@data-role="manager"]//td[contains(., "ME801")]'));
-        $this->assertSame(1, $this->countNodes($page, '//*[@data-role="manager"]//td[contains(., "ME802")]'));
+        $this->assertSame(1, $this->countNodes($page, '//*[@data-role="manager"]//td[contains(., "'.$this->flightNo('801').'")]'));
+        $this->assertSame(1, $this->countNodes($page, '//*[@data-role="manager"]//td[contains(., "'.$this->flightNo('802').'")]'));
     }
 
     public function test_the_choice_is_remembered_and_show_all_stations_clears_it(): void
     {
         $this->pair();
 
-        $this->open('manager.dashboard', 'CDG')->assertDontSee('ME802');
+        $this->open('manager.dashboard', 'CDG')->assertDontSee($this->flightNo('802'));
         $this->assertSame('CDG', session('manager_station'));
 
         $flights = $this->get(route('manager.flights'))->assertOk();
-        $flights->assertSee('ME801')->assertDontSee('ME802');
+        $flights->assertSee($this->flightNo('801'))->assertDontSee($this->flightNo('802'));
         $this->assertSeeIndicator($flights, 'CDG');
 
         $href = $this->clearHref($flights);
@@ -172,7 +172,7 @@ class StationFilterTest extends TestCase
         $this->assertSame('', $query['station'] ?? null);
 
         $cleared = $this->get(parse_url($href, PHP_URL_PATH).'?'.parse_url($href, PHP_URL_QUERY))->assertOk();
-        $cleared->assertSee('ME801')->assertSee('ME802')->assertDontSee('Show all stations', false);
+        $cleared->assertSee($this->flightNo('801'))->assertSee($this->flightNo('802'))->assertDontSee('Show all stations', false);
         $this->assertNull(session('manager_station'));
     }
 
@@ -181,21 +181,21 @@ class StationFilterTest extends TestCase
         $this->open('manager.flights', 'CDG');
         $aircraft = Aircraft::factory()->create();
 
-        $createdAway = $this->post(route('manager.flights.store'), $this->flightForm($aircraft, 'ME900', 'BEY', 'CDG'))
-            ->assertSessionHas('success', 'Flight ME900 created. It departs from BEY, not CDG, so this list does not show it.');
-        $me900 = Flight::where('flight_no', 'ME900')->sole();
+        $createdAway = $this->post(route('manager.flights.store'), $this->flightForm($aircraft, $this->flightNo('900'), 'BEY', 'CDG'))
+            ->assertSessionHas('success', 'Flight '.$this->flightNo('900').' created. It departs from BEY, not CDG, so this list does not show it.');
+        $me900 = Flight::where('flight_no', $this->flightNo('900'))->sole();
         $createdAway->assertRedirect(route('manager.flights.show', $me900));
 
         $hidden = $this->get(route('manager.flights'))->assertOk();
         // The success message names the flight. The list itself does not.
-        $this->assertSame(0, $this->countNodes($hidden, '//table//td[contains(., "ME900")]'));
+        $this->assertSame(0, $this->countNodes($hidden, '//table//td[contains(., "'.$this->flightNo('900').'")]'));
 
-        $createdHere = $this->post(route('manager.flights.store'), $this->flightForm($aircraft, 'ME901', 'CDG', 'LHR'))
-            ->assertSessionHas('success', 'Flight ME901 created.');
-        $me901 = Flight::where('flight_no', 'ME901')->sole();
+        $createdHere = $this->post(route('manager.flights.store'), $this->flightForm($aircraft, $this->flightNo('901'), 'CDG', 'LHR'))
+            ->assertSessionHas('success', 'Flight '.$this->flightNo('901').' created.');
+        $me901 = Flight::where('flight_no', $this->flightNo('901'))->sole();
         $createdHere->assertRedirect(route('manager.flights.show', $me901));
 
-        $this->get(route('manager.flights'))->assertOk()->assertSee('ME901')->assertDontSee('ME900');
+        $this->get(route('manager.flights'))->assertOk()->assertSee($this->flightNo('901'))->assertDontSee($this->flightNo('900'));
     }
 
     public function test_todays_flights_without_a_station_attribute_is_unchanged(): void
@@ -203,14 +203,14 @@ class StationFilterTest extends TestCase
         $this->pair();
 
         $this->blade('<x-todays-flights role="manager" />')
-            ->assertSee('ME801')
-            ->assertSee('ME802');
+            ->assertSee($this->flightNo('801'))
+            ->assertSee($this->flightNo('802'));
 
         $this->actingAsRole(Role::Checkin);
 
         $this->blade('<x-todays-flights role="checkin" />')
-            ->assertSee('ME802')
-            ->assertDontSee('ME801');
+            ->assertSee($this->flightNo('802'))
+            ->assertDontSee($this->flightNo('801'));
     }
 
     public function test_an_invalid_station_is_refused(): void
@@ -252,13 +252,13 @@ class StationFilterTest extends TestCase
     private function pair(): array
     {
         $cdg = Flight::factory()->create([
-            'flight_no' => 'ME801',
+            'flight_no' => $this->flightNo('801'),
             'origin' => 'CDG',
             'destination' => 'BEY',
             'departure_at' => now()->addHours(2),
         ]);
         $bey = Flight::factory()->create([
-            'flight_no' => 'ME802',
+            'flight_no' => $this->flightNo('802'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'departure_at' => now()->addHours(3),

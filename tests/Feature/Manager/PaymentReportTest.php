@@ -157,7 +157,7 @@ class PaymentReportTest extends TestCase
 
     public function test_SR57_a_flight_shows_its_payments_totals_whole_booking_and_last_4(): void
     {
-        $flight = $this->flight('ME201');
+        $flight = $this->flight($this->flightNo('201'));
         $booking = $this->reservation($flight, 'ABCD23');
         $lina = Passenger::factory()->for($booking)->create(['first_name' => 'Lina', 'last_name' => 'Karam']);
         $adamReservation = $this->reservation($flight, 'EFGH45');
@@ -168,7 +168,7 @@ class PaymentReportTest extends TestCase
         // Passenger only: the flight and the PNR come from the passenger's reservation, not reservation_id.
         $excess = $this->charge(5000, PaymentKind::ExcessBaggage, passenger: $lina);
 
-        $other = $this->flight('ME305');
+        $other = $this->flight($this->flightNo('305'));
         $this->charge(99900, PaymentKind::Fare, reservation: $this->reservation($other, 'OTHER2'));
 
         $page = $this->open(['flight_id' => $flight->id]);
@@ -177,7 +177,7 @@ class PaymentReportTest extends TestCase
         $page->assertDontSee('$999.00', false);
 
         $this->assertSame('10 Nov 2026 10:00', $this->cell($page, $fare, 'date'));
-        $this->assertSame('ME201', $this->cell($page, $fare, 'flight'));
+        $this->assertSame($this->flightNo('201'), $this->cell($page, $fare, 'flight'));
         $this->assertSame('ABCD23', $this->cell($page, $fare, 'pnr'));
         $this->assertSame('Whole booking', $this->cell($page, $fare, 'passenger'));
         $this->assertSame('Fare', $this->cell($page, $fare, 'kind'));
@@ -190,7 +190,7 @@ class PaymentReportTest extends TestCase
         $this->assertSame('Adam Zeidan', $this->cell($page, $secondFare, 'passenger'));
         $this->assertSame('$80.00', $this->cell($page, $secondFare, 'amount'));
 
-        $this->assertSame('ME201', $this->cell($page, $excess, 'flight'));
+        $this->assertSame($this->flightNo('201'), $this->cell($page, $excess, 'flight'));
         $this->assertSame('ABCD23', $this->cell($page, $excess, 'pnr'));
         $this->assertSame('Lina Karam', $this->cell($page, $excess, 'passenger'));
         $this->assertSame('Excess baggage', $this->cell($page, $excess, 'kind'));
@@ -208,7 +208,7 @@ class PaymentReportTest extends TestCase
 
     public function test_SR57_filter_by_agent(): void
     {
-        $flight = $this->flight('ME201');
+        $flight = $this->flight($this->flightNo('201'));
         $reservation = $this->reservation($flight, 'ABCD23');
         $carl = User::factory()->create(['role' => Role::Checkin, 'name' => 'Carl Hobeika']);
 
@@ -228,7 +228,7 @@ class PaymentReportTest extends TestCase
 
     public function test_SR57_filter_by_day_uses_beirut_midnight(): void
     {
-        $flight = $this->flight('ME201');
+        $flight = $this->flight($this->flightNo('201'));
         $reservation = $this->reservation($flight, 'ABCD23');
 
         // 23:50 in Beirut is still 10 November. 00:10 is 11 November in Beirut, but 22:10 UTC on the 10th.
@@ -252,12 +252,12 @@ class PaymentReportTest extends TestCase
 
     public function test_SR57_failed_payment_is_listed_but_not_totalled(): void
     {
-        $flight = $this->flight('ME201');
+        $flight = $this->flight($this->flightNo('201'));
         $reservation = $this->reservation($flight, 'ABCD23');
         $paid = $this->charge(10000, PaymentKind::Fare, reservation: $reservation);
         $failed = $this->charge(1500, PaymentKind::ExcessBaggage, reservation: $reservation, card: '4000 0000 0000 0002');
 
-        $other = $this->flight('ME305');
+        $other = $this->flight($this->flightNo('305'));
         $this->charge(4000, PaymentKind::Fee, reservation: $this->reservation($other, 'OTHER2'), card: '4000 0000 0000 0002');
 
         $page = $this->open(['flight_id' => $flight->id]);
@@ -278,7 +278,7 @@ class PaymentReportTest extends TestCase
 
     public function test_SR57_upgrade_has_its_own_total(): void
     {
-        $flight = $this->flight('ME201');
+        $flight = $this->flight($this->flightNo('201'));
         $reservation = $this->reservation($flight, 'ABCD23');
         $upgrade = $this->charge(7500, PaymentKind::Upgrade, reservation: $reservation);
 
@@ -301,7 +301,7 @@ class PaymentReportTest extends TestCase
 
     public function test_SR57_the_page_uses_a_fixed_number_of_queries(): void
     {
-        $flight = $this->flight('ME501');
+        $flight = $this->flight($this->flightNo('501'));
         $reservation = $this->reservation($flight, 'QUERY2');
         $passenger = Passenger::factory()->for($reservation)->create();
 

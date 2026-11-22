@@ -24,7 +24,7 @@ class G2BoardingTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->makeAgents();
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME305']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('305')]);
     }
 
     private function passengerWithPnr(string $pnr, ?Flight $flight = null): Passenger
@@ -79,13 +79,13 @@ class G2BoardingTest extends TestCase
 
     public function test_a_pnr_from_another_flight_is_refused(): void
     {
-        $other = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME999']);
+        $other = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('999')]);
         $stranger = $this->passengerWithPnr('OTHR22', $other);
         $this->checkIn($stranger);
         $this->startBoarding($this->flight);
 
         $this->boardPnr('OTHR22')
-            ->assertSessionHas('error', 'PNR OTHR22 is booked on ME999, not on this flight.');
+            ->assertSessionHas('error', 'PNR OTHR22 is booked on '.$this->flightNo('999').', not on this flight.');
         $this->assertSame(PassengerStatus::CheckedIn, $stranger->fresh()->status);
 
         $this->boardPnr('ZZZZZZ')->assertSessionHas('error', 'No reservation with PNR ZZZZZZ.');
@@ -180,7 +180,7 @@ class G2BoardingTest extends TestCase
         $this->from(route('gate.flights.show', $this->flight))
             ->post(route('gate.flights.start-boarding', $this->flight))
             ->assertRedirect(route('gate.flights.show', $this->flight))
-            ->assertSessionHas('success', 'Boarding started for ME305.');
+            ->assertSessionHas('success', 'Boarding started for '.$this->flightNo('305').'.');
 
         $this->assertSame(FlightStatus::Boarding, $this->flight->fresh()->status);
 

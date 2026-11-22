@@ -83,9 +83,9 @@ class AccountStationTest extends TestCase
     {
         Notification::fake();
         $this->travelTo(Carbon::parse('2026-11-15 08:00', 'UTC'));
-        Flight::factory()->create(['flight_no' => 'ME202', 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => '2026-11-15 10:00']);
-        Flight::factory()->create(['flight_no' => 'ME201', 'origin' => 'BEY', 'destination' => 'CDG', 'departure_at' => '2026-11-15 12:00']);
-        Flight::factory()->create(['flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG', 'departure_at' => '2026-11-15 11:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('202'), 'origin' => 'CDG', 'destination' => 'BEY', 'departure_at' => '2026-11-15 10:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('201'), 'origin' => 'BEY', 'destination' => 'CDG', 'departure_at' => '2026-11-15 12:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG', 'departure_at' => '2026-11-15 11:00']);
         $this->actingAsRole(Role::Manager);
 
         $this->post('/manager/accounts', $this->newAccount())->assertRedirect();
@@ -97,9 +97,9 @@ class AccountStationTest extends TestCase
         $this->actingAs($claire);
         $this->get('/checkin')
             ->assertOk()
-            ->assertSee('ME202')
-            ->assertDontSee('ME201')
-            ->assertDontSee('ME216');
+            ->assertSee($this->flightNo('202'))
+            ->assertDontSee($this->flightNo('201'))
+            ->assertDontSee($this->flightNo('216'));
     }
 
     public function test_a_station_can_be_left_empty_on_create(): void

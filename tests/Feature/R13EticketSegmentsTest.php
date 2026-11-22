@@ -46,8 +46,8 @@ class R13EticketSegmentsTest extends TestCase
         $page->assertOk()
             ->assertSee('Outbound')
             ->assertDontSee('>Return<', false)
-            ->assertSee('ME264')
-            ->assertSee('ME216')
+            ->assertSee($this->flightNo('264'))
+            ->assertSee($this->flightNo('216'))
             ->assertSee('BEY')
             ->assertSee('IST')
             ->assertSee('CDG')
@@ -65,8 +65,8 @@ class R13EticketSegmentsTest extends TestCase
 
         $html = (new ETicketMail($reservation->fresh(), $payment))->render();
 
-        $this->assertStringContainsString('ME264', $html);
-        $this->assertStringContainsString('ME216', $html);
+        $this->assertStringContainsString($this->flightNo('264'), $html);
+        $this->assertStringContainsString($this->flightNo('216'), $html);
         $this->assertStringContainsString('Connection at IST', $html);
         $this->assertStringContainsString('1 h 30 min', $html);
         $this->assertStringContainsString('12A', $html);
@@ -85,16 +85,16 @@ class R13EticketSegmentsTest extends TestCase
             ->assertOk()
             ->assertSee('Outbound')
             ->assertSee('Return')
-            ->assertSee('ME201')
-            ->assertSee('ME204')
-            ->assertSeeInOrder(['Outbound', 'ME201', 'Return', 'ME204']);
+            ->assertSee($this->flightNo('201'))
+            ->assertSee($this->flightNo('204'))
+            ->assertSeeInOrder(['Outbound', $this->flightNo('201'), 'Return', $this->flightNo('204')]);
 
         $html = (new ETicketMail($reservation->fresh(), $payment))->render();
 
         $this->assertStringContainsString('Outbound', $html);
         $this->assertStringContainsString('Return', $html);
-        $this->assertStringContainsString('ME201', $html);
-        $this->assertStringContainsString('ME204', $html);
+        $this->assertStringContainsString($this->flightNo('201'), $html);
+        $this->assertStringContainsString($this->flightNo('204'), $html);
     }
 
     public function test_payment_block_stays_on_receipt_with_last_four_only(): void
@@ -115,14 +115,14 @@ class R13EticketSegmentsTest extends TestCase
     private function bookConnection(): array
     {
         $first = Flight::factory()->create([
-            'flight_no' => 'ME264',
+            'flight_no' => $this->flightNo('264'),
             'origin' => 'BEY',
             'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 10:00', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216',
+            'flight_no' => $this->flightNo('216'),
             'origin' => 'IST',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 11:30', 'UTC'),
@@ -152,14 +152,14 @@ class R13EticketSegmentsTest extends TestCase
     private function bookRoundTrip(): array
     {
         $out = Flight::factory()->create([
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 12:45', 'UTC'),
         ]);
         $back = Flight::factory()->create([
-            'flight_no' => 'ME204',
+            'flight_no' => $this->flightNo('204'),
             'origin' => 'CDG',
             'destination' => 'BEY',
             'departure_at' => Carbon::parse('2026-11-18 10:00', 'UTC'),

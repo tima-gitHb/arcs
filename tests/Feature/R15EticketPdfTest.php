@@ -29,7 +29,7 @@ class R15EticketPdfTest extends TestCase
         Mail::fake();
 
         $this->actingAsRole('reservation');
-        $flight = Flight::factory()->create(['flight_no' => 'ME201']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('201')]);
         $seatId = $this->economySeat($flight);
 
         $this->post(route('reservation.store'), [

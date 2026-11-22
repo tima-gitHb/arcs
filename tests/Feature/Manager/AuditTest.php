@@ -140,16 +140,16 @@ class AuditTest extends TestCase
 
     public function test_filter_by_flight(): void
     {
-        $flightA = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME901']);
-        $flightB = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME902']);
+        $flightA = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('901')]);
+        $flightB = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('902')]);
 
         $onA = $this->checkedInPassenger($flightA);
         $this->checkedInPassenger($flightB);
 
         $response = $this->get(route('manager.audit', ['flight_id' => $flightA->id]))
             ->assertOk()
-            ->assertSee('ME901')   // the dropdown lists flights by number
-            ->assertSee('ME902');
+            ->assertSee($this->flightNo('901'))   // the dropdown lists flights by number
+            ->assertSee($this->flightNo('902'));
 
         $entries = $response->viewData('entries');
         $this->assertCount(1, $entries->whereNotNull('passenger_id'));

@@ -129,12 +129,12 @@ class TripFareManagerTest extends TestCase
         }
 
         $first = Flight::factory()->create([
-            'flight_no' => 'ME264', 'origin' => 'BEY', 'destination' => 'IST',
+            'flight_no' => $this->flightNo('264'), 'origin' => 'BEY', 'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 10:00', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216', 'origin' => 'IST', 'destination' => 'CDG',
+            'flight_no' => $this->flightNo('216'), 'origin' => 'IST', 'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 11:30', 'UTC'),
             'arrives_at' => Carbon::parse('2026-11-15 15:15', 'UTC'),
         ]);

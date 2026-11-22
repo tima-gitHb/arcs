@@ -155,16 +155,16 @@ class C1CheckinSearchTest extends TestCase
 
     public function test_SR41_check_in_home_shows_todays_flights(): void
     {
-        Flight::factory()->create(['flight_no' => 'ME900', 'departure_at' => '2026-11-09 18:00']);
-        Flight::factory()->create(['flight_no' => 'ME815', 'destination' => 'FCO', 'departure_at' => '2026-11-10 15:00']);
-        Flight::factory()->create(['flight_no' => 'ME801', 'destination' => 'CDG', 'departure_at' => '2026-11-10 08:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('900'), 'departure_at' => '2026-11-09 18:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('815'), 'destination' => 'FCO', 'departure_at' => '2026-11-10 15:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('801'), 'destination' => 'CDG', 'departure_at' => '2026-11-10 08:00']);
 
         $this->get(route('checkin.home'))
             ->assertOk()
             ->assertSee("Today's flights", false)
             ->assertSee('data-role="checkin"', false)
-            ->assertSeeInOrder(['ME801', 'BEY → CDG', 'ME815', 'BEY → FCO'])
-            ->assertDontSee('ME900');
+            ->assertSeeInOrder([$this->flightNo('801'), 'BEY → CDG', $this->flightNo('815'), 'BEY → FCO'])
+            ->assertDontSee($this->flightNo('900'));
     }
 
     public function test_search_by_pnr_finds_the_reservation(): void

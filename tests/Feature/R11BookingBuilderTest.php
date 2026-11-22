@@ -44,7 +44,7 @@ class R11BookingBuilderTest extends TestCase
         $this->actingAsRole('reservation');
 
         Flight::factory()->create([
-            'flight_no' => 'ME900',
+            'flight_no' => $this->flightNo('900'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'status' => FlightStatus::Scheduled,
@@ -52,7 +52,7 @@ class R11BookingBuilderTest extends TestCase
             'arrives_at' => Carbon::parse('2026-11-01 12:00', 'UTC'),
         ]);
         $live = Flight::factory()->create([
-            'flight_no' => 'ME901',
+            'flight_no' => $this->flightNo('901'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'status' => FlightStatus::Scheduled,
@@ -64,16 +64,16 @@ class R11BookingBuilderTest extends TestCase
         preg_match('/const allFlights = (\[.*?\]);/s', $page->getContent(), $match);
 
         $this->assertArrayHasKey(1, $match);
-        $this->assertStringContainsString('ME901', $match[1]);
+        $this->assertStringContainsString($this->flightNo('901'), $match[1]);
         $this->assertStringContainsString((string) $live->id, $match[1]);
-        $this->assertStringNotContainsString('ME900', $match[1]);
+        $this->assertStringNotContainsString($this->flightNo('900'), $match[1]);
     }
 
     public function test_SR65_one_way_booking_still_works_with_legacy_flight_id(): void
     {
         $this->actingAsRole('reservation');
         $flight = Flight::factory()->create([
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
@@ -125,8 +125,8 @@ class R11BookingBuilderTest extends TestCase
 
         $page = $this->followRedirects($response);
         $page->assertOk()
-            ->assertSee('ME264')
-            ->assertSee('ME216')
+            ->assertSee($this->flightNo('264'))
+            ->assertSee($this->flightNo('216'))
             ->assertSee('BEY')
             ->assertSee('IST')
             ->assertSee('CDG');
@@ -221,7 +221,7 @@ class R11BookingBuilderTest extends TestCase
     private function connection(int $gap): array
     {
         $first = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME264',
+            'flight_no' => $this->flightNo('264'),
             'origin' => 'BEY',
             'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
@@ -230,7 +230,7 @@ class R11BookingBuilderTest extends TestCase
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216',
+            'flight_no' => $this->flightNo('216'),
             'origin' => 'IST',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 10:00', 'UTC')->addMinutes($gap),
@@ -248,7 +248,7 @@ class R11BookingBuilderTest extends TestCase
     private function roundTrip(): array
     {
         $out = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
@@ -257,7 +257,7 @@ class R11BookingBuilderTest extends TestCase
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $back = Flight::factory()->create([
-            'flight_no' => 'ME204',
+            'flight_no' => $this->flightNo('204'),
             'origin' => 'CDG',
             'destination' => 'BEY',
             'departure_at' => Carbon::parse('2026-11-18 10:00', 'UTC'),

@@ -18,6 +18,22 @@ use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
 abstract class TestCase extends BaseTestCase
 {
     /**
+     * Airline IATA designator from config (default AR).
+     */
+    protected function airlineCode(): string
+    {
+        return (string) config('arcs.airline.code');
+    }
+
+    /**
+     * Build a flight number with the configured airline code (e.g. flightNo('205') → AR205).
+     */
+    protected function flightNo(string|int $number): string
+    {
+        return $this->airlineCode().$number;
+    }
+
+    /**
      * Create a user with this role and log in as them.
      */
     protected function actingAsRole(Role|string $role): User

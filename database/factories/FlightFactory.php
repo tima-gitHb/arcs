@@ -19,7 +19,7 @@ class FlightFactory extends Factory
         $departure = now()->addDay()->setTime(12, 0);
 
         return [
-            'flight_no' => 'ME'.fake()->numerify('###'),
+            'flight_no' => config('arcs.airline.code').fake()->numerify('###'),
             'origin' => 'BEY',
             'destination' => fake()->randomElement(['CDG', 'DXB', 'LHR', 'FCO']),
             'aircraft_id' => Aircraft::factory(),

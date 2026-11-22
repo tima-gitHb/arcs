@@ -35,7 +35,7 @@ class C5BoardingPassTest extends TestCase
         // Window 09:00–11:15, departure 2026-11-10 12:00 → boarding 11:20.
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->agent = $this->actingAsRole('checkin');
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME201', 'gate' => 'A3']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('201'), 'gate' => 'A3']);
     }
 
     private function passenger(string $pnr = 'K7M2NP', PassengerType $type = PassengerType::Adult, ?Passenger $adult = null): Passenger
@@ -155,7 +155,7 @@ class C5BoardingPassTest extends TestCase
         $this->get(route('checkin.boarding-pass.show', $passenger))
             ->assertOk()
             ->assertSee('HADDAD / RAMI')
-            ->assertSee('ME201')
+            ->assertSee($this->flightNo('201'))
             ->assertSee('BEY')
             ->assertSee('10 Nov 2026')
             ->assertSee('14C')

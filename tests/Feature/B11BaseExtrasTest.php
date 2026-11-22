@@ -216,7 +216,7 @@ class B11BaseExtrasTest extends TestCase
     {
         $needDetails = ['UMNR', 'PETC', 'AVIH', 'DPNA', 'MEDA'];
 
-        $this->assertCount(14, SpecialServiceCode::cases());
+        $this->assertCount(15, SpecialServiceCode::cases());
         foreach (SpecialServiceCode::cases() as $code) {
             $this->assertSame(in_array($code->value, $needDetails, true), $code->requiresDetails(), $code->value);
             $this->assertNotSame($code->value, $code->label());
@@ -306,16 +306,16 @@ class B11BaseExtrasTest extends TestCase
     {
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
 
-        Flight::factory()->create(['flight_no' => 'ME900', 'departure_at' => '2026-11-09 18:00']);
-        Flight::factory()->create(['flight_no' => 'ME815', 'destination' => 'FCO', 'gate' => 'B4', 'departure_at' => '2026-11-10 15:00']);
-        Flight::factory()->create(['flight_no' => 'ME801', 'destination' => 'CDG', 'gate' => 'A2', 'departure_at' => '2026-11-10 08:00']);
-        Flight::factory()->create(['flight_no' => 'ME950', 'departure_at' => '2026-11-11 09:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('900'), 'departure_at' => '2026-11-09 18:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('815'), 'destination' => 'FCO', 'gate' => 'B4', 'departure_at' => '2026-11-10 15:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('801'), 'destination' => 'CDG', 'gate' => 'A2', 'departure_at' => '2026-11-10 08:00']);
+        Flight::factory()->create(['flight_no' => $this->flightNo('950'), 'departure_at' => '2026-11-11 09:00']);
 
         $view = $this->blade('<x-todays-flights role="gate" />');
 
-        $view->assertSeeInOrder(['ME801', 'BEY → CDG', '08:00', 'A2', 'Scheduled', 'ME815', 'BEY → FCO', '15:00', 'B4']);
-        $view->assertDontSee('ME900');
-        $view->assertDontSee('ME950');
+        $view->assertSeeInOrder([$this->flightNo('801'), 'BEY → CDG', '08:00', 'A2', 'Scheduled', $this->flightNo('815'), 'BEY → FCO', '15:00', 'B4']);
+        $view->assertDontSee($this->flightNo('900'));
+        $view->assertDontSee($this->flightNo('950'));
     }
 
     public function test_SR41_todays_flights_shows_a_message_when_there_are_none(): void

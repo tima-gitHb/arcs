@@ -56,7 +56,7 @@ class B13cEmailPdfTest extends TestCase
     public function test_the_e_ticket_email_uses_the_arcs_layout(): void
     {
         $this->seedBookingPrices();
-        $flight = Flight::factory()->create(['flight_no' => 'ME201']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('201')]);
         $reservation = Reservation::factory()->for($flight)->create(['pnr' => 'K7M2NP']);
         Passenger::factory()->for($reservation)->create(['first_name' => 'Lea', 'last_name' => 'Morel']);
         $agent = User::factory()->create(['role' => Role::Reservation]);
@@ -96,7 +96,7 @@ class B13cEmailPdfTest extends TestCase
         $this->assertSame('2525', $env['MAIL_PORT']);
         $this->assertSame('tls', $env['MAIL_ENCRYPTION']);
         $this->assertSame('"noreply@arcs.test"', $env['MAIL_FROM_ADDRESS']);
-        $this->assertSame('"ARCS"', $env['MAIL_FROM_NAME']);
+        $this->assertSame('"${AIRLINE_NAME}"', $env['MAIL_FROM_NAME']);
 
         // Never a credential in the repository.
         $this->assertArrayHasKey('MAIL_USERNAME', $env);

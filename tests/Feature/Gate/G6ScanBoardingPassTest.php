@@ -24,7 +24,7 @@ class G6ScanBoardingPassTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->makeAgents();
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME405']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('405')]);
     }
 
     private function passengerWithPnr(string $pnr, ?Flight $flight = null, array $attributes = []): Passenger
@@ -60,7 +60,7 @@ class G6ScanBoardingPassTest extends TestCase
 
     public function test_SR62_another_flights_pass_is_refused(): void
     {
-        $other = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME406']);
+        $other = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('406')]);
         $passenger = $this->passengerWithPnr('OTHR22', $other);
         $this->checkIn($passenger);
         $this->startBoarding($this->flight);

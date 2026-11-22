@@ -49,7 +49,7 @@ class G7GateStationConnectionsTest extends TestCase
     private function connection(int $gap = 90): array
     {
         $first = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME264',
+            'flight_no' => $this->flightNo('264'),
             'origin' => 'BEY',
             'destination' => 'IST',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
@@ -58,7 +58,7 @@ class G7GateStationConnectionsTest extends TestCase
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $second = Flight::factory()->create([
-            'flight_no' => 'ME216',
+            'flight_no' => $this->flightNo('216'),
             'origin' => 'IST',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 10:00', 'UTC')->addMinutes($gap),
@@ -76,7 +76,7 @@ class G7GateStationConnectionsTest extends TestCase
     private function roundTrip(): array
     {
         $out = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME201',
+            'flight_no' => $this->flightNo('201'),
             'origin' => 'BEY',
             'destination' => 'CDG',
             'departure_at' => Carbon::parse('2026-11-15 08:00', 'UTC'),
@@ -85,7 +85,7 @@ class G7GateStationConnectionsTest extends TestCase
             'checkin_closes_at' => Carbon::parse('2026-11-15 07:15', 'UTC'),
         ]);
         $back = Flight::factory()->create([
-            'flight_no' => 'ME204',
+            'flight_no' => $this->flightNo('204'),
             'origin' => 'CDG',
             'destination' => 'BEY',
             'departure_at' => Carbon::parse('2026-11-18 10:00', 'UTC'),
@@ -145,12 +145,12 @@ class G7GateStationConnectionsTest extends TestCase
     public function test_SR81_gate_agent_sees_own_station_flights_only(): void
     {
         $bey = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME301',
+            'flight_no' => $this->flightNo('301'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
         Flight::factory()->create([
-            'flight_no' => 'ME401',
+            'flight_no' => $this->flightNo('401'),
             'origin' => 'CDG',
             'destination' => 'BEY',
             'departure_at' => now()->addHours(3),
@@ -160,8 +160,8 @@ class G7GateStationConnectionsTest extends TestCase
 
         $this->get(route('gate.home'))
             ->assertOk()
-            ->assertSee('ME301')
-            ->assertDontSee('ME401');
+            ->assertSee($this->flightNo('301'))
+            ->assertDontSee($this->flightNo('401'));
 
         $this->get(route('gate.flights.show', $bey))->assertOk();
     }
@@ -169,7 +169,7 @@ class G7GateStationConnectionsTest extends TestCase
     public function test_SR81_opening_another_stations_flight_returns_403(): void
     {
         $cdg = $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME401',
+            'flight_no' => $this->flightNo('401'),
             'origin' => 'CDG',
             'destination' => 'BEY',
         ]);
@@ -183,12 +183,12 @@ class G7GateStationConnectionsTest extends TestCase
     public function test_SR81_manager_sees_all_stations_flights(): void
     {
         $this->flightWithStatus(FlightStatus::CheckinOpen, [
-            'flight_no' => 'ME301',
+            'flight_no' => $this->flightNo('301'),
             'origin' => 'BEY',
             'destination' => 'CDG',
         ]);
         Flight::factory()->create([
-            'flight_no' => 'ME401',
+            'flight_no' => $this->flightNo('401'),
             'origin' => 'CDG',
             'destination' => 'BEY',
             'departure_at' => now()->addHours(3),
@@ -198,8 +198,8 @@ class G7GateStationConnectionsTest extends TestCase
 
         $this->get(route('manager.home'))
             ->assertOk()
-            ->assertSee('ME301')
-            ->assertSee('ME401');
+            ->assertSee($this->flightNo('301'))
+            ->assertSee($this->flightNo('401'));
     }
 
     public function test_SR81_manifest_marks_connecting_passengers_with_inbound_and_connection_time(): void
@@ -220,7 +220,7 @@ class G7GateStationConnectionsTest extends TestCase
             ->assertOk()
             ->assertSee($passenger->last_name)
             ->assertSee('Connecting')
-            ->assertSee('ME264')
+            ->assertSee($this->flightNo('264'))
             ->assertSee('1 h 30 min')
             ->assertSee('Tight connection');
     }

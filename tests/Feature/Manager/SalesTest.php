@@ -52,11 +52,11 @@ use Tests\TestCase;
  *   flights   every flight, for the picker
  *   selected  the chosen Flight, or null
  * Markup (so tests do not depend on wording):
- *   <section data-flight="ME201"> one per report
+ *   <section data-flight=$this->flightNo('201')> one per report
  *     <tr data-class="Business|Premium|Economy|NotSet|Overall"> with cells data-cell="sold|capacity|load"
  *     load cell has data-overbooked="true" and a text-red class above 100 %
  *     <span data-revenue="fares|fees|total">$250.00</span>
- *   <tr data-today-flight="ME201"> with <a href="...manager.sales?flight=<id>">  (default page only)
+ *   <tr data-today-flight=$this->flightNo('201')> with <a href="...manager.sales?flight=<id>">  (default page only)
  *   <select name="flight"> with an <option> per flight; <a data-back-to-today> when one flight is chosen
  */
 class SalesTest extends TestCase
@@ -334,10 +334,9 @@ class SalesTest extends TestCase
 
     public function test_boarded_and_no_show_passengers_are_seats_sold(): void
     {
-        // The seeded London flight ME110 departed an hour ago: 6 Boarded and 2 NoShow, all Economy.
-        // Only Cancelled is left out, so all 8 are sold. OD-MRA has 132 Economy seats: 8 / 132 = 6 %.
+        // AR110: 6 Boarded + 2 NoShow on OD-ARC (144 Economy seats) → 8/144 = 6 %.
         $this->seed(DatabaseSeeder::class);
-        $london = Flight::where('flight_no', 'ME110')->firstOrFail();
+        $london = Flight::where('flight_no', $this->flightNo('110'))->firstOrFail();
 
         // Status on this flight's coupon (B13b).
         $this->assertSame(6, $london->passengers()->wherePivot('status', 'Boarded')->count());
@@ -345,8 +344,9 @@ class SalesTest extends TestCase
 
         $response = $this->get(route('manager.sales'))->assertOk();
 
+        $economyCapacity = $london->aircraft->seats()->where('cabin_class', CabinClass::Economy)->count();
         $report = $this->report($response, $london);
-        $this->assertSame(['sold' => 8, 'capacity' => 132, 'percent' => 6], $report['classes']['Economy']);
+        $this->assertSame(['sold' => 8, 'capacity' => $economyCapacity, 'percent' => (int) round(8 / $economyCapacity * 100)], $report['classes']['Economy']);
         $this->assertSame(8, $report['overall']['sold']);
         $this->assertSame('8', $this->cell($response, $london, 'Economy', 'sold'));
     }
@@ -557,58 +557,58 @@ class SalesTest extends TestCase
 
     public function test_the_default_page_shows_only_todays_flights_in_departure_order(): void
     {
-        $evening = $this->flight(departs: '2026-11-10 20:00:00', attributes: ['flight_no' => 'ME900']);
-        $morning = $this->flight(departs: '2026-11-10 08:00:00', attributes: ['flight_no' => 'ME901']);
-        $yesterday = $this->flight(departs: '2026-11-09 14:00:00', attributes: ['flight_no' => 'ME902']);
-        $tomorrow = $this->flight(departs: '2026-11-11 14:00:00', attributes: ['flight_no' => 'ME903']);
+        $evening = $this->flight(departs: '2026-11-10 20:00:00', attributes: ['flight_no' => $this->flightNo('900')]);
+        $morning = $this->flight(departs: '2026-11-10 08:00:00', attributes: ['flight_no' => $this->flightNo('901')]);
+        $yesterday = $this->flight(departs: '2026-11-09 14:00:00', attributes: ['flight_no' => $this->flightNo('902')]);
+        $tomorrow = $this->flight(departs: '2026-11-11 14:00:00', attributes: ['flight_no' => $this->flightNo('903')]);
 
         $response = $this->get(route('manager.sales'))->assertOk();
 
         $this->assertSame(
-            ['ME901', 'ME900'],
+            [$this->flightNo('901'), $this->flightNo('900')],
             collect($response->viewData('reports'))->map(fn (array $r) => $r['flight']->flight_no)->all(),
         );
         $this->assertSame(2, $this->countNodes($response, '//section[@data-flight]'));
-        $this->assertSame(0, $this->countNodes($response, '//section[@data-flight="ME902"]'));
-        $this->assertSame(0, $this->countNodes($response, '//section[@data-flight="ME903"]'));
+        $this->assertSame(0, $this->countNodes($response, '//section[@data-flight="'.$this->flightNo('902').'"]'));
+        $this->assertSame(0, $this->countNodes($response, '//section[@data-flight="'.$this->flightNo('903').'"]'));
         $this->assertNull($response->viewData('selected'));
     }
 
     public function test_the_default_page_links_each_of_todays_flights_to_its_sales_page(): void
     {
-        $today = $this->flight(attributes: ['flight_no' => 'ME910']);
-        $this->flight(departs: '2026-11-11 14:00:00', attributes: ['flight_no' => 'ME911']);
+        $today = $this->flight(attributes: ['flight_no' => $this->flightNo('910')]);
+        $this->flight(departs: '2026-11-11 14:00:00', attributes: ['flight_no' => $this->flightNo('911')]);
 
         $response = $this->get(route('manager.sales'));
 
-        $link = "//tr[@data-today-flight='ME910']//a";
+        $link = '//tr[@data-today-flight="'.$this->flightNo('910').'"]//a';
         $this->assertSame(1, $this->countNodes($response, $link));
         $this->assertSame(
             route('manager.sales', ['flight' => $today->id]),
             html_entity_decode($this->xpath($response)->query($link)->item(0)->getAttribute('href')),
         );
-        $this->assertSame(0, $this->countNodes($response, "//tr[@data-today-flight='ME911']"));
+        $this->assertSame(0, $this->countNodes($response, '//tr[@data-today-flight="'.$this->flightNo('911').'"]'));
     }
 
     public function test_the_picker_lists_every_flight_not_only_todays(): void
     {
-        $this->flight(departs: '2026-11-09 14:00:00', attributes: ['flight_no' => 'ME920']);
-        $this->flight(departs: '2026-11-10 14:00:00', attributes: ['flight_no' => 'ME921']);
-        $this->flight(departs: '2026-11-25 14:00:00', attributes: ['flight_no' => 'ME922']);
+        $this->flight(departs: '2026-11-09 14:00:00', attributes: ['flight_no' => $this->flightNo('920')]);
+        $this->flight(departs: '2026-11-10 14:00:00', attributes: ['flight_no' => $this->flightNo('921')]);
+        $this->flight(departs: '2026-11-25 14:00:00', attributes: ['flight_no' => $this->flightNo('922')]);
 
         $response = $this->get(route('manager.sales'));
 
         $this->assertSame(1, $this->countNodes($response, '//select[@name="flight"]'));
-        $this->assertStringContainsString('ME920', $this->text($response, '//select[@name="flight"]'));
-        $this->assertStringContainsString('ME921', $this->text($response, '//select[@name="flight"]'));
-        $this->assertStringContainsString('ME922', $this->text($response, '//select[@name="flight"]'));
+        $this->assertStringContainsString($this->flightNo('920'), $this->text($response, '//select[@name="flight"]'));
+        $this->assertStringContainsString($this->flightNo('921'), $this->text($response, '//select[@name="flight"]'));
+        $this->assertStringContainsString($this->flightNo('922'), $this->text($response, '//select[@name="flight"]'));
         $this->assertSame(3, $this->countNodes($response, '//select[@name="flight"]/option[@value!=""]'));
     }
 
     public function test_choosing_a_flight_shows_that_flight_only_with_a_back_to_today_link(): void
     {
-        $today = $this->flight(attributes: ['flight_no' => 'ME930']);
-        $chosen = $this->flight(departs: '2026-11-25 14:00:00', attributes: ['flight_no' => 'ME931']);
+        $today = $this->flight(attributes: ['flight_no' => $this->flightNo('930')]);
+        $chosen = $this->flight(departs: '2026-11-25 14:00:00', attributes: ['flight_no' => $this->flightNo('931')]);
         $this->book($chosen, CabinClass::Business, 9);
 
         $response = $this->get(route('manager.sales', ['flight' => $chosen->id]))->assertOk();
@@ -616,7 +616,7 @@ class SalesTest extends TestCase
         $this->assertTrue($response->viewData('selected')->is($chosen));
         $this->assertCount(1, $response->viewData('reports'));
         $this->assertSame(1, $this->countNodes($response, '//section[@data-flight]'));
-        $this->assertSame(1, $this->countNodes($response, '//section[@data-flight="ME931"]'));
+        $this->assertSame(1, $this->countNodes($response, '//section[@data-flight="'.$this->flightNo('931').'"]'));
         $this->assertSame('50 %', $this->cell($response, $chosen, 'Business', 'load'));
 
         $back = '//a[@data-back-to-today]';

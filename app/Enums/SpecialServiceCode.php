@@ -21,6 +21,7 @@ enum SpecialServiceCode: string
     case VGML = 'VGML';
     case DBML = 'DBML';
     case CHML = 'CHML';
+    case SPML = 'SPML';
 
     public function label(): string
     {
@@ -39,6 +40,7 @@ enum SpecialServiceCode: string
             self::VGML => 'Vegetarian meal',
             self::DBML => 'Diabetic meal',
             self::CHML => 'Child meal',
+            self::SPML => 'Special meal',
         };
     }
 

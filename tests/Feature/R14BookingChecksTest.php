@@ -49,7 +49,7 @@ class R14BookingChecksTest extends TestCase
         Mail::fake();
 
         $this->actingAsRole('reservation');
-        $flight = Flight::factory()->create(['flight_no' => 'ME910']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('910')]);
         $seatId = $this->economySeat($flight);
 
         $response = $this->post(route('reservation.store'), [
@@ -214,7 +214,7 @@ class R14BookingChecksTest extends TestCase
         Mail::fake();
 
         $this->actingAsRole('reservation');
-        $flight = Flight::factory()->create(['flight_no' => 'ME920']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('920')]);
         $adultSeat = $this->economySeat($flight);
         $childSeat = Seat::factory()->create([
             'aircraft_id' => $flight->aircraft_id,
@@ -270,7 +270,7 @@ class R14BookingChecksTest extends TestCase
         $page->assertSee('Adult')
             ->assertSee('Child')
             ->assertSee('Infant')
-            ->assertSee('ME920');
+            ->assertSee($this->flightNo('920'));
 
         Mail::assertSent(ETicketMail::class, function (ETicketMail $mail) use ($names): bool {
             $html = $mail->render();

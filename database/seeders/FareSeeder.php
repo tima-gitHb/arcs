@@ -17,17 +17,17 @@ class FareSeeder extends Seeder
 {
     public function run(): void
     {
-        // One-way BEY fares (dummy, but in a realistic MEA range).
+        // Network defaults: Economy adult 250; Premium ×1.6; Business ×3.2; child 75%; infant 10%.
         $fares = [
             [CabinClass::Economy, PassengerType::Adult, 25000],
             [CabinClass::Economy, PassengerType::Child, 18750],
             [CabinClass::Economy, PassengerType::Infant, 2500],
-            [CabinClass::Premium, PassengerType::Adult, 42000],
-            [CabinClass::Premium, PassengerType::Child, 31500],
-            [CabinClass::Premium, PassengerType::Infant, 4200],
-            [CabinClass::Business, PassengerType::Adult, 75000],
-            [CabinClass::Business, PassengerType::Child, 56250],
-            [CabinClass::Business, PassengerType::Infant, 7500],
+            [CabinClass::Premium, PassengerType::Adult, 40000],
+            [CabinClass::Premium, PassengerType::Child, 30000],
+            [CabinClass::Premium, PassengerType::Infant, 4000],
+            [CabinClass::Business, PassengerType::Adult, 80000],
+            [CabinClass::Business, PassengerType::Child, 60000],
+            [CabinClass::Business, PassengerType::Infant, 8000],
         ];
 
         foreach ($fares as [$cabin, $type, $cents]) {
@@ -38,6 +38,7 @@ class FareSeeder extends Seeder
             );
         }
 
+        // Existing fee codes; amounts kept so pricing tests stay stable.
         $fees = [
             [FeeCode::ExtraBag, 5000],
             [FeeCode::ExcessKg, 1000],

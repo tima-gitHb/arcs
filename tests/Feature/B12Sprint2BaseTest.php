@@ -89,14 +89,14 @@ class B12Sprint2BaseTest extends TestCase
     {
         // 22:30 UTC on the 10th is already 00:30 on the 11th in Beirut.
         $this->travelTo(Carbon::parse('2026-11-10 22:30', 'UTC'));
-        Flight::factory()->create(['flight_no' => 'ME111', 'departure_at' => Carbon::parse('2026-11-11 08:00', 'Asia/Beirut')]);
-        Flight::factory()->create(['flight_no' => 'ME100', 'departure_at' => Carbon::parse('2026-11-10 20:00', 'Asia/Beirut')]);
+        Flight::factory()->create(['flight_no' => $this->flightNo('111'), 'departure_at' => Carbon::parse('2026-11-11 08:00', 'Asia/Beirut')]);
+        Flight::factory()->create(['flight_no' => $this->flightNo('100'), 'departure_at' => Carbon::parse('2026-11-10 20:00', 'Asia/Beirut')]);
         $this->actingAs(User::factory()->create(['role' => Role::Gate, 'airport_code' => 'BEY'])); // a Beirut agent (B13a)
 
         $this->blade('<x-todays-flights role="gate" />')
-            ->assertSee('ME111')
+            ->assertSee($this->flightNo('111'))
             ->assertSee('08:00')
-            ->assertDontSee('ME100');
+            ->assertDontSee($this->flightNo('100'));
     }
 
     // --- 2. Premium class ----------------------------------------------------------------------
@@ -521,14 +521,14 @@ class B12Sprint2BaseTest extends TestCase
     public function test_the_M5_audit_page_and_filters_work_with_a_flight_only_row(): void
     {
         $this->travelTo(Carbon::parse('2026-11-15 10:00', 'Asia/Beirut')); // fixed clock: "today" is the Beirut day
-        $flight = Flight::factory()->create(['flight_no' => 'ME777']);
+        $flight = Flight::factory()->create(['flight_no' => $this->flightNo('777')]);
         $other = Flight::factory()->create();
         $staff = User::factory()->create(['role' => Role::Gate, 'name' => 'Joe Saliba']);
         AuditEntry::forFlight($flight, 'flight_status', 'Scheduled', 'Delayed', $staff);
 
         $manager = $this->actingAsRole('manager');
 
-        $this->get(route('manager.audit'))->assertOk()->assertSee('flight_status')->assertSee('ME777')->assertSee('Joe Saliba');
+        $this->get(route('manager.audit'))->assertOk()->assertSee('flight_status')->assertSee($this->flightNo('777'))->assertSee('Joe Saliba');
 
         $this->get(route('manager.audit', ['flight_id' => $flight->id]))->assertOk()->assertSee('flight_status');
         $this->get(route('manager.audit', ['flight_id' => $other->id]))->assertOk()->assertDontSee('flight_status');

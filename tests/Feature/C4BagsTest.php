@@ -39,7 +39,7 @@ class C4BagsTest extends TestCase
 
         $this->travelTo(Carbon::parse('2026-11-10 10:00'));
         $this->agent = $this->actingAsRole('checkin');
-        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => 'ME201']);
+        $this->flight = $this->flightWithStatus(FlightStatus::CheckinOpen, ['flight_no' => $this->flightNo('201')]);
 
         $this->seedBookingPrices();
         // C4 uses Economy 1×23 (overrides the seeded 2×23).
@@ -90,7 +90,7 @@ class C4BagsTest extends TestCase
         $this->assertSame(['18.0', '23.0'], $bags->pluck('weight_kg')->all());
         $this->assertNotSame($bags[0]->tag_no, $bags[1]->tag_no);
         foreach ($bags as $bag) {
-            $this->assertMatchesRegularExpression('/^ME\d{6}$/', $bag->tag_no);
+            $this->assertMatchesRegularExpression('/^'.preg_quote($this->airlineCode(), '/').'\d{6}$/', $bag->tag_no);
             $this->assertSame($passenger->id, $bag->passenger_id);
         }
 

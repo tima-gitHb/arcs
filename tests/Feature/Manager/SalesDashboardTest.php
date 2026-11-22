@@ -70,14 +70,14 @@ class SalesDashboardTest extends TestCase
 
     public function test_totals_per_kind_match_the_succeeded_payments(): void
     {
-        $flight = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME201');
+        $flight = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('201'));
         $this->pay($flight, 25000, PaymentKind::Fare);
         $this->pay($flight, 5000, PaymentKind::ExtraBag);
         $this->pay($flight, 3000, PaymentKind::ExcessBaggage);
         $this->pay($flight, 6000, PaymentKind::Fee);
         // Passenger only, no reservation_id: the flight comes from the second COALESCE branch.
         $this->pay($flight, 8000, PaymentKind::Upgrade, throughPassenger: true);
-        $later = $this->flight('BEY', 'DXB', '2026-11-12 14:00:00', 'ME202');
+        $later = $this->flight('BEY', 'DXB', '2026-11-12 14:00:00', $this->flightNo('202'));
         $this->pay($later, 99900, PaymentKind::Fare);
 
         $response = $this->sales()->assertOk();
@@ -101,7 +101,7 @@ class SalesDashboardTest extends TestCase
 
     public function test_failed_payments_are_never_counted(): void
     {
-        $flight = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME201');
+        $flight = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('201'));
         $this->pay($flight, 25000, PaymentKind::Fare);
         $this->pay($flight, 11100, PaymentKind::Fare, '4000 0000 0000 0002');
         $this->pay($flight, 22200, PaymentKind::Upgrade, '4000 0000 0000 0002', throughPassenger: true);
@@ -123,13 +123,13 @@ class SalesDashboardTest extends TestCase
 
     public function test_the_charts_show_the_ticket_and_extras_amounts(): void
     {
-        $flight = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME201');
+        $flight = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('201'));
         $this->pay($flight, 25000, PaymentKind::Fare);
         $this->pay($flight, 5000, PaymentKind::ExtraBag);
         $this->pay($flight, 3000, PaymentKind::ExcessBaggage);
         $this->pay($flight, 6000, PaymentKind::Fee);
         $this->pay($flight, 8000, PaymentKind::Upgrade, throughPassenger: true);
-        $later = $this->flight('BEY', 'DXB', '2026-11-12 14:00:00', 'ME202');
+        $later = $this->flight('BEY', 'DXB', '2026-11-12 14:00:00', $this->flightNo('202'));
         $this->pay($later, 99900, PaymentKind::Fare);
 
         $response = $this->sales()->assertOk();
@@ -154,8 +154,8 @@ class SalesDashboardTest extends TestCase
     {
         // 21:59 UTC is 23:59 on 10 Nov in Beirut, and still 10 Nov in UTC.
         // 22:00 UTC is 00:00 on 11 Nov in Beirut (the first instant of that day), and still 10 Nov in UTC.
-        $night = $this->flight('BEY', 'CDG', '2026-11-10 21:59:00', 'ME211');
-        $midnight = $this->flight('BEY', 'CDG', '2026-11-10 22:00:00', 'ME212');
+        $night = $this->flight('BEY', 'CDG', '2026-11-10 21:59:00', $this->flightNo('211'));
+        $midnight = $this->flight('BEY', 'CDG', '2026-11-10 22:00:00', $this->flightNo('212'));
         $this->pay($night, 11100, PaymentKind::Fare);
         $this->pay($midnight, 22200, PaymentKind::Fare);
 
@@ -188,9 +188,9 @@ class SalesDashboardTest extends TestCase
 
     public function test_a_route_filter_keeps_only_that_directed_route(): void
     {
-        $beyCdg = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME221');
-        $cdgBey = $this->flight('CDG', 'BEY', '2026-11-10 16:00:00', 'ME222');
-        $later = $this->flight('BEY', 'CDG', '2026-11-12 14:00:00', 'ME223');
+        $beyCdg = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('221'));
+        $cdgBey = $this->flight('CDG', 'BEY', '2026-11-10 16:00:00', $this->flightNo('222'));
+        $later = $this->flight('BEY', 'CDG', '2026-11-12 14:00:00', $this->flightNo('223'));
         $this->pay($beyCdg, 10000, PaymentKind::Fare);
         $this->pay($cdgBey, 20000, PaymentKind::Fare);
         $this->pay($later, 40000, PaymentKind::Fare);
@@ -213,9 +213,9 @@ class SalesDashboardTest extends TestCase
 
     public function test_a_station_filter_keeps_departures_from_that_airport(): void
     {
-        $bey = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME231');
-        $cdg = $this->flight('CDG', 'BEY', '2026-11-10 16:00:00', 'ME232');
-        $cdgTomorrow = $this->flight('CDG', 'LHR', '2026-11-11 14:00:00', 'ME233');
+        $bey = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('231'));
+        $cdg = $this->flight('CDG', 'BEY', '2026-11-10 16:00:00', $this->flightNo('232'));
+        $cdgTomorrow = $this->flight('CDG', 'LHR', '2026-11-11 14:00:00', $this->flightNo('233'));
         $this->pay($bey, 10000, PaymentKind::Fare);
         $this->pay($cdg, 20000, PaymentKind::Fare);
         $this->pay($cdgTomorrow, 90000, PaymentKind::Fare);
@@ -233,8 +233,8 @@ class SalesDashboardTest extends TestCase
 
     public function test_a_flight_filter_shows_that_flight_on_any_day(): void
     {
-        $today = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME241');
-        $later = $this->flight('BEY', 'DXB', '2026-11-25 14:00:00', 'ME242');
+        $today = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('241'));
+        $later = $this->flight('BEY', 'DXB', '2026-11-25 14:00:00', $this->flightNo('242'));
         $this->pay($today, 10000, PaymentKind::Fare);
         $this->pay($later, 40000, PaymentKind::Fare);
 
@@ -248,10 +248,10 @@ class SalesDashboardTest extends TestCase
 
     public function test_filters_combined_keep_only_what_matches_every_one(): void
     {
-        $match = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME251');
-        $sameDay = $this->flight('BEY', 'CDG', '2026-11-10 18:00:00', 'ME252');
-        $otherStation = $this->flight('CDG', 'BEY', '2026-11-10 16:00:00', 'ME253');
-        $otherDay = $this->flight('BEY', 'CDG', '2026-11-12 14:00:00', 'ME254');
+        $match = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('251'));
+        $sameDay = $this->flight('BEY', 'CDG', '2026-11-10 18:00:00', $this->flightNo('252'));
+        $otherStation = $this->flight('CDG', 'BEY', '2026-11-10 16:00:00', $this->flightNo('253'));
+        $otherDay = $this->flight('BEY', 'CDG', '2026-11-12 14:00:00', $this->flightNo('254'));
         $this->pay($match, 10000, PaymentKind::Fare);
         $this->pay($match, 2500, PaymentKind::ExtraBag);
         $this->pay($sameDay, 40000, PaymentKind::Fare);
@@ -290,9 +290,9 @@ class SalesDashboardTest extends TestCase
 
     public function test_empty_filters_leave_todays_page_unchanged(): void
     {
-        $today = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME261');
-        $yesterday = $this->flight('BEY', 'DXB', '2026-11-09 14:00:00', 'ME262');
-        $tomorrow = $this->flight('CDG', 'BEY', '2026-11-11 14:00:00', 'ME263');
+        $today = $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('261'));
+        $yesterday = $this->flight('BEY', 'DXB', '2026-11-09 14:00:00', $this->flightNo('262'));
+        $tomorrow = $this->flight('CDG', 'BEY', '2026-11-11 14:00:00', $this->flightNo('263'));
         $this->pay($today, 1500, PaymentKind::Fare);
         $this->pay($yesterday, 8000, PaymentKind::Fare);
         $this->pay($tomorrow, 9000, PaymentKind::Fare);
@@ -307,8 +307,8 @@ class SalesDashboardTest extends TestCase
         ])->assertOk();
 
         // Today's list, the one flight picker, and no "back to today" link. Same with blank fields.
-        $this->assertSame(['ME261'], $this->flightNumbers($plain));
-        $this->assertSame(['ME261'], $this->flightNumbers($blank));
+        $this->assertSame([$this->flightNo('261')], $this->flightNumbers($plain));
+        $this->assertSame([$this->flightNo('261')], $this->flightNumbers($blank));
         $this->assertSame(1, $this->countNodes($plain, "//tr[@data-today-flight='{$today->flight_no}']"));
         $this->assertSame(0, $this->countNodes($plain, "//section[@data-flight='{$yesterday->flight_no}']"));
         $this->assertSame(0, $this->countNodes($plain, "//section[@data-flight='{$tomorrow->flight_no}']"));
@@ -325,11 +325,11 @@ class SalesDashboardTest extends TestCase
 
     public function test_the_number_of_queries_does_not_grow_with_the_flights_when_filtered(): void
     {
-        $this->flight('BEY', 'CDG', '2026-11-12 10:00:00', 'ME401');
+        $this->flight('BEY', 'CDG', '2026-11-12 10:00:00', $this->flightNo('401'));
         $one = $this->queryCount(fn () => $this->sales(['from' => '2026-11-12', 'to' => '2026-11-12'])->assertOk());
 
         foreach (range(2, 7) as $i) {
-            $this->flight('BEY', 'CDG', sprintf('2026-11-12 %02d:00:00', 9 + $i), 'ME40'.$i);
+            $this->flight('BEY', 'CDG', sprintf('2026-11-12 %02d:00:00', 9 + $i), $this->flightNo('40'.$i));
         }
 
         $manyResponse = null;
@@ -347,7 +347,7 @@ class SalesDashboardTest extends TestCase
 
     public function test_invalid_filter_values_are_refused(): void
     {
-        $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', 'ME271');
+        $this->flight('BEY', 'CDG', '2026-11-10 14:00:00', $this->flightNo('271'));
 
         $this->sales(['from' => '10-11-2026'])->assertRedirect()->assertSessionHasErrors('from');
         $this->sales(['to' => '2026-13-40'])->assertRedirect()->assertSessionHasErrors('to');

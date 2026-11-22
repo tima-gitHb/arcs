@@ -19,7 +19,7 @@ class StoreFlightRequest extends FormRequest
     }
 
     /**
-     * "me205", "bey" and "b4" are accepted as "ME205", "BEY" and "B4": uppercase before the rules run.
+     * "ar205", "bey" and "b4" are accepted as "AR205", "BEY" and "B4": uppercase before the rules run.
      * Only strings are touched, so an empty gate stays null.
      */
     protected function prepareForValidation(): void
@@ -98,7 +98,7 @@ class StoreFlightRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'flight_no.regex' => 'Use an airline code and a number, e.g. ME205.',
+            'flight_no.regex' => 'Use an airline code and a number, e.g. '.config('arcs.airline.code').'205.',
             'origin.regex' => 'Use a 3-letter airport code, e.g. BEY.',
             'destination.regex' => 'Use a 3-letter airport code, e.g. CDG.',
             'origin.exists' => 'Unknown airport. Use an airport of the network.',

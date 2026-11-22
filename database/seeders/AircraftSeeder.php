@@ -2,33 +2,27 @@
 
 namespace Database\Seeders;
 
-use App\Enums\CabinClass;
-use App\Models\Aircraft;
+use App\Services\AircraftService;
 use Illuminate\Database\Seeder;
 
 /**
- * OD-MRA, an A320: 30 rows x A–F = 180 seats. Rows 1–5 Business, 6–8 Premium, 9–30 Economy.
+ * Six Arcs Air aircraft (Lebanese registrations), 6-across A–F.
  */
 class AircraftSeeder extends Seeder
 {
-    public function run(): void
+    public function run(AircraftService $aircraft): void
     {
-        $aircraft = Aircraft::create(['registration' => 'OD-MRA', 'model' => 'A320', 'premium_rows' => 3]);
+        $fleet = [
+            ['registration' => 'OD-ARA', 'model' => 'A320neo', 'rows' => 25, 'seats_per_row' => 6, 'business_rows' => 2, 'premium_rows' => 3],
+            ['registration' => 'OD-ARB', 'model' => 'A320neo', 'rows' => 25, 'seats_per_row' => 6, 'business_rows' => 2, 'premium_rows' => 3],
+            ['registration' => 'OD-ARC', 'model' => 'A321neo', 'rows' => 31, 'seats_per_row' => 6, 'business_rows' => 3, 'premium_rows' => 4],
+            ['registration' => 'OD-ARD', 'model' => 'A321neo', 'rows' => 31, 'seats_per_row' => 6, 'business_rows' => 3, 'premium_rows' => 4],
+            ['registration' => 'OD-ARE', 'model' => 'A320neo', 'rows' => 27, 'seats_per_row' => 6, 'business_rows' => 0, 'premium_rows' => 4],
+            ['registration' => 'OD-ARF', 'model' => 'A321neo', 'rows' => 30, 'seats_per_row' => 6, 'business_rows' => 4, 'premium_rows' => 4],
+        ];
 
-        $seats = [];
-        for ($row = 1; $row <= 30; $row++) {
-            foreach (['A', 'B', 'C', 'D', 'E', 'F'] as $letter) {
-                $seats[] = [
-                    'seat_no' => $row.$letter,
-                    'cabin_class' => match (true) {
-                        $row <= 5 => CabinClass::Business,
-                        $row <= 8 => CabinClass::Premium,
-                        default => CabinClass::Economy,
-                    },
-                ];
-            }
+        foreach ($fleet as $spec) {
+            $aircraft->create($spec);
         }
-
-        $aircraft->seats()->createMany($seats);
     }
 }

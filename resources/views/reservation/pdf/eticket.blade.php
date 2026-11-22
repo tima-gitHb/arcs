@@ -32,7 +32,7 @@
     $showDirectionHeaders = $hasReturn || $segments->count() > 1;
 @endphp
 
-<p class="muted">ARCS e-ticket / receipt</p>
+<p class="muted">{{ config('arcs.airline.name') }} e-ticket / receipt</p>
 <h1 class="pnr">{{ $reservation->pnr }}</h1>
 <p class="muted">Give this PNR to the passenger for check-in.</p>
 
