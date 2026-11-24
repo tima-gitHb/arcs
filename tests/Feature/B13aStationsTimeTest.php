@@ -190,7 +190,8 @@ class B13aStationsTimeTest extends TestCase
     {
         Notification::fake();
 
-        $user = app(AccountService::class)->create([
+        // M20: create returns [User, temporaryPassword].
+        [$user] = app(AccountService::class)->create([
             'name' => 'Claire Petit', 'email' => 'claire@arcs.test', 'role' => 'checkin', 'airport_code' => 'CDG',
         ]);
 

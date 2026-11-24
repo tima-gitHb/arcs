@@ -9,27 +9,31 @@ use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
 /**
- * What the Manager does to staff accounts (SR-22, SR-35, SR-36).
+ * What the Manager does to staff accounts (SR-22, SR-35, SR-36, M20).
  * A refused action throws a DomainException whose message can be shown to the Manager.
  */
 class AccountService
 {
     /**
-     * Create an account and send the welcome email with a set-password link (SR-36).
+     * Create an account with a temporary password (SR-38) and send the welcome email.
+     * The plain password is returned once for the Manager to see; it is never stored in plain text.
      * airport_code is the station (B13a): an airports.code, or null for none yet.
      *
      * @param  array{name: string, email: string, role: string, airport_code?: string|null}  $data
+     * @return array{0: User, 1: string}
      */
-    public function create(array $data): User
+    public function create(array $data): array
     {
-        // users.password cannot be null, so the account gets a random password nobody knows.
-        // The 'hashed' cast on User hashes it; the person sets their own through the link.
-        $user = User::create($data + ['password' => Str::random(40)]);
+        $temporaryPassword = $this->temporaryPassword();
 
-        $token = Password::broker()->createToken($user);
-        $user->notify(new WelcomeAccount($token));
+        $user = User::create($data + [
+            'password' => $temporaryPassword,
+            'must_change_password' => true,
+        ]);
 
-        return $user;
+        $user->notify(new WelcomeAccount);
+
+        return [$user, $temporaryPassword];
     }
 
     /**
@@ -72,10 +76,9 @@ class AccountService
     }
 
     /**
-     * Send the welcome email again, with a new set-password link (M18).
-     * Locked or deactivated accounts are refused first (SR-37). An account that has
-     * already logged in uses "Send reset link" instead. The broker applies the 60-second
-     * throttle and replaces the previous token, so the old link stops working.
+     * Send the welcome email again (M18 / M20). Locked or deactivated accounts are refused
+     * first (SR-37). An account that has already logged in uses "Send reset link" instead.
+     * The broker throttle still applies so two resends within 60 seconds are refused.
      */
     public function resendWelcome(User $user): void
     {
@@ -88,11 +91,19 @@ class AccountService
         }
 
         $status = Password::sendResetLink(['email' => $user->email], function (User $user, string $token) {
-            $user->notify(new WelcomeAccount($token));
+            $user->notify(new WelcomeAccount);
         });
 
         if ($status !== Password::RESET_LINK_SENT) {
             throw new DomainException(trans($status));
         }
+    }
+
+    /**
+     * A one-time password that meets SR-38: at least 8 characters, letters and numbers.
+     */
+    private function temporaryPassword(): string
+    {
+        return Str::password(10, letters: true, numbers: true, symbols: false, spaces: false);
     }
 }

@@ -8,15 +8,11 @@ use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
 /**
- * Welcome email for a new staff account, with the link to set a first password (SR-36).
+ * Welcome email for a new staff account (SR-36, M20).
+ * The Manager gives them a temporary password in person; it is never in this email.
  */
 class WelcomeAccount extends Notification
 {
-    /**
-     * @param  string  $token  a password-broker token, made by AccountService::create()
-     */
-    public function __construct(public string $token) {}
-
     /**
      * @return array<int, string>
      */
@@ -27,10 +23,6 @@ class WelcomeAccount extends Notification
 
     public function toMail(User $notifiable): MailMessage
     {
-        // The same page as "forgot password": it checks the token and the email, then saves the new password.
-        $url = route('password.reset', ['token' => $this->token, 'email' => $notifiable->email]);
-        $minutes = config('auth.passwords.'.config('auth.defaults.passwords').'.expire');
-
         // The station is the user's airport. loadMissing so a caller that did not
         // eager-load it still gets the city, and a missing station stays null.
         $notifiable->loadMissing('airport');
@@ -50,9 +42,8 @@ class WelcomeAccount extends Notification
         }
 
         return $message
-            ->line('Click the button below to choose your password.')
-            ->action('Set your password', $url)
-            ->line("This link expires in {$minutes} minutes. If it has expired, ask the Manager to send you a new link.")
+            ->line('Your manager has a temporary password for you. Log in with that temporary password, then you will choose your own.')
+            ->line('If you do not have the temporary password, ask your manager.')
             ->salutation('The ARCS team');
     }
 }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Middleware\EnsurePasswordChanged;
 use App\Http\Middleware\EnsureStationFlight;
 use App\Http\Middleware\EnsureUserHasRole;
 use Illuminate\Foundation\Application;
@@ -19,7 +20,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role' => EnsureUserHasRole::class,
             'station' => EnsureStationFlight::class,
+            'password.changed' => EnsurePasswordChanged::class,
         ]);
+
+        // M20: after login lands on the role home, send flagged users to choose a new password.
+        $middleware->appendToGroup('web', EnsurePasswordChanged::class);
 
         // SR-39: a guest who still has the login marker cookie had a session that timed out.
         $middleware->redirectGuestsTo(function (Request $request) {

@@ -9,7 +9,6 @@ use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Notification;
-use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
 
 class AccountTest extends TestCase
@@ -46,6 +45,9 @@ class AccountTest extends TestCase
         $this->assertSame(Role::Gate, $new->role);
         $this->assertTrue($new->active);
         $this->assertFalse($new->locked);
+
+        // M20: clear the first-login flag so this test can check role and station pages.
+        $new->forceFill(['must_change_password' => false])->save();
 
         // No station yet (B13a): the Manager sets it (the dropdown is card M13).
         $this->actingAs($new);
@@ -105,7 +107,7 @@ class AccountTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
-    public function test_SR36_creating_account_sends_welcome_email_with_set_password_link(): void
+    public function test_SR36_creating_account_sends_welcome_email_about_the_temporary_password(): void
     {
         Notification::fake();
         $this->actingAsRole('manager');
@@ -114,15 +116,16 @@ class AccountTest extends TestCase
 
         $user = User::where('email', 'joe@arcs.test')->firstOrFail();
 
-        // The database requires a password, so a random one is stored; nobody knows it.
+        // A hashed temporary password is stored; the plain value was flashed once to the Manager.
         $this->assertNotEmpty($user->password);
+        $this->assertTrue($user->must_change_password);
 
         Notification::assertSentTo($user, WelcomeAccount::class, function (WelcomeAccount $notification) use ($user) {
-            // The link is the password.reset page, with a valid token and the user's email.
-            $expected = route('password.reset', ['token' => $notification->token, 'email' => $user->email]);
-
-            $this->assertSame($expected, $notification->toMail($user)->actionUrl);
-            $this->assertTrue(Password::broker()->tokenExists($user, $notification->token));
+            $html = (string) $notification->toMail($user)->render();
+            $this->assertStringContainsString('temporary password', strtolower($html));
+            $this->assertStringContainsString('manager', strtolower($html));
+            $this->assertStringNotContainsString('Set your password', $html);
+            $this->assertNull($notification->toMail($user)->actionUrl);
 
             return true;
         });
