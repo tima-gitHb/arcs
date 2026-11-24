@@ -83,10 +83,12 @@ class AccountController extends Controller
 
     public function store(StoreAccountRequest $request): RedirectResponse
     {
-        $user = $this->accounts->create($request->validated());
+        [$user, $temporaryPassword] = $this->accounts->create($request->validated());
 
+        // The temporary password is flashed once for the Manager; it is never stored in plain text.
         return redirect()->route('manager.accounts.show', $user)
-            ->with('success', "Account created. A welcome email was sent to {$user->email}.");
+            ->with('success', "Account created. A welcome email was sent to {$user->email}.")
+            ->with('temporary_password', $temporaryPassword);
     }
 
     /**

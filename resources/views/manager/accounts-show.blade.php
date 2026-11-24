@@ -12,6 +12,13 @@
         </x-slot:breadcrumb>
     </x-page-header>
 
+    @if (session('temporary_password'))
+        <x-panel title="Temporary password" class="mb-6">
+            <p class="text-sm text-gray-700">Show this once to the new staff member. It will not be shown again.</p>
+            <p class="mt-3 font-mono text-lg font-semibold tracking-wide text-navy" data-arcs-temporary-password>{{ session('temporary_password') }}</p>
+        </x-panel>
+    @endif
+
     <div class="grid gap-6 xl:grid-cols-[1fr_20rem]">
         <div class="space-y-6">
             <x-panel title="Account">

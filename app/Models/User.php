@@ -31,6 +31,7 @@ class User extends Authenticatable
         'role',
         'airport_code',
         'active',
+        'must_change_password',
     ];
 
     /**
@@ -58,6 +59,7 @@ class User extends Authenticatable
             'locked' => 'boolean',
             'active' => 'boolean',
             'last_login_at' => 'datetime',
+            'must_change_password' => 'boolean',
         ];
     }
 

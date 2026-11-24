@@ -45,11 +45,12 @@ class B13cEmailPdfTest extends TestCase
     {
         $user = User::factory()->create(['name' => 'Joe Saliba', 'role' => Role::Gate]);
 
-        $html = (string) (new WelcomeAccount('token-123'))->toMail($user)->render();
+        $html = (string) (new WelcomeAccount)->toMail($user)->render();
 
         $this->assertArcsLayout($html);
         $this->assertStringContainsString('Hello Joe Saliba,', $html);
-        $this->assertStringContainsString('Set your password', $html);
+        $this->assertStringContainsString('temporary password', strtolower($html));
+        $this->assertStringNotContainsString('Set your password', $html);
         $this->assertStringContainsString('The ARCS team', $html);
     }
 

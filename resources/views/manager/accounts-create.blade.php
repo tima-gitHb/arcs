@@ -1,5 +1,5 @@
 <x-app-layout>
-    <x-page-header title="New account" subtitle="The person gets a welcome email with a link to choose their password.">
+    <x-page-header title="New account" subtitle="You will see a temporary password once. Give it to them; they choose their own after the first login.">
         <x-slot:breadcrumb>
             <span class="text-gray-400">Staff accounts</span>
             <span class="text-gray-300">›</span>

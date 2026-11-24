@@ -94,6 +94,9 @@ class AccountStationTest extends TestCase
         $this->assertSame(Role::Checkin, $claire->role);
         $this->assertSame('CDG', $claire->airport_code);
 
+        // M20: clear the first-login flag so this test can check station filtering.
+        $claire->forceFill(['must_change_password' => false])->save();
+
         $this->actingAs($claire);
         $this->get('/checkin')
             ->assertOk()
