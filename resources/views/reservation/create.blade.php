@@ -19,7 +19,7 @@
         $bookingStep = 2;
     } elseif ($errors->has('passengers') || $errors->has('passengers.*') || $errors->has('contact_email')) {
         $bookingStep = 1;
-    } elseif ($errors->has('outbound_flight_ids') || $errors->has('return_flight_ids') || $errors->has('journey_type')) {
+    } elseif ($errors->has('outbound_flight_ids') || $errors->has('return_flight_ids') || $errors->has('journey_type') || $errors->has('legs') || $errors->has('legs.*')) {
         $bookingStep = 0;
     }
 @endphp
@@ -50,8 +50,17 @@
             const fromHash = () => { const i = hashes.indexOf(location.hash.replace('#','')); if (i >= 0) step = i; };
             fromHash();
             window.addEventListener('hashchange', fromHash);
-            $watch('step', (n) => window.arcsBookingSetHash(n));
+            $watch('step', (n) => {
+                window.arcsBookingSetHash(n);
+                // Seat map is on this step — always reload when shown (multi-city tabs + slow TiDB).
+                if (n === 2) {
+                    queue.arcsBookingLoadMap?.();
+                }
+            });
             window.arcsBookingSetHash(step);
+            if (step === 2) {
+                window.arcsBookingLoadMap?.();
+            }
         "
         x-cloak
         data-booking-flow
@@ -89,12 +98,14 @@
 
         @if ($errors->any())
             <div class="mb-4 arcs-card px-4 py-3 text-sm" style="color: var(--arcs-error); background: #FCE8E6;" role="alert" data-booking-errors>
-                @if ($errors->has('card_number') && ! $errors->has('outbound_flight_ids') && ! $errors->has('passengers'))
-                    {{ $errors->first('card_number') }}
+                @if ($errors->has('legs'))
+                    {{ $errors->first('legs') }}
                 @elseif ($errors->has('outbound_flight_ids'))
                     {{ $errors->first('outbound_flight_ids') }}
+                @elseif ($errors->has('card_number') && ! $errors->has('passengers'))
+                    {{ $errors->first('card_number') }}
                 @else
-                    Fix the highlighted fields, then charge again.
+                    {{ $errors->first() ?: 'Fix the highlighted fields, then charge again.' }}
                 @endif
             </div>
         @endif
@@ -108,7 +119,7 @@
                 <fieldset class="mt-6">
                     <legend class="arcs-label">Journey type</legend>
                     <div class="arcs-seg mt-1">
-                        @foreach (['one_way' => 'One-way', 'connection' => 'With connection', 'round_trip' => 'Round trip'] as $value => $label)
+                        @foreach (['one_way' => 'One-way', 'connection' => 'With connection', 'round_trip' => 'Round trip', 'multi_city' => 'Multi-city'] as $value => $label)
                             <label>
                                 <input
                                     type="radio"
@@ -124,7 +135,7 @@
                     <x-input-error :messages="$errors->get('journey_type')" class="mt-2" />
                 </fieldset>
 
-                <div class="mt-6 grid gap-4 lg:grid-cols-2">
+                <div id="classic-journey-panels" class="mt-6 grid gap-4 lg:grid-cols-2 {{ $journeyType === 'multi_city' ? 'hidden' : '' }}">
                     <div>
                         <x-input-label value="Outbound" class="arcs-label" />
                         <div id="outbound-legs" class="mt-2 space-y-2"></div>
@@ -143,6 +154,17 @@
                         <x-input-error :messages="$errors->get('return_flight_ids')" class="mt-2" />
                         <x-input-error :messages="$errors->get('return_flight_ids.*')" class="mt-2" />
                     </div>
+                </div>
+
+                <div id="multi-city-panel" class="mt-6 {{ $journeyType === 'multi_city' ? '' : 'hidden' }}">
+                    <x-input-label value="Legs" class="arcs-label" />
+                    <p class="mt-1 text-sm text-gray-600">2 to 6 legs. Each leg can be direct or with a connection. Next leg must leave after the previous lands (stopover over 24 h starts a new leg).</p>
+                    <div id="multi-city-legs" class="mt-3 space-y-3"></div>
+                    <button type="button" id="add-multi-city-leg" class="mt-2 text-sm font-semibold hover:underline" style="color: var(--arcs-accent-text);">
+                        + Add leg
+                    </button>
+                    <x-input-error :messages="$errors->get('legs')" class="mt-2" />
+                    <x-input-error :messages="$errors->get('legs.*')" class="mt-2" />
                 </div>
 
                 <p class="mt-3 text-sm text-gray-500">
@@ -285,7 +307,7 @@
                 {{-- Quote nodes stay in the DOM for the booking JS; copy kept for R9/R12 asserts. --}}
                 <div class="sr-only" aria-hidden="true">
                     <h2>Fare quote</h2>
-                    <p>Each segment uses its route fare (M14), else the default. Extras once. Read the total back before charging.</p>
+                    <p>Trip fare origin→destination when published, else each segment’s route fare. Round trip uses the round-trip fare. Multi-city adds each leg. Extras once.</p>
                     <p id="summary-flight">No flight selected</p>
                     <ul id="price-lines"></ul>
                     <span id="price-total">$0.00</span>
@@ -366,8 +388,12 @@
         const outboundBox = document.getElementById('outbound-legs');
         const returnBox = document.getElementById('return-legs');
         const returnPanel = document.getElementById('return-panel');
+        const classicPanels = document.getElementById('classic-journey-panels');
+        const multiCityPanel = document.getElementById('multi-city-panel');
+        const multiCityBox = document.getElementById('multi-city-legs');
         const addOutboundBtn = document.getElementById('add-outbound-leg');
         const addReturnBtn = document.getElementById('add-return-leg');
+        const addMultiCityBtn = document.getElementById('add-multi-city-leg');
         const activeFlightSelect = document.getElementById('active-seat-flight');
         const seatFlightTabs = document.getElementById('seat-flight-tabs');
         const seatPaxChips = document.getElementById('seat-pax-chips');
@@ -378,11 +404,13 @@
         const seatProgressLabel = document.getElementById('seat-progress-label');
         const allowances = @json($allowances);
         const fares = @json($fares);
+        const tripFares = @json($tripFares);
         const fees = @json($fees);
         const allFlights = @json($flightPayload);
         const connectionMinutes = @json($connectionMinutes);
         let initialOutbound = @json($outboundFlightIds);
         let initialReturn = @json($returnFlightIds);
+        let initialMultiCity = @json($multiCityLegs);
 
         const rows = () => [...list.querySelectorAll('.passenger-row')];
         const flightById = Object.fromEntries(allFlights.map((flight) => [String(flight.id), flight]));
@@ -403,7 +431,30 @@
             return Math.floor((Date.parse(next.departure_at) - Date.parse(previous.arrives_at)) / 60000);
         }
 
-        function previousFlightFor(direction, index) {
+        function previousFlightFor(direction, index, exceptSelect = null) {
+            if (journeyType() === 'multi_city' && exceptSelect) {
+                const wrap = exceptSelect.closest('[data-multi-leg]');
+                if (! wrap) {
+                    return null;
+                }
+                const selects = [...wrap.querySelectorAll('.journey-flight')];
+                const indexInLeg = selects.indexOf(exceptSelect);
+                if (indexInLeg > 0) {
+                    return flightById[selects[indexInLeg - 1].value] || null;
+                }
+                const legIndex = Number(wrap.dataset.multiLeg || 0);
+                if (legIndex <= 0) {
+                    return null;
+                }
+                const prevWrap = multiCityBox.querySelector(`[data-multi-leg="${legIndex - 1}"]`);
+                const prevSelects = [...(prevWrap?.querySelectorAll('.journey-flight') || [])]
+                    .map((select) => select.value)
+                    .filter((value) => value !== '');
+                const lastId = prevSelects[prevSelects.length - 1];
+
+                return lastId ? (flightById[lastId] || null) : null;
+            }
+
             if (direction === 'outbound') {
                 if (index === 0) {
                     return null;
@@ -423,7 +474,11 @@
 
         function takenFlightIds(exceptSelect = null) {
             return new Set(
-                [...outboundBox.querySelectorAll('.journey-flight'), ...returnBox.querySelectorAll('.journey-flight')]
+                [
+                    ...outboundBox.querySelectorAll('.journey-flight'),
+                    ...returnBox.querySelectorAll('.journey-flight'),
+                    ...multiCityBox.querySelectorAll('.journey-flight'),
+                ]
                     .filter((select) => select !== exceptSelect)
                     .map((select) => select.value)
                     .filter((value) => value !== ''),
@@ -431,8 +486,13 @@
         }
 
         function eligibleFlights(direction, index, currentId = '', exceptSelect = null) {
-            const previous = previousFlightFor(direction, index);
+            const previous = previousFlightFor(direction, index, exceptSelect);
             const taken = takenFlightIds(exceptSelect);
+            const multi = journeyType() === 'multi_city' && exceptSelect;
+            const wrap = multi ? exceptSelect.closest('[data-multi-leg]') : null;
+            const indexInLeg = wrap
+                ? [...wrap.querySelectorAll('.journey-flight')].indexOf(exceptSelect)
+                : index;
 
             return allFlights.filter((flight) => {
                 const id = String(flight.id);
@@ -449,17 +509,22 @@
                     return true;
                 }
 
-                if (flight.origin !== previous.destination) {
-                    return false;
-                }
-
                 if (! previous.arrives_at) {
                     return false;
                 }
 
                 const gap = gapMinutes(previous, flight);
+                if (gap === null) {
+                    return false;
+                }
 
-                return gap !== null && gap >= mctAt(previous.destination);
+                // Within a multi-city leg (or classic connection): must connect + MCT.
+                if (! multi || indexInLeg > 0) {
+                    return flight.origin === previous.destination && gap >= mctAt(previous.destination);
+                }
+
+                // Next multi-city leg: must leave after the previous leg lands (open jaw allowed).
+                return gap >= 0;
             });
         }
 
@@ -510,6 +575,12 @@
         }
 
         function selectedFlights() {
+            if (journeyType() === 'multi_city') {
+                return [...multiCityBox.querySelectorAll('.journey-flight')]
+                    .map((select) => flightById[select.value])
+                    .filter(Boolean);
+            }
+
             const outbound = selectedFlightIds(outboundBox).map((id) => flightById[id]).filter(Boolean);
             const ret = journeyType() === 'round_trip'
                 ? selectedFlightIds(returnBox).map((id) => flightById[id]).filter(Boolean)
@@ -518,19 +589,133 @@
             return [...outbound, ...ret];
         }
 
+        function tripFareLookup(cabin, type, origin, destination, roundTrip = false) {
+            const row = tripFares.find((item) =>
+                item.cabin === cabin
+                && item.type === type
+                && item.origin === origin
+                && item.destination === destination
+            );
+            if (! row) {
+                return null;
+            }
+            if (roundTrip && row.round_trip_cents != null) {
+                return { cents: row.round_trip_cents, source: 'round-trip' };
+            }
+
+            return { cents: row.one_way_cents, source: 'trip' };
+        }
+
+        function multiCityLegFlights() {
+            const legs = [];
+            multiCityBox.querySelectorAll('[data-multi-leg]').forEach((wrap) => {
+                const flights = [...wrap.querySelectorAll('.journey-flight')]
+                    .map((select) => flightById[select.value])
+                    .filter(Boolean);
+                if (flights.length > 0) {
+                    legs.push(flights);
+                }
+            });
+
+            return legs;
+        }
+
+        function makeMultiCityLeg(index, selectedIds = ['']) {
+            const wrap = document.createElement('div');
+            wrap.className = 'rounded-md border border-gray-200 p-3 space-y-2';
+            wrap.dataset.multiLeg = String(index);
+
+            const header = document.createElement('div');
+            header.className = 'flex items-center justify-between gap-2';
+            const title = document.createElement('p');
+            title.className = 'text-xs font-semibold uppercase tracking-wide text-gray-500';
+            title.textContent = `Leg ${index + 1}`;
+            header.appendChild(title);
+
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'text-xs font-semibold text-red-700 hover:underline';
+            remove.textContent = 'Remove';
+            remove.addEventListener('click', () => {
+                if (multiCityBox.querySelectorAll('[data-multi-leg]').length <= 2) {
+                    return;
+                }
+                wrap.remove();
+                reindexMultiCityLegs();
+                syncSeatInputs();
+                refreshActiveFlightOptions();
+                refreshFlightSummary();
+                refreshAllowances();
+                refreshPrice();
+                loadMap();
+            });
+            header.appendChild(remove);
+            wrap.appendChild(header);
+
+            const ids = selectedIds.length > 0 ? selectedIds : [''];
+            ids.forEach((id, flightIndex) => {
+                wrap.appendChild(makeLegSelect(
+                    `legs[${index}][]`,
+                    'outbound',
+                    flightIndex,
+                    id ?? '',
+                ));
+            });
+
+            const addConn = document.createElement('button');
+            addConn.type = 'button';
+            addConn.className = 'text-xs font-semibold hover:underline';
+            addConn.style.color = 'var(--arcs-accent-text)';
+            addConn.textContent = 'Add connection on this leg';
+            addConn.addEventListener('click', () => {
+                const count = wrap.querySelectorAll('.journey-flight').length;
+                if (count >= 3) {
+                    return;
+                }
+                wrap.insertBefore(
+                    makeLegSelect(`legs[${index}][]`, 'outbound', count, ''),
+                    addConn,
+                );
+                refreshLegOptions();
+            });
+            wrap.appendChild(addConn);
+
+            return wrap;
+        }
+
+        function reindexMultiCityLegs() {
+            [...multiCityBox.querySelectorAll('[data-multi-leg]')].forEach((wrap, index) => {
+                wrap.dataset.multiLeg = String(index);
+                wrap.querySelector('p').textContent = `Leg ${index + 1}`;
+                wrap.querySelectorAll('.journey-flight').forEach((select) => {
+                    select.name = `legs[${index}][]`;
+                });
+            });
+        }
+
         function fillFlightSelect(select, direction, index, selected = '') {
             select.dataset.direction = direction;
             select.dataset.legIndex = String(index);
 
             const current = selected !== '' ? String(selected) : (select.value || '');
             const offered = eligibleFlights(direction, index, current, select);
+            const previous = previousFlightFor(direction, index, select);
+            const multi = journeyType() === 'multi_city';
+            const wrap = multi ? select.closest('[data-multi-leg]') : null;
+            const indexInLeg = wrap
+                ? [...wrap.querySelectorAll('.journey-flight')].indexOf(select)
+                : index;
 
             select.replaceChildren();
             const blank = document.createElement('option');
             blank.value = '';
-            blank.textContent = previousFlightFor(direction, index)
-                ? 'Select connecting flight…'
-                : 'Select flight…';
+            if (! previous) {
+                blank.textContent = 'Select flight…';
+            } else if (multi && indexInLeg === 0) {
+                blank.textContent = `Select next leg (after ${previous.flight_no} lands)…`;
+            } else {
+                blank.textContent = 'Select connecting flight…';
+            }
             select.appendChild(blank);
 
             if (offered.length === 0) {
@@ -589,6 +774,11 @@
             [...returnBox.querySelectorAll('.journey-flight')].forEach((select, index) => {
                 fillFlightSelect(select, 'return', index, select.value);
             });
+            [...multiCityBox.querySelectorAll('.journey-flight')].forEach((select) => {
+                const wrap = select.closest('[data-multi-leg]');
+                const index = [...wrap.querySelectorAll('.journey-flight')].indexOf(select);
+                fillFlightSelect(select, 'outbound', index, select.value);
+            });
             updateConnectionHint();
         }
 
@@ -618,6 +808,25 @@
                 }
             }
 
+            if (type === 'multi_city') {
+                const legs = multiCityLegFlights();
+                if (legs.length >= 1) {
+                    const last = legs[legs.length - 1][legs[legs.length - 1].length - 1];
+                    const legWraps = multiCityBox.querySelectorAll('[data-multi-leg]');
+                    const nextEmpty = [...legWraps].some((wrap, index) => {
+                        if (index < legs.length) {
+                            return false;
+                        }
+                        return [...wrap.querySelectorAll('.journey-flight')].every((select) => select.value === '');
+                    });
+                    if (nextEmpty || legWraps.length > legs.length) {
+                        messages.push(
+                            `Next leg must leave after ${last.flight_no} lands at ${last.destination} (open jaw allowed).`,
+                        );
+                    }
+                }
+            }
+
             if (messages.length === 0) {
                 hint.classList.add('hidden');
                 hint.textContent = '';
@@ -631,42 +840,63 @@
 
         function rebuildLegs() {
             const type = journeyType();
-            const outboundWanted = type === 'connection'
-                ? Math.max(2, outboundBox.querySelectorAll('.journey-flight').length || 2)
-                : 1;
-            const returnWanted = type === 'round_trip'
-                ? Math.max(1, returnBox.querySelectorAll('.journey-flight').length || 1)
-                : 0;
+            classicPanels.classList.toggle('hidden', type === 'multi_city');
+            multiCityPanel.classList.toggle('hidden', type !== 'multi_city');
 
-            const keepOutbound = selectedFlightIds(outboundBox);
-            const keepReturn = selectedFlightIds(returnBox);
+            if (type === 'multi_city') {
+                const keep = multiCityLegFlights().map((flights) => flights.map((f) => String(f.id)));
+                const seed = keep.length >= 2
+                    ? keep
+                    : (Array.isArray(initialMultiCity) && initialMultiCity.length >= 2
+                        ? initialMultiCity.map((leg) => (Array.isArray(leg) ? leg.map(String) : ['']) )
+                        : [[''], ['']]);
 
-            outboundBox.replaceChildren();
-            for (let i = 0; i < outboundWanted; i++) {
-                outboundBox.appendChild(makeLegSelect(
-                    'outbound_flight_ids[]',
-                    'outbound',
-                    i,
-                    keepOutbound[i] ?? initialOutbound[i] ?? '',
-                ));
+                multiCityBox.replaceChildren();
+                seed.forEach((ids, index) => {
+                    multiCityBox.appendChild(makeMultiCityLeg(index, ids.length ? ids : ['']));
+                });
+                initialMultiCity = [];
+                outboundBox.replaceChildren();
+                returnBox.replaceChildren();
+            } else {
+                const outboundWanted = type === 'connection'
+                    ? Math.max(2, outboundBox.querySelectorAll('.journey-flight').length || 2)
+                    : 1;
+                const returnWanted = type === 'round_trip'
+                    ? Math.max(1, returnBox.querySelectorAll('.journey-flight').length || 1)
+                    : 0;
+
+                const keepOutbound = selectedFlightIds(outboundBox);
+                const keepReturn = selectedFlightIds(returnBox);
+
+                outboundBox.replaceChildren();
+                for (let i = 0; i < outboundWanted; i++) {
+                    outboundBox.appendChild(makeLegSelect(
+                        'outbound_flight_ids[]',
+                        'outbound',
+                        i,
+                        keepOutbound[i] ?? initialOutbound[i] ?? '',
+                    ));
+                }
+
+                returnPanel.classList.toggle('hidden', type !== 'round_trip');
+                addOutboundBtn.classList.toggle('hidden', type !== 'connection');
+                addReturnBtn.classList.toggle('hidden', type !== 'round_trip');
+
+                returnBox.replaceChildren();
+                for (let i = 0; i < returnWanted; i++) {
+                    returnBox.appendChild(makeLegSelect(
+                        'return_flight_ids[]',
+                        'return',
+                        i,
+                        keepReturn[i] ?? initialReturn[i] ?? '',
+                    ));
+                }
+
+                initialOutbound = [];
+                initialReturn = [];
+                multiCityBox.replaceChildren();
             }
-
-            returnPanel.classList.toggle('hidden', type !== 'round_trip');
-            addOutboundBtn.classList.toggle('hidden', type !== 'connection');
-            addReturnBtn.classList.toggle('hidden', type !== 'round_trip');
-
-            returnBox.replaceChildren();
-            for (let i = 0; i < returnWanted; i++) {
-                returnBox.appendChild(makeLegSelect(
-                    'return_flight_ids[]',
-                    'return',
-                    i,
-                    keepReturn[i] ?? initialReturn[i] ?? '',
-                ));
-            }
-
-            initialOutbound = [];
-            initialReturn = [];
 
             refreshLegOptions();
             syncSeatInputs();
@@ -704,8 +934,8 @@
                 tab.textContent = `${flight.flight_no} · ${flight.origin} → ${flight.destination}`;
                 tab.addEventListener('click', () => {
                     activeFlightSelect.value = String(flight.id);
-                    activeFlightSelect.dispatchEvent(new Event('change'));
                     refreshFlightTabActive();
+                    loadMap();
                 });
                 seatFlightTabs.appendChild(tab);
             });
@@ -717,6 +947,8 @@
             }
 
             refreshFlightTabActive();
+            // Tabs rebuilt — load the map for the active flight (needed when opening Seats / multi-city).
+            loadMap();
         }
 
         function refreshFlightTabActive() {
@@ -944,57 +1176,142 @@
             });
         }
 
+        function passengerGroups() {
+            const groups = new Map();
+            rows().forEach((row) => {
+                const type = row.querySelector('.passenger-type').value;
+                const cabin = type === 'Infant' ? adultCabinFor(row) : row.querySelector('.passenger-cabin').value;
+                if (cabin === '') {
+                    return;
+                }
+                const key = `${cabin}|${type}`;
+                groups.set(key, (groups.get(key) || 0) + 1);
+            });
+
+            return groups;
+        }
+
+        function appendGroupFareLines(groups, origin, destination, roundTrip, title, segments, totals) {
+            const segmentLines = [];
+            let segmentTotal = 0;
+            let priced = true;
+
+            groups.forEach((quantity, key) => {
+                const [cabin, type] = key.split('|');
+                const trip = tripFareLookup(cabin, type, origin, destination, roundTrip);
+                const fare = trip ?? fareLookup(cabin, type, origin, destination);
+                if (fare === null) {
+                    priced = false;
+
+                    return;
+                }
+                const amount = quantity * fare.cents;
+                segmentTotal += amount;
+                totals.total += amount;
+                const sourceLabel = fare.source === 'round-trip'
+                    ? 'round-trip fare'
+                    : (fare.source === 'trip' ? 'trip fare' : (fare.source === 'route' ? 'route fare' : 'default fare'));
+                segmentLines.push({
+                    label: `${cabin} ${type}`,
+                    detail: `${quantity === 1 ? formatMoney(fare.cents) : `${quantity} × ${formatMoney(fare.cents)}`} · ${sourceLabel}`,
+                    amount: formatMoney(amount),
+                });
+            });
+
+            if (priced && segmentLines.length > 0) {
+                segments.push({
+                    title,
+                    total: formatMoney(segmentTotal),
+                    lines: segmentLines,
+                });
+            }
+
+            return priced;
+        }
+
         function refreshPrice() {
             const flights = selectedFlights();
             const segments = [];
             const extras = [];
-            let total = 0;
+            const totals = { total: 0 };
             let extraBags = 0;
             let extraKg = 0;
+            const groups = passengerGroups();
+            const type = journeyType();
 
-            flights.forEach((flight) => {
-                const groups = new Map();
-                const segmentLines = [];
-                let segmentTotal = 0;
+            if (type === 'multi_city') {
+                multiCityLegFlights().forEach((legFlights, index) => {
+                    const origin = legFlights[0].origin;
+                    const destination = legFlights[legFlights.length - 1].destination;
+                    const usedTrip = [...groups.keys()].every((key) => {
+                        const [cabin, paxType] = key.split('|');
 
-                rows().forEach((row) => {
-                    const type = row.querySelector('.passenger-type').value;
-                    const cabin = type === 'Infant' ? adultCabinFor(row) : row.querySelector('.passenger-cabin').value;
-
-                    if (cabin === '') {
-                        return;
-                    }
-
-                    const key = `${cabin}|${type}`;
-                    groups.set(key, (groups.get(key) || 0) + 1);
-                });
-
-                groups.forEach((quantity, key) => {
-                    const [cabin, type] = key.split('|');
-                    const fare = fareLookup(cabin, type, flight.origin, flight.destination);
-
-                    if (fare === null) {
-                        return;
-                    }
-
-                    const amount = quantity * fare.cents;
-                    segmentTotal += amount;
-                    total += amount;
-                    segmentLines.push({
-                        label: `${cabin} ${type}`,
-                        detail: `${quantity === 1 ? formatMoney(fare.cents) : `${quantity} × ${formatMoney(fare.cents)}`} · ${fare.source === 'route' ? 'route fare' : 'default fare'}`,
-                        amount: formatMoney(amount),
+                        return tripFareLookup(cabin, paxType, origin, destination, false) !== null;
                     });
+                    if (usedTrip) {
+                        appendGroupFareLines(
+                            groups,
+                            origin,
+                            destination,
+                            false,
+                            `Leg ${index + 1} ${origin}→${destination}`,
+                            segments,
+                            totals,
+                        );
+                    } else {
+                        legFlights.forEach((flight) => {
+                            appendGroupFareLines(
+                                groups,
+                                flight.origin,
+                                flight.destination,
+                                false,
+                                `${flight.origin}→${flight.destination} · ${flight.flight_no}`,
+                                segments,
+                                totals,
+                            );
+                        });
+                    }
+                });
+            } else if (flights.length > 0) {
+                const outbound = type === 'round_trip'
+                    ? selectedFlightIds(outboundBox).map((id) => flightById[id]).filter(Boolean)
+                    : flights;
+                const origin = outbound[0]?.origin;
+                const destination = outbound[outbound.length - 1]?.destination;
+                const roundTrip = type === 'round_trip'
+                    && selectedFlightIds(returnBox).map((id) => flightById[id]).filter(Boolean).length > 0;
+                const allHaveTrip = origin && destination && [...groups.keys()].every((key) => {
+                    const [cabin, paxType] = key.split('|');
+
+                    return tripFareLookup(cabin, paxType, origin, destination, roundTrip) !== null;
                 });
 
-                if (segmentLines.length > 0) {
-                    segments.push({
-                        title: `${flight.origin}→${flight.destination} · ${flight.flight_no}`,
-                        total: formatMoney(segmentTotal),
-                        lines: segmentLines,
+                if (allHaveTrip) {
+                    appendGroupFareLines(
+                        groups,
+                        origin,
+                        destination,
+                        roundTrip,
+                        `${origin}→${destination}${roundTrip ? ' round-trip' : ' trip'}`,
+                        segments,
+                        totals,
+                    );
+                } else {
+                    flights.forEach((flight) => {
+                        appendGroupFareLines(
+                            groups,
+                            flight.origin,
+                            flight.destination,
+                            false,
+                            `${flight.origin}→${flight.destination} · ${flight.flight_no}`,
+                            segments,
+                            totals,
+                        );
                     });
                 }
-            });
+            }
+
+            let total = totals.total;
 
             rows().forEach((row) => {
                 if (row.querySelector('.passenger-type').value === 'Infant') {
@@ -1358,18 +1675,41 @@
             const flightId = activeFlightId();
             seatData = [];
 
+            const hint = document.getElementById('seat-map-hint');
+            const map = document.getElementById('seat-map');
+
             if (flightId === '') {
                 paintMap();
 
                 return;
             }
 
-            const response = await fetch(`/reservation/flights/${flightId}/seats`, {
-                headers: {
-                    Accept: 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                },
-            });
+            if (hint) {
+                const flight = flightById[flightId];
+                hint.textContent = flight
+                    ? `Loading seat map for ${flight.flight_no}…`
+                    : 'Loading seat map…';
+            }
+            map?.replaceChildren();
+
+            let response;
+            try {
+                response = await fetch(`/reservation/flights/${flightId}/seats`, {
+                    headers: {
+                        Accept: 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+            } catch {
+                if (request !== mapRequest) {
+                    return;
+                }
+                if (hint) {
+                    hint.textContent = 'Could not load the seat map — check your connection and try again.';
+                }
+
+                return;
+            }
 
             if (request !== mapRequest) {
                 return;
@@ -1377,7 +1717,11 @@
 
             if (response.ok) {
                 const body = await response.json();
-                seatData = body.seats;
+                seatData = body.seats ?? [];
+            } else if (hint) {
+                hint.textContent = response.status === 404
+                    ? 'This flight has no seat map (departed or cancelled).'
+                    : 'Could not load the seat map — try another flight.';
             }
 
             rows().forEach((row) => {
@@ -1392,11 +1736,13 @@
             paintMap();
         }
 
+        window.arcsBookingLoadMap = loadMap;
+
         document.querySelectorAll('input[name="journey_type"]').forEach((input) => {
             input.addEventListener('change', rebuildLegs);
         });
 
-        outboundBox.addEventListener('change', () => {
+        function onJourneyChange() {
             refreshLegOptions();
             syncSeatInputs();
             refreshActiveFlightOptions();
@@ -1404,17 +1750,11 @@
             refreshAllowances();
             refreshPrice();
             loadMap();
-        });
+        }
 
-        returnBox.addEventListener('change', () => {
-            refreshLegOptions();
-            syncSeatInputs();
-            refreshActiveFlightOptions();
-            refreshFlightSummary();
-            refreshAllowances();
-            refreshPrice();
-            loadMap();
-        });
+        outboundBox.addEventListener('change', onJourneyChange);
+        returnBox.addEventListener('change', onJourneyChange);
+        multiCityBox.addEventListener('change', onJourneyChange);
 
         addOutboundBtn.addEventListener('click', () => {
             if (outboundBox.querySelectorAll('.journey-flight').length >= 3) {
@@ -1436,6 +1776,16 @@
             returnBox.appendChild(makeLegSelect('return_flight_ids[]', 'return', index));
             refreshLegOptions();
             updateConnectionHint();
+        });
+
+        addMultiCityBtn.addEventListener('click', () => {
+            const count = multiCityBox.querySelectorAll('[data-multi-leg]').length;
+            if (count >= 6) {
+                return;
+            }
+            multiCityBox.appendChild(makeMultiCityLeg(count, ['']));
+            refreshLegOptions();
+            onJourneyChange();
         });
 
         activeFlightSelect.addEventListener('change', loadMap);

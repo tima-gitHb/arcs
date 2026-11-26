@@ -23,6 +23,7 @@ use App\Models\Fee;
 use App\Models\Flight;
 use App\Models\Passenger;
 use App\Models\Reservation;
+use App\Models\TripFare;
 use App\Services\CorrectionService;
 use App\Services\FareService;
 use App\Services\Payments\CardDetails;
@@ -113,6 +114,17 @@ class ReservationController extends Controller
             ],
         )->values();
 
+        $tripFares = TripFare::query()->get()->map(
+            fn (TripFare $fare) => [
+                'cabin' => $fare->cabin_class->value,
+                'type' => $fare->passenger_type->value,
+                'origin' => $fare->origin_code,
+                'destination' => $fare->destination_code,
+                'one_way_cents' => $fare->one_way_cents,
+                'round_trip_cents' => $fare->round_trip_cents,
+            ],
+        )->values();
+
         $defaultFares = $fares->filter(
             fn (array $fare) => $fare['origin'] === null && $fare['destination'] === null,
         )->values();
@@ -160,12 +172,14 @@ class ReservationController extends Controller
             'passengers' => $passengers,
             'allowances' => $allowances,
             'fares' => $fares,
+            'tripFares' => $tripFares,
             'fees' => $fees,
             'cabinOptions' => $cabinOptions,
             'pricesReady' => $defaultFares->isNotEmpty() && ($fees['extra_bag'] > 0),
             'journeyType' => old('journey_type', 'one_way'),
             'outboundFlightIds' => array_map('intval', (array) old('outbound_flight_ids', old('flight_id') ? [old('flight_id')] : [])),
             'returnFlightIds' => array_map('intval', (array) old('return_flight_ids', [])),
+            'multiCityLegs' => old('legs', [[null], [null]]),
         ]);
     }
 
@@ -210,19 +224,10 @@ class ReservationController extends Controller
                 ]);
             }
 
-            $outboundIds = $request->outboundFlightIds();
-            $returnIds = $request->returnFlightIds();
-            $outbound = Flight::query()->whereIn('id', $outboundIds)->get()
-                ->sortBy(fn (Flight $flight) => array_search($flight->id, $outboundIds, true))
-                ->values()
-                ->all();
-            $return = Flight::query()->whereIn('id', $returnIds)->get()
-                ->sortBy(fn (Flight $flight) => array_search($flight->id, $returnIds, true))
-                ->values()
-                ->all();
+            $journey = $this->journeyFromRequest($request);
 
             $reservation = $reservations->create(
-                new Journey($outbound, $return),
+                $journey,
                 $request->user(),
                 $request->validated('passengers'),
                 [
@@ -238,8 +243,10 @@ class ReservationController extends Controller
 
             Cache::put($cacheKey.':reservation', $reservation->id, now()->addHour());
         } catch (InvalidJourney $exception) {
+            $field = $request->input('journey_type') === 'multi_city' ? 'legs' : 'outbound_flight_ids';
+
             return back()->withInput($safeInput())->withErrors([
-                'outbound_flight_ids' => $exception->getMessage(),
+                $field => $exception->getMessage(),
             ]);
         } catch (SeatTaken|SeatNotAllowed $exception) {
             return back()->withInput($safeInput())->withErrors([
@@ -257,8 +264,10 @@ class ReservationController extends Controller
                 $field => $message,
             ]);
         } catch (FareNotFound $exception) {
+            $field = $request->input('journey_type') === 'multi_city' ? 'legs' : 'outbound_flight_ids';
+
             return back()->withInput($safeInput())->withErrors([
-                'outbound_flight_ids' => $exception->getMessage(),
+                $field => $exception->getMessage(),
             ]);
         }
 
@@ -398,5 +407,38 @@ class ReservationController extends Controller
             'success',
             $passenger->first_name.' '.$passenger->last_name.' cancelled.',
         );
+    }
+
+    private function journeyFromRequest(StoreReservationRequest $request): Journey
+    {
+        if ($request->input('journey_type') === 'multi_city') {
+            $legIds = $request->cityLegs();
+            $allIds = [];
+            foreach ($legIds as $leg) {
+                foreach ($leg as $id) {
+                    $allIds[] = $id;
+                }
+            }
+            $flights = Flight::query()->whereIn('id', $allIds)->get()->keyBy('id');
+            $cityLegs = [];
+            foreach ($legIds as $leg) {
+                $cityLegs[] = array_map(fn (int $id) => $flights->get($id), $leg);
+            }
+
+            return Journey::multiCity($cityLegs);
+        }
+
+        $outboundIds = $request->outboundFlightIds();
+        $returnIds = $request->returnFlightIds();
+        $outbound = Flight::query()->whereIn('id', $outboundIds)->get()
+            ->sortBy(fn (Flight $flight) => array_search($flight->id, $outboundIds, true))
+            ->values()
+            ->all();
+        $return = Flight::query()->whereIn('id', $returnIds)->get()
+            ->sortBy(fn (Flight $flight) => array_search($flight->id, $returnIds, true))
+            ->values()
+            ->all();
+
+        return new Journey($outbound, $return);
     }
 }

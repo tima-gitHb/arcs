@@ -6,7 +6,9 @@
         ? $reservation->segments
         : $reservation->load('segments.flight')->segments;
     $hasReturn = $segments->contains(fn ($segment) => $segment->direction === SegmentDirection::Return);
-    $showDirectionHeaders = $hasReturn || $segments->count() > 1;
+    $legNumbers = $segments->pluck('leg')->unique()->sort()->values();
+    $isMultiCity = ! $hasReturn && $legNumbers->count() > 1;
+    $showDirectionHeaders = $hasReturn || ($segments->count() > 1 && ! $isMultiCity);
 
     if (! $reservation->relationLoaded('passengers')
         || $reservation->passengers->contains(fn ($p) => ! $p->relationLoaded('coupons'))) {
@@ -14,6 +16,44 @@
     }
 @endphp
 
+@if ($isMultiCity)
+@foreach ($legNumbers as $legNo)
+@php $legs = $segments->where('leg', $legNo)->values(); @endphp
+### Leg {{ $legNo }}
+
+@foreach ($legs as $index => $segment)
+@php
+    $flight = $segment->flight;
+    $previous = $index > 0 ? $legs[$index - 1]->flight : null;
+    $connection = $previous ? ConnectionTime::label($previous, $flight) : null;
+    $dep = $flight->departureLocal()?->format('d M Y H:i');
+    $arr = $flight->arrivalLocal()?->format('d M Y H:i');
+@endphp
+@if ($connection)
+*Connection at {{ $previous->destination }}: {{ $connection }}*
+
+@endif
+**{{ $flight->flight_no }}** · {{ $flight->origin }} → {{ $flight->destination }}
+- Departure ({{ $flight->origin }} local): {{ $dep ?? '—' }}
+- Arrival ({{ $flight->destination }} local): {{ $arr ?? '—' }}
+- Seats:
+@foreach ($reservation->passengers as $passenger)
+@php
+    $coupon = $passenger->coupons->firstWhere('flight_id', $flight->id);
+    $seatNo = $coupon?->seatAssignment?->seat?->seat_no;
+@endphp
+@if ($passenger->type === App\Enums\PassengerType::Infant)
+  - {{ $passenger->first_name }} {{ $passenger->last_name }}: No seat
+@elseif ($seatNo)
+  - {{ $passenger->first_name }} {{ $passenger->last_name }}: {{ $seatNo }}
+@else
+  - {{ $passenger->first_name }} {{ $passenger->last_name }}: Not assigned
+@endif
+@endforeach
+
+@endforeach
+@endforeach
+@else
 @foreach ([SegmentDirection::Outbound, SegmentDirection::Return] as $direction)
 @php $legs = $segments->where('direction', $direction)->values(); @endphp
 @if ($legs->isNotEmpty())
@@ -54,3 +94,4 @@
 @endforeach
 @endif
 @endforeach
+@endif

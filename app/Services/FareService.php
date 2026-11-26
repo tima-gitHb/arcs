@@ -11,11 +11,14 @@ use App\Models\Fare;
 use App\Models\Fee;
 use App\Models\Passenger;
 use App\Models\Reservation;
+use App\Models\ReservationSegment;
 use App\Models\TripFare;
+use Illuminate\Support\Collection;
 
 /**
  * The only place to compute a price. It reads the fares and fees tables, so changing a
  * price there (card M7) is all it takes. Trip fares (B14) override the per-route sum when set.
+ * Multi-city (CR-16): one trip fare (or route sum) per leg, added up.
  */
 class FareService
 {
@@ -77,10 +80,10 @@ class FareService
     }
 
     /**
-     * The price of a journey (B13b, SR-69): for every flight, each passenger's fare on that route (the
-     * route fare, else the default), added up. One line per flight and class/type. No extras.
-     * When a trip fare exists for the journey origin → final outbound destination (B14, CR-13/CR-14),
-     * that price is used instead (round_trip_cents when a return is booked and published).
+     * The price of a journey (B13b / B14 / CR-16, SR-69):
+     * - classic one-way / connection: trip fare origin→final outbound dest when set, else per-route sum
+     * - round trip: round_trip_cents when set, else one_way trip or per-route sum
+     * - multi-city (2+ legs, no return direction): trip fare (or route sum) per leg, added up
      */
     public function journeyQuote(Reservation $reservation): Quote
     {
@@ -92,17 +95,46 @@ class FareService
             ])
             ->all();
 
+        $legs = app(JourneyService::class)->legs($reservation);
+        $hasReturn = $reservation->segments->contains(
+            fn (ReservationSegment $segment) => $segment->direction === SegmentDirection::Return,
+        );
+
+        // Multi-city: every leg is priced on its own (CR-13 / CR-16).
+        if ($legs->count() > 1 && ! $hasReturn) {
+            return $this->multiCityQuote($legs, $passengers);
+        }
+
         $trip = $this->tripJourneyQuote($reservation, $passengers);
         if ($trip !== null) {
             return $trip;
         }
 
-        $lines = [];
-        foreach ($reservation->segments as $segment) {
-            $flight = $segment->flight;
+        return $this->routeSumQuote($reservation->segments, $passengers);
+    }
 
-            foreach ($this->quote($passengers, origin: $flight->origin, destination: $flight->destination)->lines as $line) {
-                $lines[] = ['label' => "{$flight->origin}→{$flight->destination} {$flight->flight_no}: {$line['label']}"] + $line;
+    /**
+     * @param  Collection<int, Collection<int, ReservationSegment>>  $legs
+     * @param  list<array{cabin_class: CabinClass, type: PassengerType}>  $passengers
+     */
+    private function multiCityQuote(Collection $legs, array $passengers): Quote
+    {
+        $lines = [];
+
+        foreach ($legs as $index => $segments) {
+            $origin = $segments->first()->flight->origin;
+            $destination = $segments->last()->flight->destination;
+            $legNo = $index + 1;
+
+            $trip = $this->tripFareLines($passengers, $origin, $destination, hasReturn: false, labelPrefix: "Leg {$legNo} {$origin}→{$destination}");
+            if ($trip !== null) {
+                array_push($lines, ...$trip);
+
+                continue;
+            }
+
+            foreach ($this->routeSumQuote($segments, $passengers)->lines as $line) {
+                $lines[] = ['label' => "Leg {$legNo}: {$line['label']}"] + $line;
             }
         }
 
@@ -128,7 +160,28 @@ class FareService
         $destination = $outbound->last()->flight->destination;
         $hasReturn = $segments->contains(fn ($segment) => $segment->direction === SegmentDirection::Return);
 
+        $lines = $this->tripFareLines($passengers, $origin, $destination, $hasReturn);
+        if ($lines === null) {
+            return null;
+        }
+
+        return new Quote($lines, array_sum(array_column($lines, 'amount_cents')), self::CURRENCY);
+    }
+
+    /**
+     * @param  list<array{cabin_class: CabinClass, type: PassengerType}>  $passengers
+     * @return list<array{label: string, quantity: int, unit_cents: int, amount_cents: int}>|null
+     */
+    private function tripFareLines(
+        array $passengers,
+        string $origin,
+        string $destination,
+        bool $hasReturn,
+        string $labelPrefix = '',
+    ): ?array {
         $lines = [];
+        $prefix = $labelPrefix !== '' ? $labelPrefix.' ' : "{$origin}→{$destination} ";
+
         foreach ($this->groupPassengers($passengers) as $group) {
             $tripFare = TripFare::query()
                 ->forTrip($origin, $destination)
@@ -144,11 +197,31 @@ class FareService
                 ? $tripFare->round_trip_cents
                 : $tripFare->one_way_cents;
 
-            $label = $hasReturn && $tripFare->round_trip_cents !== null
-                ? "{$origin}→{$destination} round-trip {$group['cabin_class']->label()} {$group['type']->label()}"
-                : "{$origin}→{$destination} trip {$group['cabin_class']->label()} {$group['type']->label()}";
+            $kind = $hasReturn && $tripFare->round_trip_cents !== null ? 'round-trip' : 'trip';
 
-            $lines[] = $this->line($label, $group['quantity'], $unit);
+            $lines[] = $this->line(
+                "{$prefix}{$kind} {$group['cabin_class']->label()} {$group['type']->label()}",
+                $group['quantity'],
+                $unit,
+            );
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param  Collection<int, ReservationSegment>  $segments
+     * @param  list<array{cabin_class: CabinClass, type: PassengerType}>  $passengers
+     */
+    private function routeSumQuote(Collection $segments, array $passengers): Quote
+    {
+        $lines = [];
+        foreach ($segments as $segment) {
+            $flight = $segment->flight;
+
+            foreach ($this->quote($passengers, origin: $flight->origin, destination: $flight->destination)->lines as $line) {
+                $lines[] = ['label' => "{$flight->origin}→{$flight->destination} {$flight->flight_no}: {$line['label']}"] + $line;
+            }
         }
 
         return new Quote($lines, array_sum(array_column($lines, 'amount_cents')), self::CURRENCY);

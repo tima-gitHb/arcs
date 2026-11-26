@@ -41,6 +41,22 @@ class StoreReservationRequest extends FormRequest
             $merge['outbound_flight_ids'] = [$this->integer('flight_id')];
         }
 
+        if ($this->input('journey_type') === 'multi_city' && is_array($this->input('legs'))) {
+            $flat = [];
+            foreach ($this->input('legs') as $leg) {
+                if (! is_array($leg)) {
+                    continue;
+                }
+                foreach ($leg as $flightId) {
+                    if ($flightId !== null && $flightId !== '') {
+                        $flat[] = (int) $flightId;
+                    }
+                }
+            }
+            $merge['outbound_flight_ids'] = $flat;
+            $merge['return_flight_ids'] = [];
+        }
+
         if (! $this->filled('journey_type')) {
             $outbound = $this->input('outbound_flight_ids', $merge['outbound_flight_ids'] ?? []);
             $return = $this->input('return_flight_ids', []);
@@ -112,11 +128,25 @@ class StoreReservationRequest extends FormRequest
         $maxPax = Limits::maxPassengersPerBooking();
 
         return [
-            'journey_type' => ['required', Rule::in(['one_way', 'connection', 'round_trip'])],
-            'outbound_flight_ids' => ['required', 'array', 'min:1', 'max:3'],
+            'journey_type' => ['required', Rule::in(['one_way', 'connection', 'round_trip', 'multi_city'])],
+            'outbound_flight_ids' => [
+                Rule::requiredIf(fn () => $this->input('journey_type') !== 'multi_city'),
+                'array',
+                'min:1',
+                'max:18',
+            ],
             'outbound_flight_ids.*' => ['integer', Rule::exists('flights', 'id')->where($bookable)],
             'return_flight_ids' => ['nullable', 'array', 'max:3'],
             'return_flight_ids.*' => ['integer', Rule::exists('flights', 'id')->where($bookable)],
+            'legs' => [
+                Rule::requiredIf(fn () => $this->input('journey_type') === 'multi_city'),
+                'nullable',
+                'array',
+                'min:2',
+                'max:6',
+            ],
+            'legs.*' => ['array', 'min:1', 'max:3'],
+            'legs.*.*' => ['integer', Rule::exists('flights', 'id')->where($bookable)],
             'flight_id' => ['nullable', 'integer'],
             'passengers' => ['required', 'array', 'min:1', 'max:'.$maxPax],
             'passengers.*.first_name' => ['required', 'string', 'max:255'],
@@ -148,9 +178,12 @@ class StoreReservationRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'journey_type.required' => 'Choose one-way, connection or round trip.',
+            'journey_type.required' => 'Choose one-way, connection, round trip or multi-city.',
             'outbound_flight_ids.required' => 'Choose the outbound flight(s).',
             'outbound_flight_ids.min' => 'Choose the outbound flight(s).',
+            'legs.required' => 'Add at least two multi-city legs.',
+            'legs.min' => 'A multi-city trip needs at least two legs.',
+            'legs.max' => 'A multi-city trip cannot have more than 6 legs.',
             'passengers.required' => 'Add at least one passenger.',
             'passengers.min' => 'Add at least one passenger.',
             'passengers.max' => 'A booking cannot have more than '.Limits::maxPassengersPerBooking().' passengers.',
@@ -203,6 +236,7 @@ class StoreReservationRequest extends FormRequest
                 $type = $this->input('journey_type');
                 $outboundIds = array_values(array_map('intval', (array) $this->input('outbound_flight_ids', [])));
                 $returnIds = array_values(array_map('intval', (array) $this->input('return_flight_ids', [])));
+                $legs = $this->normalizedLegs();
 
                 if ($type === 'one_way' && count($outboundIds) !== 1) {
                     $validator->errors()->add('outbound_flight_ids', 'One-way needs exactly one outbound flight.');
@@ -213,7 +247,17 @@ class StoreReservationRequest extends FormRequest
                 if ($type === 'round_trip' && $returnIds === []) {
                     $validator->errors()->add('return_flight_ids', 'Round trip needs at least one return flight.');
                 }
-                if ($type !== 'round_trip' && $returnIds !== []) {
+                if ($type === 'multi_city') {
+                    if (count($legs) < 2) {
+                        $validator->errors()->add('legs', 'A multi-city trip needs at least two legs.');
+                    }
+                    if (count($legs) > 6) {
+                        $validator->errors()->add('legs', 'A multi-city trip cannot have more than 6 legs.');
+                    }
+                    if ($returnIds !== []) {
+                        $validator->errors()->add('return_flight_ids', 'Return flights are only for round trip.');
+                    }
+                } elseif ($type !== 'round_trip' && $returnIds !== []) {
                     $validator->errors()->add('return_flight_ids', 'Return flights are only for round trip.');
                 }
 
@@ -435,6 +479,17 @@ class StoreReservationRequest extends FormRequest
      */
     public function outboundFlightIds(): array
     {
+        if ($this->input('journey_type') === 'multi_city') {
+            $flat = [];
+            foreach ($this->cityLegs() as $leg) {
+                foreach ($leg as $id) {
+                    $flat[] = (int) $id;
+                }
+            }
+
+            return $flat;
+        }
+
         return array_values(array_map('intval', (array) $this->validated('outbound_flight_ids')));
     }
 
@@ -444,5 +499,37 @@ class StoreReservationRequest extends FormRequest
     public function returnFlightIds(): array
     {
         return array_values(array_map('intval', (array) ($this->validated('return_flight_ids') ?? [])));
+    }
+
+    /**
+     * Multi-city legs as lists of flight ids (CR-16).
+     *
+     * @return list<list<int>>
+     */
+    public function cityLegs(): array
+    {
+        return $this->normalizedLegs();
+    }
+
+    /**
+     * @return list<list<int>>
+     */
+    private function normalizedLegs(): array
+    {
+        $legs = [];
+        foreach ((array) $this->input('legs', []) as $leg) {
+            if (! is_array($leg)) {
+                continue;
+            }
+            $ids = array_values(array_filter(array_map(
+                fn ($id) => $id === null || $id === '' ? null : (int) $id,
+                $leg,
+            )));
+            if ($ids !== []) {
+                $legs[] = $ids;
+            }
+        }
+
+        return $legs;
     }
 }
