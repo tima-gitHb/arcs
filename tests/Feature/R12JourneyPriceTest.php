@@ -52,7 +52,7 @@ class R12JourneyPriceTest extends TestCase
         $this->assertNotNull($route);
         $this->assertSame(19000, $route['cents']);
 
-        $page->assertSee('Each segment uses its route fare')
+        $page->assertSee('Trip fare origin→destination when published')
             ->assertSee('id="price-lines"', false);
     }
 

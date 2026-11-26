@@ -34,6 +34,7 @@ class R11BookingBuilderTest extends TestCase
             ->assertSee('value="round_trip"', false)
             ->assertSee('With connection')
             ->assertSee('Round trip')
+            ->assertSee('Multi-city')
             ->assertSee('Outbound')
             ->assertSee('connecting flights')
             ->assertSee('Same flight cannot be picked twice');
