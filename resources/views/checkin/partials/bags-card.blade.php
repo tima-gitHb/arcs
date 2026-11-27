@@ -151,6 +151,7 @@
     @if ($passenger->checkinDetailsEditable())
         <form method="POST" action="{{ route('checkin.bags.store', $passenger) }}" class="mt-6 flex flex-wrap items-end gap-4 border-t pt-4" style="border-color: var(--arcs-border);" x-show="step === 2" x-cloak>
             @csrf
+            <input type="hidden" name="leg" value="{{ $activeLeg ?? 1 }}">
             <div>
                 <x-input-label for="bag-weight" value="Weight (kg)" />
                 <div class="mt-1 flex flex-wrap items-center gap-2">

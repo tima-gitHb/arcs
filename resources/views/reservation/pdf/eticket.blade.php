@@ -66,7 +66,9 @@
         @endphp
 
         @if ($connection)
-            <div class="connection">Connection at {{ $previous->destination }}: {{ $connection }}</div>
+            <div class="connection{{ ConnectionTime::isTight($previous, $flight) ? ' tight' : '' }}">
+                Connection at {{ $previous->destination }}: {{ $connection }}{{ ConnectionTime::isTight($previous, $flight) ? ' · tight' : '' }}
+            </div>
         @endif
 
         <div class="leg">

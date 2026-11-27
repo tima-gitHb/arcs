@@ -5,7 +5,7 @@ Booking confirmed. Give this PNR to the passenger for check-in.
 
 @include('emails.partials.itinerary', ['reservation' => $reservation])
 
-<x-receipt :payment="$payment" class="my-4" />
+@include('emails.partials.payment', ['payment' => $payment])
 
 ## Passengers
 

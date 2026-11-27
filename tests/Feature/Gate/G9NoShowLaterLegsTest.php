@@ -54,11 +54,12 @@ class G9NoShowLaterLegsTest extends TestCase
         $this->statuses->closeBoarding($leg1, $this->gate);
 
         $this->assertSame(
-            [PassengerStatus::Boarded->value, PassengerStatus::CheckedIn->value, PassengerStatus::CheckedIn->value],
+            [PassengerStatus::Boarded->value, PassengerStatus::Booked->value, PassengerStatus::Booked->value],
             $this->statusesOf($passenger),
         );
 
         $this->travelTo(Carbon::parse('2026-11-17 06:00', 'UTC'));
+        $this->checkInLeg($passenger, 2, 'CAI');
         $this->openBoarding($leg2);
         $this->statuses->closeBoarding($leg2, $this->gate);
 
@@ -162,14 +163,32 @@ class G9NoShowLaterLegsTest extends TestCase
 
     private function checkIn(Passenger $passenger): void
     {
+        // C23: check-in is one leg at a time. G9 needs leg 1 CheckedIn (and later legs still Booked
+        // until boarded/no-show), so only complete leg 1 here. Leg 2 is checked in when a test needs it.
         $checkin = User::factory()->create(['role' => Role::Checkin, 'airport_code' => 'BEY']);
-        app(BoardingPassService::class)->completeCheckIn($passenger, $checkin);
+        app(BoardingPassService::class)->completeCheckIn($passenger, $checkin, null, null, 1);
+    }
+
+    private function checkInLeg(Passenger $passenger, int $leg, string $station): void
+    {
+        $checkin = User::factory()->create(['role' => Role::Checkin, 'airport_code' => $station]);
+        $flight = app(JourneyService::class)->flightsOfLeg($passenger->reservation, $leg)->first();
+        if ($flight !== null && $flight->status === FlightStatus::Scheduled) {
+            $this->statuses->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->gate);
+        }
+        app(BoardingPassService::class)->completeCheckIn($passenger, $checkin, null, null, $leg);
     }
 
     private function openBoarding(Flight $flight): void
     {
-        $this->statuses->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->gate);
-        $this->statuses->setFlightStatus($flight, FlightStatus::Boarding, $this->gate);
+        $flight = $flight->fresh();
+        if ($flight->status === FlightStatus::Scheduled) {
+            $this->statuses->setFlightStatus($flight, FlightStatus::CheckinOpen, $this->gate);
+            $flight = $flight->fresh();
+        }
+        if ($flight->status === FlightStatus::CheckinOpen) {
+            $this->statuses->setFlightStatus($flight, FlightStatus::Boarding, $this->gate);
+        }
     }
 
     private function seatCoupon(Coupon $coupon): void

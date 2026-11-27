@@ -37,25 +37,29 @@ class BagService
     /**
      * Add a bag with a new unique tag, write an audit row and refresh the allowance flags.
      */
-    public function add(Passenger $passenger, float $weightKg, BagType $type, User $by, ?SegmentDirection $direction = null): Bag
+    public function add(Passenger $passenger, float $weightKg, BagType $type, User $by, ?SegmentDirection $direction = null, ?int $leg = null): Bag
     {
-        return DB::transaction(function () use ($passenger, $weightKg, $type, $by, $direction) {
+        return DB::transaction(function () use ($passenger, $weightKg, $type, $by, $direction, $leg) {
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($passenger->id);
-            // The direction being checked in; the bag goes to its final destination (SR-67).
-            $direction ??= $this->journeys->directionFor($passenger, $by);
+            // The leg being checked in; the bag goes to that leg's final destination (SR-67 / C23).
+            $leg ??= $this->journeys->legFor($passenger, $by, $direction);
+            $direction ??= $this->journeys->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction
+                ?? $this->journeys->directionFor($passenger, $by);
 
-            if (! in_array($this->journeys->statusOf($passenger, $direction), [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
+            if (! in_array($this->journeys->statusOfLeg($passenger, $leg), [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
                 throw new BagNotAllowed('Bags can only be added for a booked or checked-in passenger.');
             }
 
-            $allowance = $this->allowances->for($passenger, $direction);
+            $allowance = $this->allowances->for($passenger, $direction, $leg);
             if ($weightKg > $allowance->hardMaxKg) {
                 throw new BagNotAllowed('Bag over 32 kg must be repacked');
             }
 
+            $destination = $this->journeys->finalDestinationOfLeg($passenger->reservation, $leg);
+
             $bag = $passenger->bags()->create([
                 'direction' => $direction,
-                'destination' => $this->journeys->finalDestination($passenger->reservation, $direction),
+                'destination' => $destination,
                 'tag_no' => $this->newTag($passenger, $direction),
                 'type' => $type,
                 // Wheelchairs and strollers go back to the passenger at the aircraft door.
@@ -86,7 +90,12 @@ class BagService
         DB::transaction(function () use ($bag, $by) {
             $passenger = Passenger::query()->lockForUpdate()->findOrFail($bag->passenger_id);
 
-            if ($this->journeys->statusOf($passenger, $bag->direction) !== PassengerStatus::Booked) {
+            $bagLeg = $this->legNumberForBag($passenger, $bag);
+            $status = $bagLeg !== null
+                ? $this->journeys->statusOfLeg($passenger, $bagLeg)
+                : $this->journeys->statusOf($passenger, $bag->direction);
+
+            if ($status !== PassengerStatus::Booked) {
                 throw new BagNotAllowed('A bag can only be removed before check-in is confirmed.');
             }
 
@@ -143,15 +152,28 @@ class BagService
      * allowed kg = (allowed pieces + extra bags) × kg per bag (+ prepaid extra_kg).
      * Wheelchairs and strollers are ignored. Missing fees → quote null ("Price not set").
      */
-    public function excess(Passenger $passenger, ?SegmentDirection $direction = null): BaggageExcess
+    public function excess(Passenger $passenger, ?SegmentDirection $direction = null, ?int $leg = null): BaggageExcess
     {
-        // Each direction has its own allowance and its own bags (B13b). Default: the passenger's current direction.
-        $direction ??= $this->journeys->directionOf($passenger);
-        $allowance = $this->allowances->for($passenger, $direction);
-        $counted = $passenger->bags()
+        // Each leg/direction has its own allowance and bags (B13b / C23). Default: current direction/leg.
+        $leg ??= $direction === null ? $this->journeys->legFor($passenger) : null;
+        if ($leg !== null) {
+            $direction ??= $this->journeys->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction
+                ?? $this->journeys->directionOf($passenger);
+        } else {
+            $direction ??= $this->journeys->directionOf($passenger);
+        }
+
+        $allowance = $this->allowances->for($passenger, $direction, $leg);
+        $bagsQuery = $passenger->bags()
             ->where('direction', $direction)
             ->whereNull('offloaded_at')
-            ->orderBy('id')
+            ->orderBy('id');
+
+        if ($leg !== null) {
+            $bagsQuery->where('destination', $this->journeys->finalDestinationOfLeg($passenger->reservation, $leg));
+        }
+
+        $counted = $bagsQuery
             ->get()
             ->filter(fn (Bag $bag) => $bag->type->countsTowardAllowance());
 
@@ -201,9 +223,9 @@ class BagService
      * What is still owed for the current pooled excess after prior payments (C11).
      * Zero when there is no excess, fees are missing, or payments cover the quote.
      */
-    public function excessDueCents(Passenger $passenger, ?SegmentDirection $direction = null): int
+    public function excessDueCents(Passenger $passenger, ?SegmentDirection $direction = null, ?int $leg = null): int
     {
-        $excess = $this->excess($passenger, $direction);
+        $excess = $this->excess($passenger, $direction, $leg);
 
         if (! $excess->hasExcess() || ! $excess->priceIsSet()) {
             return 0;
@@ -272,5 +294,19 @@ class BagService
         }
 
         throw new RuntimeException('Could not generate a unique bag tag.');
+    }
+
+    /**
+     * Infer the bag's leg from its destination (C23 — no bags.leg column).
+     */
+    private function legNumberForBag(Passenger $passenger, Bag $bag): ?int
+    {
+        foreach ($this->journeys->legNumbers($passenger->reservation) as $leg) {
+            if ($this->journeys->finalDestinationOfLeg($passenger->reservation, $leg) === $bag->destination) {
+                return $leg;
+            }
+        }
+
+        return null;
     }
 }

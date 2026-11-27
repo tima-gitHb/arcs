@@ -126,17 +126,12 @@ class ManifestService
             return null;
         }
 
-        $gap = $inbound->arrives_at !== null && $flight->departure_at !== null
-            ? (int) $inbound->arrives_at->diffInMinutes($flight->departure_at, false)
-            : null;
-        $minimum = (int) ($inbound->destinationAirport?->min_connection_minutes ?? 60);
-
         return [
             'flight_no' => $inbound->flight_no,
             'arrives_at' => $inbound->arrives_at,
             'airport' => $inbound->destination,
             'label' => ConnectionTime::label($inbound, $flight),
-            'tight' => $gap !== null && $gap < $minimum,
+            'tight' => ConnectionTime::isTight($inbound, $flight),
         ];
     }
 

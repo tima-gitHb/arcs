@@ -1,11 +1,15 @@
 <x-app-layout>
     @php
-        // The flight this screen is about (B13b: the first of the agent's direction, or ?flight=).
+        // The flight this screen is about (B13b / C23: first of the active leg, or ?flight=).
         $flight ??= $passenger->reservation->flight;
+        $activeLeg ??= 1;
+        $legStatus ??= $passenger->status;
+        $hasMultipleLegs ??= false;
+        $legSummaries ??= collect();
         $currentSeat = $passenger->seatAssignment?->seat;
-        $picking = $passenger->status === \App\Enums\PassengerStatus::Booked
+        $picking = $legStatus === \App\Enums\PassengerStatus::Booked
             && $passenger->type !== \App\Enums\PassengerType::Infant;
-        $canChange = $passenger->status === \App\Enums\PassengerStatus::CheckedIn
+        $canChange = $legStatus === \App\Enums\PassengerStatus::CheckedIn
             && $currentSeat
             && ! $flight->isBoardingClosed()
             && $flight->status !== \App\Enums\FlightStatus::Cancelled;
@@ -13,7 +17,7 @@
 
         // Booked opens on Documents. Checked in (and later statuses) open on Done.
         // A validation error, an open edit, or Change seat opens that step instead.
-        $initialStep = $passenger->status === \App\Enums\PassengerStatus::Booked ? 0 : 5;
+        $initialStep = $legStatus === \App\Enums\PassengerStatus::Booked ? 0 : 5;
         if ($errors->getBag('addDocument')->any() || $errors->getBag('editDocument')->any() || $editing) {
             $initialStep = 0;
         } elseif ($changingSeat || $errors->has('seat_id') || $errors->has('seat')) {
@@ -39,15 +43,14 @@
         $bagKg = $passenger->bags->sum('weight_kg');
         $connectionLabel = '—';
         $connectionChip = null;
+        $connectionTight = false;
         if ($legs->count() > 1) {
-            foreach ($legs as $index => $leg) {
-                if ($index < $legs->count() - 1 && $leg->arrives_at) {
+            foreach ($legs as $index => $legFlight) {
+                if ($index < $legs->count() - 1 && $legFlight->arrives_at) {
                     $next = $legs[$index + 1];
-                    $gapMinutes = (int) abs($leg->arrives_at->diffInMinutes($next->departure_at, false));
-                    $hours = intdiv($gapMinutes, 60);
-                    $mins = $gapMinutes % 60;
-                    $connectionLabel = $hours > 0 ? $hours.' h '.str_pad((string) $mins, 2, '0', STR_PAD_LEFT) : $mins.' min';
-                    $connectionChip = 'Connection · '.$connectionLabel;
+                    $connectionLabel = \App\Support\ConnectionTime::label($legFlight, $next) ?? '—';
+                    $connectionTight = \App\Support\ConnectionTime::isTight($legFlight, $next);
+                    $connectionChip = 'Connection · '.$connectionLabel.($connectionTight ? ' · tight' : '');
                     break;
                 }
             }
@@ -58,10 +61,10 @@
             ->filter()
             ->implode(' · ') ?: ($currentSeat?->seat_no ?? '—');
 
-        $allowance = app(\App\Services\AllowanceService::class)->for($passenger);
-        $excess = app(\App\Services\BagService::class)->excess($passenger);
+        $allowance = app(\App\Services\AllowanceService::class)->for($passenger, null, $activeLeg);
+        $excess = app(\App\Services\BagService::class)->excess($passenger, null, $activeLeg);
         $bagsService = app(\App\Services\BagService::class);
-        $dueCents = $excess->priceIsSet() ? $bagsService->excessDueCents($passenger) : 0;
+        $dueCents = $excess->priceIsSet() ? $bagsService->excessDueCents($passenger, null, $activeLeg) : 0;
         $paidCents = $bagsService->excessPaidCents($passenger);
         $servicesCount = $passenger->specialServices->count();
 
@@ -103,14 +106,17 @@
                         @if ($index < $journeyFlights->count() - 1 && $leg->arrives_at)
                             @php
                                 $next = $journeyFlights[$index + 1];
-                                $gap = (int) $leg->arrives_at->diffInMinutes($next->departure_at, false);
+                                $gapLabel = \App\Support\ConnectionTime::label($leg, $next);
+                                $gapTight = \App\Support\ConnectionTime::isTight($leg, $next);
                             @endphp
-                            <li class="pl-1 text-xs text-gray-500">Connection at {{ $leg->destination }}: {{ $gap }} min</li>
+                            <li @class(['pl-1 text-xs', 'text-red-600 font-semibold' => $gapTight, 'text-gray-500' => ! $gapTight])>
+                                Connection at {{ $leg->destination }}: {{ $gapLabel }}{{ $gapTight ? ' · tight' : '' }}
+                            </li>
                         @endif
                     @endforeach
                 </ul>
                 <p class="mt-3 text-xs text-gray-500">
-                    Connection to {{ $journeyFlights->last()->destination }}: check-in covers every flight, bags go to {{ $journeyFlights->last()->destination }}.
+                    Connection to {{ $journeyFlights->last()->destination }}: check-in covers every flight of this leg, bags go to {{ $journeyFlights->last()->destination }}.
                 </p>
             @else
                 <p class="mt-3 text-sm font-medium text-gray-900">
@@ -182,7 +188,7 @@
                 <div class="min-w-0">
                     <div class="flex flex-wrap items-center gap-2">
                         <h1 class="text-[22px] font-bold tracking-tight text-gray-900 sm:text-2xl">{{ $passenger->first_name }} {{ $passenger->last_name }}</h1>
-                        <x-status-badge :status="$passenger->status" />
+                        <x-status-badge :status="$legStatus" />
                     </div>
                     <p class="mt-1 text-sm text-gray-500">
                         {{ $passenger->type->value }}
@@ -210,11 +216,52 @@
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 @if ($connectionChip)
-                    <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold" style="background: #F8E9C8; color: #5C4810;">{{ $connectionChip }}</span>
+                    <span @class([
+                        'inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold',
+                    ]) style="{{ $connectionTight ? 'background:#FDE8E8;color:#9B1C1C;' : 'background:#F8E9C8;color:#5C4810;' }}">{{ $connectionChip }}</span>
                 @endif
                 <a href="{{ route('checkin.home', ['q' => $passenger->reservation->pnr]) }}" class="arcs-btn-secondary">← Back to search</a>
             </div>
         </div>
+
+        @if ($hasMultipleLegs)
+            <div class="mb-4 flex flex-wrap gap-2" data-leg-strip role="tablist" aria-label="Journey legs">
+                @foreach ($legSummaries as $summary)
+                    @php
+                        $isActive = (int) $summary['leg'] === (int) $activeLeg;
+                        $done = in_array($summary['status'], [
+                            \App\Enums\PassengerStatus::CheckedIn,
+                            \App\Enums\PassengerStatus::Boarded,
+                        ], true);
+                        $cancelled = in_array($summary['status'], [
+                            \App\Enums\PassengerStatus::Cancelled,
+                            \App\Enums\PassengerStatus::NoShow,
+                        ], true);
+                        $opens = $summary['first_flight'];
+                    @endphp
+                    <a
+                        href="{{ route('checkin.passengers.show', ['passenger' => $passenger, 'leg' => $summary['leg']]) }}"
+                        @class([
+                            'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold',
+                            'border-navy bg-navy text-white' => $isActive,
+                            'border-gray-200 bg-white text-gray-700 hover:border-navy/40' => ! $isActive,
+                        ])
+                    >
+                        Leg {{ $summary['leg'] }}
+                        @if ($done)
+                            · ✓ {{ strtolower($summary['status']->label()) }}
+                        @elseif ($cancelled)
+                            · {{ strtolower($summary['status']->label()) }}
+                        @elseif (! $summary['window_open'] && $opens)
+                            · {{ $summary['origin'] }} → {{ $summary['destination'] }} · check-in opens
+                            <x-local-time :at="$opens->checkin_opens_at" :airport="$opens->origin" format="d M H:i" />
+                        @else
+                            · {{ $summary['origin'] }} → {{ $summary['destination'] }}
+                        @endif
+                    </a>
+                @endforeach
+            </div>
+        @endif
 
         @if (isset($journeyFlights) && $journeyFlights->count() > 1)
             {{-- Through check-in (C14 / SR-66): whole direction, local times, connection gap. Kept for asserts. --}}
@@ -230,15 +277,15 @@
                             @endif
                             · Seat {{ $seatsByFlight->get($leg->id)?->seat?->seat_no ?? 'none' }}
                             @unless ($leg->is($flight))
-                                <a href="{{ route('checkin.passengers.show', [$passenger, 'flight' => $leg->id]) }}">Seat on {{ $leg->flight_no }}</a>
+                                <a href="{{ route('checkin.passengers.show', [$passenger, 'flight' => $leg->id, 'leg' => $activeLeg]) }}">Seat on {{ $leg->flight_no }}</a>
                             @endunless
                         </li>
                         @if ($index < $journeyFlights->count() - 1 && $leg->arrives_at)
                             @php
                                 $next = $journeyFlights[$index + 1];
-                                $gap = (int) $leg->arrives_at->diffInMinutes($next->departure_at, false);
+                                $gapLabel = \App\Support\ConnectionTime::label($leg, $next);
                             @endphp
-                            <li>Connection at {{ $leg->destination }}: {{ $gap }} min</li>
+                            <li>Connection at {{ $leg->destination }}: {{ $gapLabel }}</li>
                         @endif
                     @endforeach
                 </ul>
@@ -305,7 +352,7 @@
 
                     @if (! $editable)
                         <p class="mt-4 text-sm text-gray-600">
-                            Documents can no longer be changed: this passenger is {{ strtolower($passenger->status->label()) }}.
+                            Documents can no longer be changed: this passenger is {{ strtolower($legStatus->label()) }}.
                         </p>
                     @endif
 
@@ -361,7 +408,7 @@
 
                         @include('checkin.partials.seat-card')
 
-                        @if (in_array($passenger->status, [\App\Enums\PassengerStatus::Booked, \App\Enums\PassengerStatus::CheckedIn], true)
+                        @if (in_array($legStatus, [\App\Enums\PassengerStatus::Booked, \App\Enums\PassengerStatus::CheckedIn], true)
                             && $passenger->type !== \App\Enums\PassengerType::Infant
                             && ! $flight->isBoardingClosed())
                             <x-panel>
@@ -431,10 +478,11 @@
                     </x-panel>
                 @endif
 
-                @if ($passenger->status === \App\Enums\PassengerStatus::Booked)
+                @if ($legStatus === \App\Enums\PassengerStatus::Booked)
                     {{-- Completes check-in: StatusService::checkIn(), then the boarding pass (C5). --}}
                     <form method="POST" action="{{ route('checkin.passengers.confirm', $passenger) }}">
                         @csrf
+                        <input type="hidden" name="leg" value="{{ $activeLeg }}">
                         @include('checkin.partials.entry-reason')
                         <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
                             <button type="button" class="arcs-btn-ghost" @click="go(3)">← Back</button>
@@ -460,7 +508,7 @@
             </div>
 
             <div x-show="step === 5" class="space-y-6">
-                @if ($passenger->status === \App\Enums\PassengerStatus::CheckedIn || $passenger->status === \App\Enums\PassengerStatus::Boarded)
+                @if ($legStatus === \App\Enums\PassengerStatus::CheckedIn || $legStatus === \App\Enums\PassengerStatus::Boarded)
                     <x-panel>
                         <div class="flex flex-wrap items-start justify-between gap-4">
                             <div class="flex items-start gap-4">
