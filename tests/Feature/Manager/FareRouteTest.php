@@ -76,6 +76,8 @@ class FareRouteTest extends TestCase
                 'ExcessKg' => '10.00',
                 'SportsEquipment' => '75.00',
                 'Pet' => '60.00',
+                'Cancellation' => '75.00',
+                'Change' => '50.00',
             ],
         ];
     }

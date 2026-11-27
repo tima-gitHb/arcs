@@ -329,3 +329,26 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Cause: the B12 test expected the old legend order; the new legend lists the states in a different order.
 - Fix: test updated to the new legend order; seat-map behaviour unchanged.
 - Status: Fixed
+
+## BUG-029 · Weekly schedule skipped the first valid day (timezone compare)
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 1)
+- Card / branch: Feature 1 · feature/fees-weekly-schedules
+- Where: FlightSchedule::isValidOn · GenerateFlightsFromSchedule
+- Severity: Major
+- Steps: 1. Create Mon/Wed/Fri schedule valid_from = first Monday 2. Generate 4 weeks
+- Expected: 12 flights including the valid_from Monday
+- Actual: 11 flights; first local day skipped. Date-column midnight UTC compared to origin-local midnight (earlier in UTC).
+- Status: Fixed
+- Fix: compare `toDateString()` only in `isValidOn`
+- Retested: WeeklyScheduleTest (Mon/Wed/Fri + DST)
+
+## BUG-030 · B13bMigrationTest rollback step count stale after new migration
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 1)
+- Card / branch: Feature 1 · feature/fees-weekly-schedules
+- Where: tests/Feature/B13bMigrationTest.php B13B_STEPS
+- Severity: Minor
+- Steps: 1. Add flight_schedules migration 2. php artisan test --filter=B13bMigrationTest
+- Expected: rollback still reaches pre-segment schema
+- Actual: reservation_segments still present after --step=11
+- Status: Fixed
+- Fix: B13B_STEPS 11 → 12 (include flight_schedules)

@@ -26,7 +26,7 @@ use Tests\TestCase;
  *   PUT  manager.fares.update   fields, all amounts in dollars:
  *                               fares[<cabin>][<type>]   cabin = economy|premium|business,
  *                                                        type = adult|child|infant   (9 values)
- *                               fees[<FeeCode value>]    ExtraBag|ExcessKg|SportsEquipment|Pet   (4 values)
+ *                               fees[<FeeCode value>]    ExtraBag|ExcessKg|SportsEquipment|Pet|Cancellation|Change
  * Menu item: 'Fares and fees' => 'manager.fares'.
  * Audit: field "fare Business Adult" / "fee ExtraBag", old and new as formatted dollars ("$800.00"),
  * no passenger and no flight. Errors are under keys like fares.business.adult and fees.ExtraBag.
@@ -43,7 +43,7 @@ class FareTest extends TestCase
 
         $this->travelTo('2026-11-10 10:00:00');
 
-        // 9 fares and 4 fees, in cents: see FareSeeder (Business Adult 80000 = $800.00, Extra bag 5000 = $50.00).
+        // 9 fares and 6 fees, in cents: see FareSeeder (Business Adult 80000 = $800.00, Extra bag 5000 = $50.00).
         $this->seed(FareSeeder::class);
         $this->manager = $this->actingAsRole(Role::Manager);
     }
@@ -67,6 +67,8 @@ class FareTest extends TestCase
                 'ExcessKg' => '10.00',
                 'SportsEquipment' => '75.00',
                 'Pet' => '60.00',
+                'Cancellation' => '75.00',
+                'Change' => '50.00',
             ],
         ], $overrides);
     }
@@ -104,15 +106,19 @@ class FareTest extends TestCase
             ->assertSee('value="250.00"', false)
             ->assertSee('value="187.50"', false)
             ->assertSee('value="800.00"', false)
-            // 4 fees, labelled as in the FeeCode enum.
+            // 6 fees, labelled as in the FeeCode enum.
             ->assertSee('name="fees[ExtraBag]"', false)
             ->assertSee('name="fees[ExcessKg]"', false)
             ->assertSee('name="fees[SportsEquipment]"', false)
             ->assertSee('name="fees[Pet]"', false)
+            ->assertSee('name="fees[Cancellation]"', false)
+            ->assertSee('name="fees[Change]"', false)
             ->assertSee('Extra bag')
             ->assertSee('Excess baggage (per kg)')
             ->assertSee('Sports equipment')
             ->assertSee('Pet')
+            ->assertSee('Cancellation')
+            ->assertSee('Change')
             ->assertSee('value="75.00"', false);
     }
 
@@ -121,7 +127,7 @@ class FareTest extends TestCase
         $html = $this->get(route('manager.fares'))->getContent();
 
         $this->assertSame(9, preg_match_all('/name="fares\[\w+\]\[\w+\]"/', $html));
-        $this->assertSame(4, preg_match_all('/name="fees\[\w+\]"/', $html));
+        $this->assertSame(6, preg_match_all('/name="fees\[\w+\]"/', $html));
     }
 
     public function test_the_manager_menu_has_the_fares_item(): void
@@ -228,9 +234,9 @@ class FareTest extends TestCase
             'fees' => ['SportsEquipment' => '80.00'],
         ]))->assertSessionHasNoErrors();
 
-        // Still exactly 9 fares and 4 fees, and they are the same rows (same ids), only with new amounts.
+        // Still exactly 9 fares and 6 fees, and they are the same rows (same ids), only with new amounts.
         $this->assertSame(9, Fare::count());
-        $this->assertSame(4, Fee::count());
+        $this->assertSame(6, Fee::count());
         $this->assertSame($fareIds, Fare::orderBy('id')->pluck('id')->all());
         $this->assertSame($feeIds, Fee::orderBy('id')->pluck('id')->all());
     }
@@ -243,7 +249,7 @@ class FareTest extends TestCase
         ]));
 
         $this->assertSame(9, Fare::count());
-        $this->assertSame(4, Fee::count());
+        $this->assertSame(6, Fee::count());
         $this->assertSame(0, Fee::where('code', 'Parachute')->count());
     }
 

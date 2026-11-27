@@ -247,6 +247,34 @@ class FareService
     /**
      * @return array{label: string, quantity: int, unit_cents: int, amount_cents: int}
      */
+    /**
+     * Cancellation fee: amount × passengers × legs (Sprint 4 Feature 1).
+     */
+    public function cancellationFee(int $passengers, int $legs): Quote
+    {
+        $quantity = max(0, $passengers) * max(0, $legs);
+
+        return new Quote(
+            $quantity > 0 ? [$this->feeLine(FeeCode::Cancellation, $quantity)] : [],
+            $quantity > 0 ? $this->feeLine(FeeCode::Cancellation, $quantity)['amount_cents'] : 0,
+            self::CURRENCY,
+        );
+    }
+
+    /**
+     * Change fee: amount × passengers × legs (Sprint 4 Feature 1).
+     */
+    public function changeFee(int $passengers, int $legs): Quote
+    {
+        $quantity = max(0, $passengers) * max(0, $legs);
+
+        return new Quote(
+            $quantity > 0 ? [$this->feeLine(FeeCode::Change, $quantity)] : [],
+            $quantity > 0 ? $this->feeLine(FeeCode::Change, $quantity)['amount_cents'] : 0,
+            self::CURRENCY,
+        );
+    }
+
     private function feeLine(FeeCode $code, int $quantity): array
     {
         $cents = Fee::query()->where('code', $code)->value('amount_cents');
