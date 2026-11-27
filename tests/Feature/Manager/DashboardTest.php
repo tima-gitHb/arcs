@@ -103,9 +103,25 @@ class DashboardTest extends TestCase
 
     public function test_SR41_only_todays_flights_appear(): void
     {
+        // Today: use the usual helper. Yesterday / tomorrow must not have a check-in window
+        // open now (BUG-013 also lists window-open flights), so build them with closed windows.
         $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => $this->flightNo('901')]);
-        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => $this->flightNo('902'), 'departure_at' => now()->subDay()]);
-        $this->flightWithStatus(FlightStatus::Scheduled, ['flight_no' => $this->flightNo('903'), 'departure_at' => now()->addDay()]);
+        Flight::factory()->create([
+            'flight_no' => $this->flightNo('902'),
+            'origin' => 'BEY',
+            'destination' => 'DXB',
+            'departure_at' => now()->subDay(),
+            'checkin_opens_at' => now()->subDay()->subHours(3),
+            'checkin_closes_at' => now()->subDay()->subMinutes(45),
+        ]);
+        Flight::factory()->create([
+            'flight_no' => $this->flightNo('903'),
+            'origin' => 'BEY',
+            'destination' => 'FCO',
+            'departure_at' => now()->addDay(),
+            'checkin_opens_at' => now()->addDay()->subHours(3),
+            'checkin_closes_at' => now()->addDay()->subMinutes(45),
+        ]);
 
         $this->actingAsRole('manager');
 

@@ -26,8 +26,12 @@
                         @endphp
 
                         @if ($connection)
-                            <li class="rounded-md border border-dashed border-navy/20 bg-[#F7FAFD] px-3 py-2 text-sm text-navy">
-                                Connection at {{ $previous->destination }}: {{ $connection }}
+                            <li @class([
+                                'rounded-md border border-dashed px-3 py-2 text-sm',
+                                'border-red-300 bg-red-50 text-red-700 font-semibold' => ConnectionTime::isTight($previous, $flight),
+                                'border-navy/20 bg-[#F7FAFD] text-navy' => ! ConnectionTime::isTight($previous, $flight),
+                            ])>
+                                Connection at {{ $previous->destination }}: {{ $connection }}{{ ConnectionTime::isTight($previous, $flight) ? ' · tight' : '' }}
                             </li>
                         @endif
 
@@ -59,8 +63,12 @@
                         @endphp
 
                         @if ($connection)
-                            <li class="rounded-md border border-dashed border-navy/20 bg-[#F7FAFD] px-3 py-2 text-sm text-navy">
-                                Connection at {{ $previous->destination }}: {{ $connection }}
+                            <li @class([
+                                'rounded-md border border-dashed px-3 py-2 text-sm',
+                                'border-red-300 bg-red-50 text-red-700 font-semibold' => ConnectionTime::isTight($previous, $flight),
+                                'border-navy/20 bg-[#F7FAFD] text-navy' => ! ConnectionTime::isTight($previous, $flight),
+                            ])>
+                                Connection at {{ $previous->destination }}: {{ $connection }}{{ ConnectionTime::isTight($previous, $flight) ? ' · tight' : '' }}
                             </li>
                         @endif
 

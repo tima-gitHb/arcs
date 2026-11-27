@@ -42,23 +42,25 @@ class BoardingPassService
 
     /**
      * "Confirm check-in": StatusService::checkIn() checks every rule, then a pass is issued for every
-     * flight of the direction (SR-66). One transaction: no check-in without passes, no pass without a
-     * check-in. Returns the first flight's pass. Direction: null = the one departing from the agent's station.
+     * flight of the leg (SR-66 / C23). One transaction: no check-in without passes, no pass without a
+     * check-in. Returns the first flight's pass. Direction/leg: null = the leg at the agent's station.
      */
-    public function completeCheckIn(Passenger $passenger, User $by, ?string $entryReason = null, ?SegmentDirection $direction = null): BoardingPass
+    public function completeCheckIn(Passenger $passenger, User $by, ?string $entryReason = null, ?SegmentDirection $direction = null, ?int $leg = null): BoardingPass
     {
-        $direction ??= $this->journeys->directionFor($passenger, $by);
+        $leg ??= $this->journeys->legFor($passenger, $by, $direction);
+        $direction ??= $this->journeys->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction
+            ?? $this->journeys->directionFor($passenger, $by);
 
-        $pass = DB::transaction(function () use ($passenger, $by, $entryReason, $direction) {
-            $this->statuses->checkIn($passenger, $by, $direction);
-            $this->assertExcessPaid($passenger, $direction);
-            $this->acknowledgeEntryCheck($passenger, $by, $entryReason, $direction);
+        $pass = DB::transaction(function () use ($passenger, $by, $entryReason, $direction, $leg) {
+            $this->statuses->checkIn($passenger, $by, $direction, $leg);
+            $this->assertExcessPaid($passenger, $direction, $leg);
+            $this->acknowledgeEntryCheck($passenger, $by, $entryReason, $direction, $leg);
 
-            return $this->issueDirection($passenger, $by, $direction);
+            return $this->issueLeg($passenger, $by, $leg);
         });
 
         // After a successful check-in only (not reprints). Failure must not undo the check-in (SR-79).
-        $this->sendCheckInEmail($passenger->fresh(), $direction, $by);
+        $this->sendCheckInEmail($passenger->fresh(), $direction, $by, $leg);
 
         return $pass;
     }
@@ -67,7 +69,7 @@ class BoardingPassService
      * Email boarding-pass and bag-tag PDFs to the passenger (or reservation contact).
      * No address → skip. Send failure → log + audit_log, check-in already committed.
      */
-    private function sendCheckInEmail(Passenger $passenger, SegmentDirection $direction, User $by): void
+    private function sendCheckInEmail(Passenger $passenger, SegmentDirection $direction, User $by, ?int $leg = null): void
     {
         $passenger->loadMissing('reservation');
         // No passengers.email column yet: reservation contact only. Ready for a future passenger email.
@@ -78,7 +80,7 @@ class BoardingPassService
         }
 
         try {
-            Mail::to($email)->send(new CheckInCompleteMail($passenger, $direction));
+            Mail::to($email)->send(new CheckInCompleteMail($passenger, $direction, $leg));
         } catch (Throwable $e) {
             Log::error('Check-in email could not be sent.', [
                 'passenger_id' => $passenger->id,
@@ -100,16 +102,18 @@ class BoardingPassService
     /**
      * Same for a late check-in at the gate, approved by a Manager (SR-29).
      */
-    public function completeLateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?string $entryReason = null, ?SegmentDirection $direction = null): BoardingPass
+    public function completeLateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?string $entryReason = null, ?SegmentDirection $direction = null, ?int $leg = null): BoardingPass
     {
-        return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $entryReason, $direction) {
-            $direction ??= $this->journeys->directionFor($passenger, $gateUser);
+        return DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $entryReason, $direction, $leg) {
+            $leg ??= $this->journeys->legFor($passenger, $gateUser, $direction);
+            $direction ??= $this->journeys->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction
+                ?? $this->journeys->directionFor($passenger, $gateUser);
 
-            $this->statuses->lateCheckIn($passenger, $gateUser, $manager, $reason, $direction);
-            $this->assertExcessPaid($passenger, $direction);
-            $this->acknowledgeEntryCheck($passenger, $gateUser, $entryReason, $direction);
+            $this->statuses->lateCheckIn($passenger, $gateUser, $manager, $reason, $direction, $leg);
+            $this->assertExcessPaid($passenger, $direction, $leg);
+            $this->acknowledgeEntryCheck($passenger, $gateUser, $entryReason, $direction, $leg);
 
-            return $this->issueDirection($passenger, $gateUser, $direction);
+            return $this->issueLeg($passenger, $gateUser, $leg);
         });
     }
 
@@ -118,21 +122,25 @@ class BoardingPassService
      *
      * @return Collection<int, BoardingPass>
      */
-    public function passesFor(Passenger $passenger, SegmentDirection $direction): Collection
+    public function passesFor(Passenger $passenger, SegmentDirection $direction, ?int $leg = null): Collection
     {
+        $couponIds = $leg !== null
+            ? $this->journeys->couponsOfLeg($passenger, $leg)->modelKeys()
+            : $this->journeys->couponsOf($passenger, $direction)->modelKeys();
+
         return BoardingPass::query()
-            ->whereIn('coupon_id', $this->journeys->couponsOf($passenger, $direction)->modelKeys())
+            ->whereIn('coupon_id', $couponIds)
             ->whereNull('voided_at')
             ->orderBy('coupon_id')
             ->get();
     }
 
     /**
-     * A pass for every coupon of the direction; returns the first flight's.
+     * A pass for every coupon of the leg; returns the first flight's.
      */
-    private function issueDirection(Passenger $passenger, User $by, SegmentDirection $direction): BoardingPass
+    private function issueLeg(Passenger $passenger, User $by, int $leg): BoardingPass
     {
-        return $this->journeys->couponsOf($passenger, $direction)
+        return $this->journeys->couponsOfLeg($passenger, $leg)
             ->map(fn ($coupon) => $this->issue($passenger, $by, $coupon->flight))
             ->first();
     }
@@ -142,16 +150,16 @@ class BoardingPassService
      * Due is quote − succeeded ExcessBaggage payments (C11). Missing fees still block.
      * Runs after status rules.
      */
-    private function assertExcessPaid(Passenger $passenger, SegmentDirection $direction): void
+    private function assertExcessPaid(Passenger $passenger, SegmentDirection $direction, ?int $leg = null): void
     {
         $passenger = $passenger->fresh();
-        $excess = $this->bags->excess($passenger, $direction);
+        $excess = $this->bags->excess($passenger, $direction, $leg);
 
         if (! $excess->hasExcess()) {
             return;
         }
 
-        if (! $excess->priceIsSet() || $this->bags->excessDueCents($passenger, $direction) > 0) {
+        if (! $excess->priceIsSet() || $this->bags->excessDueCents($passenger, $direction, $leg) > 0) {
             throw new ExcessBaggageUnpaid;
         }
     }
@@ -162,9 +170,9 @@ class BoardingPassService
      * Runs after the status rules, so their refusals keep their order and messages; the
      * exception rolls the check-in back.
      */
-    private function acknowledgeEntryCheck(Passenger $passenger, User $by, ?string $reason, SegmentDirection $direction): void
+    private function acknowledgeEntryCheck(Passenger $passenger, User $by, ?string $reason, SegmentDirection $direction, ?int $leg = null): void
     {
-        $result = $this->entryCheck->check($passenger->fresh(), $direction);
+        $result = $this->entryCheck->check($passenger->fresh(), $direction, $leg);
 
         if (! $result->needsAcknowledgement()) {
             return;

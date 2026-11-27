@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Checkin;
 
+use App\Enums\PassengerStatus;
 use App\Enums\PassengerType;
 use App\Exceptions\EntryReasonRequired;
 use App\Exceptions\ExcessBaggageUnpaid;
@@ -37,10 +38,17 @@ class CheckinController extends Controller
                     ->orWhere('last_name', 'like', $search.'%'))
                 // Only flights from the agent's station (B13a), through any flight of the journey
                 // (B13b: the return of a trip is checked in at its own origin). Flights that left
-                // before today (at the station) are not checked in any more.
+                // before today (at the station) are not checked in any more — unless their check-in
+                // window is still open (BUG-013 / overnight departures).
                 ->whereHas('coupons.flight', fn ($flight) => $flight
                     ->departingFrom($request->user()->airport_code)
-                    ->where('departure_at', '>=', $request->user()->stationDay()[0]))
+                    ->where(function ($board) use ($request) {
+                        $board->where('departure_at', '>=', $request->user()->stationDay()[0])
+                            ->orWhere(function ($window) {
+                                $window->where('checkin_opens_at', '<=', now())
+                                    ->where('checkin_closes_at', '>=', now());
+                            });
+                    }))
                 ->orderBy('id')
                 ->limit(self::MAX_RESULTS)
                 ->get()
@@ -62,15 +70,43 @@ class CheckinController extends Controller
      */
     public function show(Request $request, Passenger $passenger, SeatService $seats, EntryRequirementChecker $entryCheck, JourneyService $journeys): View
     {
-        // B13b: the direction the agent checks in (the return at its own origin), and in it the flight
-        // this screen is about: the first one, or ?flight=<id> to choose a seat on a later flight.
-        $direction = $journeys->directionFor($passenger, $request->user());
-        $journeyFlights = $journeys->flightsOf($passenger->reservation, $direction);
-        $flight = $journeyFlights->firstWhere('id', $request->integer('flight')) ?? $journeyFlights->first() ?? $passenger->reservation->flight;
+        $reservation = $passenger->reservation->loadMissing('segments.flight');
+        $legNumbers = $journeys->legNumbers($reservation);
+        $activeLeg = $request->integer('leg') ?: $journeys->legFor($passenger, $request->user());
+        if (! in_array($activeLeg, $legNumbers, true)) {
+            $activeLeg = $journeys->legFor($passenger, $request->user());
+        }
+
+        $direction = $journeys->segmentsOfLeg($reservation, $activeLeg)->first()?->direction
+            ?? $journeys->directionFor($passenger, $request->user());
+        $journeyFlights = $journeys->flightsOfLeg($reservation, $activeLeg);
+        $flight = $journeyFlights->firstWhere('id', $request->integer('flight'))
+            ?? $journeyFlights->first()
+            ?? $passenger->reservation->flight;
         $coupon = $passenger->couponOn($flight);
+        $legDestination = $journeys->finalDestinationOfLeg($reservation, $activeLeg);
+        $legStatus = $journeys->statusOfLeg($passenger, $activeLeg);
+
+        $legSummaries = collect($legNumbers)->map(function (int $legNo) use ($journeys, $reservation, $passenger) {
+            $flights = $journeys->flightsOfLeg($reservation, $legNo);
+            $first = $flights->first();
+            $last = $flights->last();
+
+            return [
+                'leg' => $legNo,
+                'origin' => $first?->origin,
+                'destination' => $last?->destination,
+                'status' => $journeys->statusOfLeg($passenger, $legNo),
+                'first_flight' => $first,
+                'checkin_opens_at' => $first?->checkin_opens_at,
+                'window_open' => $first?->isCheckinWindowOpen() ?? false,
+                'earlier_complete' => $journeys->earlierLegsAreComplete($passenger, $legNo),
+            ];
+        });
 
         $passenger->load([
             'reservation.flight',
+            'reservation.segments.flight',
             'travelDocuments' => fn ($query) => $query->orderBy('id'),
             'travelDocuments.verifier',
             'accompanyingAdult',
@@ -78,19 +114,31 @@ class CheckinController extends Controller
             'coupon.checkedInBy.user',
             'seatAssignment' => fn ($query) => $query->where('seat_assignments.flight_id', $flight->id),
             'seatAssignment.seat',
-            'bags' => fn ($query) => $query->where('direction', $direction)->orderBy('id'),
+            'bags' => fn ($query) => $query
+                ->where('direction', $direction)
+                ->where('destination', $legDestination)
+                ->orderBy('id'),
             'specialServices' => fn ($query) => $query->orderBy('id'),
             'activeBoardingPass' => fn ($query) => $query->where('boarding_passes.coupon_id', $coupon?->id),
         ]);
         $passenger->setRelation('checkedInBy', $passenger->coupon?->checkedInBy);
 
-        $boardingPasses = app(BoardingPassService::class)->passesFor($passenger, $direction)
+        // Drive the wizard off this leg's status (C23), not the first coupon of the whole trip.
+        if ($legStatus === PassengerStatus::Booked) {
+            $passenger->setRelation('coupon', $coupon);
+        }
+
+        $boardingPasses = app(BoardingPassService::class)->passesFor($passenger, $direction, $activeLeg)
             ->load(['coupon.flight']);
 
         return view('checkin.show', [
             'passenger' => $passenger,
             'flight' => $flight,
-            // Every flight of the direction with the passenger's seat on it (a connection has several).
+            'activeLeg' => $activeLeg,
+            'legStatus' => $legStatus,
+            'legSummaries' => $legSummaries,
+            'hasMultipleLegs' => count($legNumbers) > 1,
+            // Every flight of the active leg with the passenger's seat on it (a connection has several).
             'journeyFlights' => $journeyFlights,
             'seatsByFlight' => SeatAssignment::query()
                 ->where('passenger_id', $passenger->id)
@@ -102,7 +150,7 @@ class CheckinController extends Controller
             // ?edit=<document id> opens the edit form for that document.
             'editing' => $passenger->travelDocuments->firstWhere('id', $request->integer('edit')),
             // Advisory entry check (SR-49): read only. ?check_entry=1 shows the full result.
-            'entryResult' => $entryCheck->check($passenger, $direction),
+            'entryResult' => $entryCheck->check($passenger, $direction, $activeLeg),
             'showEntryCheck' => $request->boolean('check_entry'),
             // ?change_seat=1 opens the seat map for a checked-in passenger (C6).
             'changingSeat' => $request->boolean('change_seat'),
@@ -118,14 +166,23 @@ class CheckinController extends Controller
      * (SR-6, SR-23, SR-25, SR-30, seat required) and the boarding pass is issued (C5).
      * Either way the agent stays on the check-in screen.
      */
-    public function confirm(Request $request, Passenger $passenger, BoardingPassService $passes): RedirectResponse
+    public function confirm(Request $request, Passenger $passenger, BoardingPassService $passes, JourneyService $journeys): RedirectResponse
     {
         // Kept in audit_log, whose columns hold 255 characters.
-        $request->validate(['entry_reason' => ['nullable', 'string', 'max:255']]);
-        $screen = redirect()->route('checkin.passengers.show', $passenger);
+        $request->validate([
+            'entry_reason' => ['nullable', 'string', 'max:255'],
+            'leg' => ['nullable', 'integer', 'min:1', 'max:6'],
+        ]);
+        $leg = $request->integer('leg') ?: $journeys->legFor($passenger, $request->user());
+        $screen = redirect()->route(
+            'checkin.passengers.show',
+            $journeys->hasMultipleLegs($passenger->reservation)
+                ? ['passenger' => $passenger, 'leg' => $leg]
+                : $passenger,
+        );
 
         try {
-            $passes->completeCheckIn($passenger, $request->user(), $request->input('entry_reason'));
+            $passes->completeCheckIn($passenger, $request->user(), $request->input('entry_reason'), null, $leg);
         } catch (InvalidStatusChange|ExcessBaggageUnpaid $exception) {
             return $screen->with('error', $exception->getMessage());
         } catch (EntryReasonRequired $exception) {

@@ -153,9 +153,9 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Expected: "Visa ••••4242 · reference fake_… · 18 Nov 2026 22:49" shown as normal text
 - Actual: raw code is shown in a grey code block: <p class="mt-3 text-sm font-medium text-gray-800"> Visa ••••4242 · reference <span class="font-mono">fake_…</span> · 18 Nov 2026 22:49 </p></div>
 - Screenshot: Mailtrap screenshot taken 18 Nov 2026 22:52 (manual test)
-- Status: Open
-- Fix:
-- Retested:
+- Status: Fixed
+- Fix: e-ticket Markdown mail no longer embeds `<x-receipt>` (HTML became a code block); uses `emails/partials/payment.blade.php` plain Markdown lines instead. Covered by Bug012EticketPaymentMailTest.
+- Retested: 27 Nov 2026 · Bug012EticketPaymentMailTest + full suite
 
 ## BUG-013 · Today's flights hides a flight after midnight while its check-in is open
 - Date / who: 18 Nov 2026 · Tima
@@ -165,9 +165,9 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Expected: ME264 is listed in Today's flights because its check-in window is open now
 - Actual: only ME110 (Closed) and ME305 (Boarding) are listed; ME264 is missing because it departs after midnight
 - Screenshot: check-in page screenshot taken 18 Nov 2026 22:59 (manual test)
-- Status: Open
-- Fix:
-- Retested:
+- Status: Fixed
+- Fix: `Flight::scopeDepartingToday` also includes flights with a check-in window open now, or status Boarding (not only station-calendar departures). Same scope feeds sidebars, check-in home, gate, manager. Covered by Bug013TodaysFlightsWindowTest.
+- Retested: 27 Nov 2026 · Bug013TodaysFlightsWindowTest + full suite
 
 ## BUG-014 · Multi-city leg split hid SR-65 connect and return errors
 - Date / who: 21 Nov 2026 · Tima

@@ -8,6 +8,7 @@ use App\Models\BoardingPass;
 use App\Models\Passenger;
 use App\Services\BagTagService;
 use App\Services\BoardingPassService;
+use App\Services\JourneyService;
 use App\Support\Pdf;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -15,9 +16,11 @@ use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Collection;
 
 /**
  * Check-in complete email (C17 / SR-79): ARCS layout with boarding-pass and bag-tag PDFs.
+ * Attachments and itinerary cover the checked-in leg only (C23).
  */
 class CheckInCompleteMail extends Mailable
 {
@@ -26,6 +29,7 @@ class CheckInCompleteMail extends Mailable
     public function __construct(
         public Passenger $passenger,
         public SegmentDirection $direction,
+        public ?int $leg = null,
     ) {}
 
     public function envelope(): Envelope
@@ -45,6 +49,7 @@ class CheckInCompleteMail extends Mailable
                 'passenger' => $this->passenger,
                 'reservation' => $this->passenger->reservation,
                 'direction' => $this->direction,
+                'leg' => $this->leg,
             ],
         );
     }
@@ -56,10 +61,8 @@ class CheckInCompleteMail extends Mailable
     {
         $this->loadRelations();
 
-        $passes = app(BoardingPassService::class)->passesFor($this->passenger, $this->direction);
-        $bags = $this->passenger->bags
-            ->where('direction', $this->direction)
-            ->values();
+        $passes = app(BoardingPassService::class)->passesFor($this->passenger, $this->direction, $this->leg);
+        $bags = $this->bagsForLeg();
 
         $attachments = [];
 
@@ -92,6 +95,22 @@ class CheckInCompleteMail extends Mailable
 
         return Attachment::fromData(fn () => $bytes, 'bag-tag-'.$bag->tag_no.'.pdf')
             ->withMime('application/pdf');
+    }
+
+    /**
+     * @return Collection<int, Bag>
+     */
+    private function bagsForLeg()
+    {
+        $bags = $this->passenger->bags->where('direction', $this->direction);
+
+        if ($this->leg !== null) {
+            $destination = app(JourneyService::class)
+                ->finalDestinationOfLeg($this->passenger->reservation, $this->leg);
+            $bags = $bags->where('destination', $destination);
+        }
+
+        return $bags->values();
     }
 
     private function loadRelations(): void

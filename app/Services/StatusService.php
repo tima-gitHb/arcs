@@ -48,17 +48,20 @@ class StatusService
     public function __construct(private JourneyService $journeys) {}
 
     /**
-     * Booked -> CheckedIn for every coupon of the direction, all or none (SR-6, SR-23, SR-25, SR-30,
-     * SR-31, SR-66). The window and CheckinOpen are checked on the direction's first flight; documents
-     * and seat (C5, infants excepted) on every flight. Direction: null = the one departing from the
-     * agent's station (JourneyService::directionFor).
+     * Booked -> CheckedIn for every coupon of one leg, all or none (SR-6, SR-23, SR-25, SR-30,
+     * SR-31, SR-66, C23/CR-16). A connection inside the leg still checks in together. Multi-city
+     * and overnight splits check in one leg at a time. Window and CheckinOpen on the leg's first
+     * flight; documents and seat on every flight of the leg. Direction/leg: null = leg departing
+     * from the agent's station (JourneyService::legFor).
      */
-    public function checkIn(Passenger $passenger, User $by, ?SegmentDirection $direction = null): void
+    public function checkIn(Passenger $passenger, User $by, ?SegmentDirection $direction = null, ?int $leg = null): void
     {
-        DB::transaction(function () use ($passenger, $by, $direction) {
+        DB::transaction(function () use ($passenger, $by, $direction, $leg) {
             $this->lock($passenger);
-            $coupons = $this->directionCoupons($passenger, $direction ?? $this->journeys->directionFor($passenger, $by));
+            $leg ??= $this->journeys->legFor($passenger, $by, $direction);
+            $coupons = $this->journeys->couponsOfLeg($passenger, $leg);
             $this->ensureBooked($coupons);
+            $this->assertEarlierLegsComplete($passenger, $leg);
 
             $flight = $coupons->first()->flight;
 
@@ -77,12 +80,14 @@ class StatusService
      * seat rule still apply. Boarding must not be closed. The gate agent is the actor in
      * audit_log; a gate_overrides row per coupon records the Manager, the reason and the time.
      */
-    public function lateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?SegmentDirection $direction = null): void
+    public function lateCheckIn(Passenger $passenger, User $gateUser, User $manager, string $reason, ?SegmentDirection $direction = null, ?int $leg = null): void
     {
-        DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $direction) {
+        DB::transaction(function () use ($passenger, $gateUser, $manager, $reason, $direction, $leg) {
             $this->lock($passenger);
-            $coupons = $this->directionCoupons($passenger, $direction ?? $this->journeys->directionFor($passenger, $gateUser));
+            $leg ??= $this->journeys->legFor($passenger, $gateUser, $direction);
+            $coupons = $this->journeys->couponsOfLeg($passenger, $leg);
             $this->ensureBooked($coupons);
+            $this->assertEarlierLegsComplete($passenger, $leg);
 
             if ($manager->role !== Role::Manager) {
                 throw new InvalidStatusChange('A late check-in must be approved by a Manager.');
@@ -115,6 +120,16 @@ class StatusService
                 ]);
             }
         });
+    }
+
+    /**
+     * A later leg cannot check in while an earlier leg is still Booked or CheckedIn (C23).
+     */
+    private function assertEarlierLegsComplete(Passenger $passenger, int $leg): void
+    {
+        if (! $this->journeys->earlierLegsAreComplete($passenger, $leg)) {
+            throw new InvalidStatusChange('Earlier leg must be flown or cancelled before checking in this leg.');
+        }
     }
 
     /**

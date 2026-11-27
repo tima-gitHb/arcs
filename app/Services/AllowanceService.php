@@ -22,9 +22,13 @@ class AllowanceService
     /**
      * Pieces = the class's pieces + extra_bags; total kg = pieces x kg per bag + extra_kg.
      */
-    public function for(Passenger $passenger, ?SegmentDirection $direction = null): Allowance
+    public function for(Passenger $passenger, ?SegmentDirection $direction = null, ?int $leg = null): Allowance
     {
-        $cabin = $this->cabinClassOf($passenger, $direction ?? app(JourneyService::class)->directionOf($passenger));
+        $journeys = app(JourneyService::class);
+        $direction ??= $leg !== null
+            ? ($journeys->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction ?? $journeys->directionOf($passenger))
+            : $journeys->directionOf($passenger);
+        $cabin = $this->cabinClassOf($passenger, $direction, $leg);
         $row = BaggageAllowance::query()->where('cabin_class', $cabin)->first();
 
         $pieces = (int) $row?->pieces + $passenger->extra_bags;
@@ -41,20 +45,26 @@ class AllowanceService
     }
 
     /**
-     * One flight in the direction: the cabin of the passenger's seat on it, else the booked class.
+     * One flight in the leg/direction: the cabin of the passenger's seat on it, else the booked class.
      * A connection (several flights, maybe in different cabins): the booked class (SR-67).
      * Else Economy. An infant travels in the cabin of the accompanying adult.
      */
-    private function cabinClassOf(Passenger $passenger, SegmentDirection $direction): CabinClass
+    private function cabinClassOf(Passenger $passenger, SegmentDirection $direction, ?int $leg = null): CabinClass
     {
         $traveller = $passenger->accompanyingAdult ?? $passenger;
         $journeys = app(JourneyService::class);
 
-        if ($journeys->isConnection($traveller->reservation, $direction)) {
+        $isConnection = $leg !== null
+            ? $journeys->isConnectionLeg($traveller->reservation, $leg)
+            : $journeys->isConnection($traveller->reservation, $direction);
+
+        if ($isConnection) {
             return $traveller->cabin_class ?? CabinClass::Economy;
         }
 
-        $coupon = $journeys->couponsOf($traveller, $direction)->first();
+        $coupon = $leg !== null
+            ? $journeys->couponsOfLeg($traveller, $leg)->first()
+            : $journeys->couponsOf($traveller, $direction)->first();
         $seat = $coupon === null || $traveller->seatAssignment?->coupon_id === $coupon->id
             ? $traveller->seatAssignment?->seat
             : SeatAssignment::query()->where('coupon_id', $coupon->id)->first()?->seat;

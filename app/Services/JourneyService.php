@@ -259,6 +259,175 @@ class JourneyService
     }
 
     /**
+     * Distinct leg numbers on the reservation, ascending (CR-16).
+     *
+     * @return list<int>
+     */
+    public function legNumbers(Reservation $reservation): array
+    {
+        return $this->segments($reservation)
+            ->pluck('leg')
+            ->map(fn ($leg) => (int) $leg)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * More than one leg on the booking (multi-city or overnight split, or outbound+return).
+     */
+    public function hasMultipleLegs(Reservation $reservation): bool
+    {
+        return count($this->legNumbers($reservation)) > 1;
+    }
+
+    /**
+     * Segments of one leg, in sequence order.
+     *
+     * @return Collection<int, ReservationSegment>
+     */
+    public function segmentsOfLeg(Reservation $reservation, int $leg): Collection
+    {
+        return $this->segments($reservation)
+            ->where('leg', $leg)
+            ->values();
+    }
+
+    /**
+     * Flights of one leg, in order (C23 / CR-16).
+     *
+     * @return Collection<int, Flight>
+     */
+    public function flightsOfLeg(Reservation $reservation, int $leg): Collection
+    {
+        return new Collection(
+            $this->segmentsOfLeg($reservation, $leg)->pluck('flight')->all()
+        );
+    }
+
+    /**
+     * Coupons of one leg, in journey order (C23 / CR-16).
+     *
+     * @return Collection<int, Coupon>
+     */
+    public function couponsOfLeg(Passenger $passenger, int $leg): Collection
+    {
+        return Coupon::query()
+            ->select('coupons.*')
+            ->join('reservation_segments', 'reservation_segments.id', '=', 'coupons.reservation_segment_id')
+            ->where('coupons.passenger_id', $passenger->id)
+            ->where('reservation_segments.leg', $leg)
+            ->orderBy('reservation_segments.sequence')
+            ->with('flight')
+            ->get();
+    }
+
+    /**
+     * Status of the first coupon of the leg (check-in moves the leg together).
+     */
+    public function statusOfLeg(Passenger $passenger, int $leg): PassengerStatus
+    {
+        return $this->couponsOfLeg($passenger, $leg)->first()?->status ?? $passenger->status;
+    }
+
+    /**
+     * Bags of this leg go to the last flight's destination (CR-16 / SR-67 per leg).
+     */
+    public function finalDestinationOfLeg(Reservation $reservation, int $leg): string
+    {
+        return $this->flightsOfLeg($reservation, $leg)->last()?->destination
+            ?? $reservation->flight->destination;
+    }
+
+    /**
+     * More than one flight inside this leg?
+     */
+    public function isConnectionLeg(Reservation $reservation, int $leg): bool
+    {
+        return $this->flightsOfLeg($reservation, $leg)->count() > 1;
+    }
+
+    /**
+     * Which leg the agent is checking in (C23 / CR-16): prefer a leg whose first flight
+     * departs from their station and whose check-in window is open; else that station's
+     * earliest unfinished leg; else the first leg of the direction they would have used.
+     */
+    public function legFor(Passenger $passenger, ?User $agent = null, ?SegmentDirection $direction = null): int
+    {
+        $numbers = $this->legNumbers($passenger->reservation);
+
+        if ($numbers === []) {
+            return 1;
+        }
+
+        if ($agent?->airport_code !== null) {
+            $atStation = [];
+            foreach ($numbers as $leg) {
+                $first = $this->flightsOfLeg($passenger->reservation, $leg)->first();
+                if ($first !== null && $first->origin === $agent->airport_code) {
+                    $atStation[] = $leg;
+                }
+            }
+
+            foreach ($atStation as $leg) {
+                $first = $this->flightsOfLeg($passenger->reservation, $leg)->first();
+                if ($first?->isCheckinWindowOpen()) {
+                    return $leg;
+                }
+            }
+
+            foreach ($atStation as $leg) {
+                $status = $this->statusOfLeg($passenger, $leg);
+                if (in_array($status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
+                    return $leg;
+                }
+            }
+
+            if ($atStation !== []) {
+                return $atStation[0];
+            }
+        }
+
+        if ($direction !== null) {
+            $segment = $this->segments($passenger->reservation)->firstWhere('direction', $direction);
+
+            return $segment !== null ? (int) $segment->leg : $numbers[0];
+        }
+
+        return $numbers[0];
+    }
+
+    /**
+     * Earlier legs must be flown (Boarded), no-show, or cancelled before a later leg checks in (C23).
+     * Round-trip return (a later Return leg) does not wait on the outbound: SR-66 checks the return
+     * in at its own origin independently. Multi-city / overnight Outbound legs still wait.
+     */
+    public function earlierLegsAreComplete(Passenger $passenger, int $leg): bool
+    {
+        $activeDirection = $this->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction;
+
+        foreach ($this->legNumbers($passenger->reservation) as $earlier) {
+            if ($earlier >= $leg) {
+                break;
+            }
+
+            $earlierDirection = $this->segmentsOfLeg($passenger->reservation, $earlier)->first()?->direction;
+            if ($activeDirection === SegmentDirection::Return && $earlierDirection === SegmentDirection::Outbound) {
+                continue;
+            }
+
+            foreach ($this->couponsOfLeg($passenger, $earlier) as $coupon) {
+                if (in_array($coupon->status, [PassengerStatus::Booked, PassengerStatus::CheckedIn], true)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * @return Collection<int, ReservationSegment>
      */
     private function segments(Reservation $reservation): Collection

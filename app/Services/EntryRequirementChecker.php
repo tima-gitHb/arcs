@@ -32,14 +32,22 @@ class EntryRequirementChecker
     public function __construct(private CountryList $countries, private JourneyService $journeys) {}
 
     /**
-     * Entry into the final destination of the direction only (SR-68): BEY→IST→CDG checks France,
-     * not Turkey (transit rules are out of scope). Direction: null = the passenger's current one.
+     * Entry into the final destination of the leg (or direction) only (SR-68 / C23): BEY→IST→CDG
+     * checks France, not Turkey (transit rules are out of scope). Direction/leg: null = current.
      */
-    public function check(Passenger $passenger, ?SegmentDirection $direction = null): EntryResult
+    public function check(Passenger $passenger, ?SegmentDirection $direction = null, ?int $leg = null): EntryResult
     {
-        $direction ??= $this->journeys->directionOf($passenger);
-        $flight = $this->journeys->flightsOf($passenger->reservation, $direction)->first() ?? $passenger->reservation->flight;
-        $destination = $this->journeys->finalDestination($passenger->reservation, $direction);
+        if ($leg !== null) {
+            $direction ??= $this->journeys->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction
+                ?? $this->journeys->directionOf($passenger);
+            $flight = $this->journeys->flightsOfLeg($passenger->reservation, $leg)->first()
+                ?? $passenger->reservation->flight;
+            $destination = $this->journeys->finalDestinationOfLeg($passenger->reservation, $leg);
+        } else {
+            $direction ??= $this->journeys->directionOf($passenger);
+            $flight = $this->journeys->flightsOf($passenger->reservation, $direction)->first() ?? $passenger->reservation->flight;
+            $destination = $this->journeys->finalDestination($passenger->reservation, $direction);
+        }
 
         // Valid means not expired on the departure date.
         $departure = $flight->departureDate();

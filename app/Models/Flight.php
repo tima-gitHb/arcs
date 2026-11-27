@@ -94,12 +94,22 @@ class Flight extends Model
     }
 
     /**
-     * Flights departing on the user's "today": the calendar day at their station (UTC without one).
-     * The day only: add departingFrom() for the station's own flights.
+     * Flights on the staff board for "today" (SR-41 / BUG-013): depart on the calendar day at the
+     * user's station, or have a check-in window open right now, or are Boarding — even when the
+     * departure is after local midnight. Add departingFrom() for the station's own flights.
      */
     public function scopeDepartingToday(Builder $query, User $user): void
     {
-        $query->whereBetween('flights.departure_at', $user->stationDay());
+        [$dayStart, $dayEnd] = $user->stationDay();
+
+        $query->where(function (Builder $board) use ($dayStart, $dayEnd) {
+            $board->whereBetween('flights.departure_at', [$dayStart, $dayEnd])
+                ->orWhere(function (Builder $window) {
+                    $window->where('flights.checkin_opens_at', '<=', now())
+                        ->where('flights.checkin_closes_at', '>=', now());
+                })
+                ->orWhere('flights.status', FlightStatus::Boarding);
+        });
     }
 
     /**

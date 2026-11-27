@@ -19,7 +19,11 @@ class BagController extends Controller
 {
     public function store(StoreBagRequest $request, Passenger $passenger, BagService $bags): RedirectResponse
     {
-        $screen = redirect()->route('checkin.passengers.show', $passenger);
+        $leg = $request->integer('leg') ?: null;
+        $screen = redirect()->route('checkin.passengers.show', array_filter([
+            'passenger' => $passenger,
+            'leg' => $leg,
+        ]));
 
         try {
             $bag = $bags->add(
@@ -27,6 +31,8 @@ class BagController extends Controller
                 (float) $request->validated('weight_kg'),
                 BagType::from($request->validated('type')),
                 $request->user(),
+                null,
+                $leg,
             );
         } catch (BagNotAllowed $exception) {
             return $screen->with('error', $exception->getMessage());
@@ -37,7 +43,11 @@ class BagController extends Controller
 
     public function destroy(Request $request, Bag $bag, BagService $bags): RedirectResponse
     {
-        $screen = redirect()->route('checkin.passengers.show', $bag->passenger_id);
+        $leg = $request->integer('leg') ?: null;
+        $screen = redirect()->route('checkin.passengers.show', array_filter([
+            'passenger' => $bag->passenger_id,
+            'leg' => $leg,
+        ]));
 
         try {
             $bags->remove($bag, $request->user());
