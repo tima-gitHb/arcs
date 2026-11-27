@@ -62,6 +62,9 @@ Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('re
     Route::get('/passengers/{passenger}/edit', [ReservationController::class, 'edit'])->name('edit');
     Route::put('/passengers/{passenger}', [ReservationController::class, 'update'])->name('update');
     Route::post('/passengers/{passenger}/cancel', [ReservationController::class, 'cancel'])->name('cancel');
+    Route::get('/reservations/{reservation}/refund', [ReservationController::class, 'refundForm'])->name('refund');
+    Route::post('/reservations/{reservation}/refund/preview', [ReservationController::class, 'refundPreview'])->name('refund.preview');
+    Route::post('/reservations/{reservation}/refund', [ReservationController::class, 'refundConfirm'])->name('refund.confirm');
 });
 
 // Check-in staff, at their station: only flights departing from it (B13a).

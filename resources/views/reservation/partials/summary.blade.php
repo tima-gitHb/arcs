@@ -5,6 +5,9 @@
         @if ($reservation->isGroup())
             <span class="ml-2 align-middle rounded-full px-2 py-0.5 font-sans text-xs font-semibold uppercase tracking-wide text-white" style="background: var(--arcs-navy); letter-spacing: 0.06em;">Group</span>
         @endif
+        @if ($reservation->isCancelled())
+            <span class="ml-2 align-middle rounded-full px-2 py-0.5 font-sans text-xs font-semibold uppercase tracking-wide" style="background: #FCE8E6; color: var(--arcs-error); letter-spacing: 0.06em;">Cancelled</span>
+        @endif
     </p>
 
     <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
@@ -23,6 +26,14 @@
             </dd>
         </div>
     </dl>
+
+    @unless ($reservation->isCancelled())
+        <div class="mt-6">
+            <a href="{{ route('reservation.refund', $reservation) }}" class="arcs-btn-danger !min-h-0 px-3 py-1.5 text-sm">
+                Cancel and refund
+            </a>
+        </div>
+    @endunless
 
     <h2 class="mt-8 text-base font-semibold text-gray-900">Passengers</h2>
 

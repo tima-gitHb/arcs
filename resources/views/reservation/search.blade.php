@@ -37,6 +37,20 @@
                     </div>
                 @endif
 
+                @if (session('refund_receipt'))
+                    @php $receipt = session('refund_receipt'); @endphp
+                    <div class="mt-4 rounded-[14px] border px-4 py-4" style="border-color: var(--arcs-success); background: var(--arcs-success-bg);" role="status">
+                        <p class="text-sm font-semibold" style="color: var(--arcs-success);">Refund receipt</p>
+                        <p class="mt-1 text-lg font-bold text-gray-900">
+                            Refunded {{ \App\Support\Money::format($receipt['amount_cents']) }}
+                            @if (! empty($receipt['card_brand']))
+                                to {{ $receipt['card_brand'] }} ••••{{ $receipt['card_last4'] }}
+                            @endif
+                        </p>
+                        <p class="mt-1 text-sm text-gray-600">Cancellation fee {{ \App\Support\Money::format($receipt['fee_cents'] ?? 0) }}</p>
+                    </div>
+                @endif
+
                 @if ($reservation)
                     <div class="mt-4">
                         @include('reservation.partials.summary', ['reservation' => $reservation])

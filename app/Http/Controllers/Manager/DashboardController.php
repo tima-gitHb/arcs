@@ -231,7 +231,7 @@ class DashboardController extends Controller
             ->leftJoin('reservations as booking', 'booking.id', '=', 'payments.reservation_id')
             ->leftJoin('passengers', 'passengers.id', '=', 'payments.passenger_id')
             ->leftJoin('reservations as traveller', 'traveller.id', '=', 'passengers.reservation_id')
-            ->where('payments.status', PaymentStatus::Succeeded)
+            ->whereIn('payments.status', [PaymentStatus::Succeeded, PaymentStatus::Refunded])
             ->whereBetween('payments.paid_at', [$from, $to])
             ->when($station !== null || $flightIds !== [], function ($query) use ($flightIds, $flightIdExpr) {
                 if ($flightIds === []) {
@@ -243,13 +243,17 @@ class DashboardController extends Controller
             })
             ->get();
 
-        $ticketCents = (int) $payments->where('kind', PaymentKind::Fare)->sum('amount_cents');
-        $extrasCents = (int) $payments->whereIn('kind', [
+        $charges = $payments->where('status', PaymentStatus::Succeeded);
+        $refundCents = (int) $payments->where('status', PaymentStatus::Refunded)->sum('amount_cents');
+        $ticketGross = (int) $charges->where('kind', PaymentKind::Fare)->sum('amount_cents');
+        $extrasCents = (int) $charges->whereIn('kind', [
             PaymentKind::ExtraBag,
             PaymentKind::ExcessBaggage,
             PaymentKind::Fee,
             PaymentKind::Upgrade,
         ])->sum('amount_cents');
+        // Net ticket revenue: fare charges − refunds (Sprint 4 Feature 2).
+        $ticketCents = $ticketGross - $refundCents;
 
         $periodPassengerCounts = DB::table('coupons')
             ->whereIn('flight_id', $flightIds === [] ? [0] : $flightIds)

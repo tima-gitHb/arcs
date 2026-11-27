@@ -36,12 +36,20 @@ class PaymentReportController extends Controller
         $payments = $this->payments($filters, $request->user(), $station);
 
         $succeeded = $payments->where('status', PaymentStatus::Succeeded);
+        $refunded = $payments->where('status', PaymentStatus::Refunded);
         $totals = [];
         foreach (PaymentKind::cases() as $kind) {
+            if ($kind === PaymentKind::Refund) {
+                $totals[$kind->value] = (int) $refunded->sum('amount_cents');
+
+                continue;
+            }
             $totals[$kind->value] = (int) $succeeded->where('kind', $kind)->sum('amount_cents');
         }
 
         $failed = $payments->where('status', PaymentStatus::Failed);
+        $chargeCents = (int) $succeeded->sum('amount_cents');
+        $refundCents = (int) $refunded->sum('amount_cents');
 
         $status = $request->query('status');
 
@@ -52,9 +60,12 @@ class PaymentReportController extends Controller
             )->when(
                 is_string($status) && $status === 'failed',
                 fn ($c) => $c->where('status', PaymentStatus::Failed)
+            )->when(
+                is_string($status) && $status === 'refunded',
+                fn ($c) => $c->where('status', PaymentStatus::Refunded)
             )->values(),
             'totals' => $totals,
-            'grandCents' => array_sum($totals),
+            'grandCents' => $chargeCents - $refundCents,
             'failedCount' => $failed->count(),
             'failedCents' => (int) $failed->sum('amount_cents'),
             'flights' => Flight::query()
@@ -84,6 +95,8 @@ class PaymentReportController extends Controller
                 ->orderByDesc('created_at')
                 ->get();
         }
+
+        $payment->loadMissing(['refundOf', 'refunds']);
 
         return view('manager.payments-show', [
             'payment' => $payment,

@@ -11,4 +11,5 @@ enum FlightAction: string
     case ChangeSeat = 'change_seat';
     case CheckIn = 'check_in';
     case Board = 'board';
+    case Refund = 'refund';
 }

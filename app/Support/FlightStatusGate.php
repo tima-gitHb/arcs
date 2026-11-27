@@ -23,6 +23,11 @@ final class FlightStatusGate
                 FlightStatus::CheckinOpen,
                 FlightStatus::Delayed,
             ], true),
+            // Refunds / booking changes: only before boarding (Sprint 4 Feature 2).
+            FlightAction::Refund => in_array($status, [
+                FlightStatus::Scheduled,
+                FlightStatus::CheckinOpen,
+            ], true),
             FlightAction::CheckIn => $status === FlightStatus::CheckinOpen,
             FlightAction::Board => $status === FlightStatus::Boarding,
         };
@@ -42,6 +47,7 @@ final class FlightStatusGate
         $message = match ($action) {
             FlightAction::Book => "{$flight->flight_no} is {$label}: it cannot be booked.",
             FlightAction::ChangeSeat => "{$flight->flight_no} is {$label}: the seat cannot be changed.",
+            FlightAction::Refund => "{$flight->flight_no} is {$label}: it cannot be refunded.",
             FlightAction::CheckIn => 'Check-in closed',
             FlightAction::Board => 'Boarding has not started',
         };

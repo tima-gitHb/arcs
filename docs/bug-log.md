@@ -352,3 +352,21 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Actual: reservation_segments still present after --step=11
 - Status: Fixed
 - Fix: B13B_STEPS 11 → 12 (include flight_schedules)
+
+## BUG-031 · Refund refused checked-in passenger with wrong message
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 2)
+- Card / branch: Feature 2 · feature/fees-weekly-schedules
+- Where: RefundService::targetCoupons
+- Severity: Major
+- Steps: 1. Check in a passenger 2. Cancel and refund that passenger
+- Expected: "Lina Haddad is checked in on ARxxx — cannot refund."
+- Actual: "… has no booked flights to cancel." (only Booked coupons were selected)
+- Status: Fixed
+- Fix: include non-Cancelled coupons in the selection set; assertEligible reports status
+
+## BUG-032 · B13bMigrationTest step count stale after refunds migration
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 2)
+- Severity: Minor
+- Where: B13bMigrationTest B13B_STEPS
+- Fix: 12 → 13
+- Status: Fixed

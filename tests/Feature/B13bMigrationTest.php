@@ -21,10 +21,10 @@ class B13bMigrationTest extends TestCase
     use DatabaseMigrations;
 
     /**
-     * Rolled back, newest first: flight_schedules (S4), must_change_password (M20), four B14 migrations,
-     * add_route_to_fares, then the five B13b migrations after add_arrives_at_to_flights_table.
+     * Rolled back, newest first: refunds columns (S4), flight_schedules (S4), must_change_password (M20),
+     * four B14 migrations, add_route_to_fares, then the five B13b migrations after add_arrives_at.
      */
-    private const B13B_STEPS = 12;
+    private const B13B_STEPS = 13;
 
     public function test_existing_data_becomes_one_segment_and_one_coupon_per_passenger(): void
     {

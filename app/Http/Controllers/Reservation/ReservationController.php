@@ -10,6 +10,7 @@ use App\Exceptions\FareNotFound;
 use App\Exceptions\InvalidJourney;
 use App\Exceptions\InvalidStatusChange;
 use App\Exceptions\PaymentDeclined;
+use App\Exceptions\RefundNotAllowed;
 use App\Exceptions\SeatNotAllowed;
 use App\Exceptions\SeatTaken;
 use App\Http\Controllers\Controller;
@@ -26,8 +27,10 @@ use App\Models\Reservation;
 use App\Models\TripFare;
 use App\Services\CorrectionService;
 use App\Services\FareService;
+use App\Services\JourneyService;
 use App\Services\Payments\CardDetails;
 use App\Services\PnrGenerator;
+use App\Services\RefundService;
 use App\Services\ReservationService;
 use App\Services\SeatService;
 use App\Services\StatusService;
@@ -407,6 +410,96 @@ class ReservationController extends Controller
             'success',
             $passenger->first_name.' '.$passenger->last_name.' cancelled.',
         );
+    }
+
+    /**
+     * Cancel-and-refund review (Sprint 4 Feature 2). Extends the booking cancel flow.
+     */
+    public function refundForm(Reservation $reservation, JourneyService $journeys): View
+    {
+        $reservation->load([
+            'passengers.coupons.flight',
+            'passengers.coupons.segment',
+            'segments.flight',
+            'payments',
+            'flight',
+        ]);
+
+        return view('reservation.refund', [
+            'reservation' => $reservation,
+            'legNumbers' => $journeys->legNumbers($reservation),
+            'payment' => $reservation->farePayment(),
+        ]);
+    }
+
+    public function refundPreview(Request $request, Reservation $reservation, RefundService $refunds): View|RedirectResponse
+    {
+        $data = $request->validate([
+            'passenger_ids' => ['required', 'array', 'min:1'],
+            'passenger_ids.*' => ['integer'],
+            'legs' => ['nullable', 'array'],
+            'legs.*' => ['integer'],
+        ]);
+
+        try {
+            $preview = $refunds->preview(
+                $reservation,
+                $data['passenger_ids'],
+                $data['legs'] ?? [],
+            );
+        } catch (RefundNotAllowed $exception) {
+            return back()->withInput()->with('error', $exception->getMessage());
+        }
+
+        $reservation->load(['passengers', 'segments.flight', 'payments', 'flight']);
+
+        return view('reservation.refund-review', [
+            'reservation' => $reservation,
+            'preview' => $preview,
+            'passengerIds' => $data['passenger_ids'],
+            'legs' => $data['legs'] ?? [],
+            'payment' => $reservation->farePayment(),
+        ]);
+    }
+
+    public function refundConfirm(Request $request, Reservation $reservation, RefundService $refunds): RedirectResponse
+    {
+        $data = $request->validate([
+            'passenger_ids' => ['required', 'array', 'min:1'],
+            'passenger_ids.*' => ['integer'],
+            'legs' => ['nullable', 'array'],
+            'legs.*' => ['integer'],
+        ]);
+
+        try {
+            $result = $refunds->confirm(
+                $reservation,
+                $request->user(),
+                $data['passenger_ids'],
+                $data['legs'] ?? [],
+            );
+        } catch (RefundNotAllowed|InvalidStatusChange $exception) {
+            return redirect()
+                ->route('reservation.refund', $reservation)
+                ->withInput()
+                ->with('error', $exception->getMessage());
+        }
+
+        $amount = $result['preview']['refund_cents'];
+        $card = $result['preview']['payment'];
+        $message = $amount > 0 && $card
+            ? 'Refunded '.Money::format($amount).' to '.$card->card_brand.' ••••'.$card->card_last4
+            : 'Booking cancelled. Refund '.Money::format(0).'.';
+
+        return redirect()
+            ->route('reservation.search', ['pnr' => $reservation->pnr])
+            ->with('success', $message)
+            ->with('refund_receipt', [
+                'amount_cents' => $amount,
+                'card_brand' => $card?->card_brand,
+                'card_last4' => $card?->card_last4,
+                'fee_cents' => $result['preview']['fee_cents'],
+            ]);
     }
 
     private function journeyFromRequest(StoreReservationRequest $request): Journey

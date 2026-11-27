@@ -29,6 +29,11 @@ class FakeCardGateway implements PaymentGateway
         return new GatewayResult(true, $this->brand($card), $card->last4(), 'fake_'.Str::random(16), null);
     }
 
+    public function refund(string $originalReference, int $amountCents, string $currency, string $cardBrand, string $cardLast4): GatewayResult
+    {
+        return new GatewayResult(true, $cardBrand, $cardLast4, 'fake_rf_'.Str::random(14), null);
+    }
+
     /**
      * MM/YY, and not past the end of that month.
      */

@@ -461,7 +461,7 @@ class SalesTest extends TestCase
         $response = $this->get(route('manager.sales'));
 
         $this->assertSame(
-            ['fares_cents' => 25000, 'fees_cents' => 14000, 'total_cents' => 39000],
+            ['fares_cents' => 25000, 'fees_cents' => 14000, 'refunds_cents' => 0, 'total_cents' => 39000],
             $this->report($response, $flight)['revenue'],
         );
         $this->assertSame('$250.00', $this->revenue($response, $flight, 'fares'));
@@ -481,7 +481,7 @@ class SalesTest extends TestCase
         $this->charge(20000, PaymentKind::Fare, reservation: $reservation);
 
         $this->assertSame(
-            ['fares_cents' => 30000, 'fees_cents' => 0, 'total_cents' => 30000],
+            ['fares_cents' => 30000, 'fees_cents' => 0, 'refunds_cents' => 0, 'total_cents' => 30000],
             $this->report($this->get(route('manager.sales')), $flight)['revenue'],
         );
     }
@@ -501,7 +501,7 @@ class SalesTest extends TestCase
         $this->charge(100, PaymentKind::ExcessBaggage, reservation: $reservation);
 
         $this->assertSame(
-            ['fares_cents' => 2000, 'fees_cents' => 1100, 'total_cents' => 3100],
+            ['fares_cents' => 2000, 'fees_cents' => 1100, 'refunds_cents' => 0, 'total_cents' => 3100],
             $this->report($this->get(route('manager.sales')), $flight)['revenue'],
         );
     }
@@ -524,7 +524,7 @@ class SalesTest extends TestCase
         $response = $this->get(route('manager.sales'));
 
         $this->assertSame(
-            ['fares_cents' => 25000, 'fees_cents' => 0, 'total_cents' => 25000],
+            ['fares_cents' => 25000, 'fees_cents' => 0, 'refunds_cents' => 0, 'total_cents' => 25000],
             $this->report($response, $flight)['revenue'],
         );
         $this->assertSame('$250.00', $this->revenue($response, $flight, 'total'));

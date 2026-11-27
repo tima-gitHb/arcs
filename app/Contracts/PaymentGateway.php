@@ -11,4 +11,9 @@ use App\Services\Payments\GatewayResult;
 interface PaymentGateway
 {
     public function charge(CardDetails $card, int $amountCents, string $currency): GatewayResult;
+
+    /**
+     * Return money on a previous charge. Fake gateway always approves instantly.
+     */
+    public function refund(string $originalReference, int $amountCents, string $currency, string $cardBrand, string $cardLast4): GatewayResult;
 }

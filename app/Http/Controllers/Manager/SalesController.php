@@ -177,8 +177,10 @@ class SalesController extends Controller
             + $totals[PaymentKind::Fee->value]
             + $totals[PaymentKind::Upgrade->value];
 
+        $refunds = $totals[PaymentKind::Refund->value] ?? 0;
         $totals['extras'] = $extras;
-        $totals['grand'] = $totals[PaymentKind::Fare->value] + $extras;
+        // Net revenue: charges − refunds (Sprint 4 Feature 2).
+        $totals['grand'] = $totals[PaymentKind::Fare->value] + $extras - $refunds;
 
         return $totals;
     }
@@ -240,7 +242,7 @@ class SalesController extends Controller
             ->leftJoin('reservations as booking', 'booking.id', '=', 'payments.reservation_id')
             ->leftJoin('passengers', 'passengers.id', '=', 'payments.passenger_id')
             ->leftJoin('reservations as traveller', 'traveller.id', '=', 'passengers.reservation_id')
-            ->where('payments.status', PaymentStatus::Succeeded->value)
+            ->whereIn('payments.status', [PaymentStatus::Succeeded->value, PaymentStatus::Refunded->value])
             ->whereIn(DB::raw($flightId), $flights->modelKeys())
             ->select(DB::raw($flightId.' as flight_id'), 'payments.kind', DB::raw('sum(payments.amount_cents) as total'))
             ->groupBy(DB::raw($flightId), 'payments.kind')
@@ -263,9 +265,10 @@ class SalesController extends Controller
         }
 
         // Fares and fees are told apart by the payment kind only: Fare = fares; ExtraBag, ExcessBaggage
-        // and Fee = fees. A Fare payment that also holds fees would still count as fares.
+        // and Fee = fees. Refunds reduce net total (Sprint 4 Feature 2).
         $fares = $revenue[PaymentKind::Fare->value] ?? 0;
-        $fees = $revenue->except(PaymentKind::Fare->value)->sum();
+        $refunds = $revenue[PaymentKind::Refund->value] ?? 0;
+        $fees = $revenue->except([PaymentKind::Fare->value, PaymentKind::Refund->value])->sum();
 
         return [
             'flight' => $flight,
@@ -273,7 +276,12 @@ class SalesController extends Controller
             // Passengers with no class are in no class line, but they did buy a seat: overall counts them.
             'not_set' => $sold[''] ?? 0,
             'overall' => $this->line($sold->sum(), $capacity->sum()),
-            'revenue' => ['fares_cents' => $fares, 'fees_cents' => $fees, 'total_cents' => $fares + $fees],
+            'revenue' => [
+                'fares_cents' => $fares,
+                'fees_cents' => $fees,
+                'refunds_cents' => $refunds,
+                'total_cents' => $fares + $fees - $refunds,
+            ],
         ];
     }
 
