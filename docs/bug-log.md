@@ -329,3 +329,80 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Cause: the B12 test expected the old legend order; the new legend lists the states in a different order.
 - Fix: test updated to the new legend order; seat-map behaviour unchanged.
 - Status: Fixed
+
+## BUG-029 · Weekly schedule skipped the first valid day (timezone compare)
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 1)
+- Card / branch: Feature 1 · feature/fees-weekly-schedules
+- Where: FlightSchedule::isValidOn · GenerateFlightsFromSchedule
+- Severity: Major
+- Steps: 1. Create Mon/Wed/Fri schedule valid_from = first Monday 2. Generate 4 weeks
+- Expected: 12 flights including the valid_from Monday
+- Actual: 11 flights; first local day skipped. Date-column midnight UTC compared to origin-local midnight (earlier in UTC).
+- Status: Fixed
+- Fix: compare `toDateString()` only in `isValidOn`
+- Retested: WeeklyScheduleTest (Mon/Wed/Fri + DST)
+
+## BUG-030 · B13bMigrationTest rollback step count stale after new migration
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 1)
+- Card / branch: Feature 1 · feature/fees-weekly-schedules
+- Where: tests/Feature/B13bMigrationTest.php B13B_STEPS
+- Severity: Minor
+- Steps: 1. Add flight_schedules migration 2. php artisan test --filter=B13bMigrationTest
+- Expected: rollback still reaches pre-segment schema
+- Actual: reservation_segments still present after --step=11
+- Status: Fixed
+- Fix: B13B_STEPS 11 → 12 (include flight_schedules)
+
+## BUG-031 · Refund refused checked-in passenger with wrong message
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 2)
+- Card / branch: Feature 2 · feature/fees-weekly-schedules
+- Where: RefundService::targetCoupons
+- Severity: Major
+- Steps: 1. Check in a passenger 2. Cancel and refund that passenger
+- Expected: "Lina Haddad is checked in on ARxxx — cannot refund."
+- Actual: "… has no booked flights to cancel." (only Booked coupons were selected)
+- Status: Fixed
+- Fix: include non-Cancelled coupons in the selection set; assertEligible reports status
+
+## BUG-032 · B13bMigrationTest step count stale after refunds migration
+- Date / who: 27 Nov 2026 · Auto (Sprint 4 Feature 2)
+- Severity: Minor
+- Where: B13bMigrationTest B13B_STEPS
+- Fix: 12 → 13
+- Status: Fixed
+
+## BUG-033 · Hiding Cancelled coupons from couponsOfLeg broke check-in refusal
+- Date / who: 28 Nov 2026 · Auto (Sprint 4 Feature 3)
+- Card / branch: Feature 3 · feature/fees-weekly-schedules
+- Where: JourneyService::couponsOfLeg / StatusService::checkIn
+- Severity: Major
+- Steps: 1. Cancel a passenger 2. Attempt check-in (or late check-in)
+- Expected: "Reservation cancelled"
+- Actual: 500 — Attempt to read property "flight" on null (empty coupon set skipped ensureBooked)
+- Status: Fixed
+- Fix: omit only Exchanged from couponsOfLeg; keep Cancelled so ensureBooked still throws. segmentsOfLeg drops all-Exchanged segments only.
+- Retested: B7StatusServiceTest, C1CheckinSearchTest, G5LateCheckInTest, ExchangeTest
+
+## BUG-034 · composer test:mysql hit default 300s process timeout
+- Date / who: 28 Nov 2026 · Auto (Sprint 4 Feature 3)
+- Card / branch: Feature 3 · feature/fees-weekly-schedules
+- Where: composer test:mysql (Composer Process.php timeout)
+- Severity: Minor
+- Steps: 1. Run `composer test:mysql` on a cold machine after Feature 3
+- Expected: suite finishes
+- Actual: process killed at 300s mid-suite
+- Status: Workaround
+- Fix: run with `COMPOSER_PROCESS_TIMEOUT=0` (or raise timeout). Suite then green (958).
+- Retested: composer test:mysql with timeout disabled
+
+## BUG-035 · Clearing passenger email wrote null into audit_log.new_value
+- Date / who: 28 Nov 2026 · Auto (CR-12 passenger email)
+- Card / branch: feature/C19-passenger-email-checkin
+- Where: PassengerService::updateEmail
+- Severity: Major
+- Steps: 1. Set a passenger email 2. Clear it at the check-in desk
+- Expected: email cleared; audit old → "" 
+- Actual: SQL NOT NULL on audit_log.new_value
+- Status: Fixed
+- Fix: store empty string for cleared old/new email values (column is NOT NULL)
+- Retested: PassengerEmailCheckinTest

@@ -23,6 +23,7 @@ class ETicketMail extends Mailable
     public function __construct(
         public Reservation $reservation,
         public Payment $payment,
+        public ?string $changeNote = null,
     ) {}
 
     public function envelope(): Envelope
@@ -41,6 +42,7 @@ class ETicketMail extends Mailable
             with: [
                 'reservation' => $this->reservation,
                 'payment' => $this->payment,
+                'changeNote' => $this->changeNote,
             ],
         );
     }

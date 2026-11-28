@@ -3,6 +3,10 @@
 
 Booking confirmed. Give this PNR to the passenger for check-in.
 
+@if (! empty($changeNote))
+{{ $changeNote }}
+@endif
+
 @include('emails.partials.itinerary', ['reservation' => $reservation])
 
 @include('emails.partials.payment', ['payment' => $payment])

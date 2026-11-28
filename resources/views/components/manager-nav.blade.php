@@ -4,7 +4,7 @@
     $section = match (true) {
         request()->routeIs('manager.dashboard') => 'overview',
         request()->routeIs('manager.home') || request()->routeIs('manager.flight-lists.*') => 'lists',
-        request()->routeIs('manager.flights*') || request()->routeIs('manager.aircraft*') => 'fleet',
+        request()->routeIs('manager.flights*') || request()->routeIs('manager.aircraft*') || request()->routeIs('manager.schedules*') => 'fleet',
         request()->routeIs('manager.airports*') => 'airports',
         request()->routeIs('manager.accounts*') => 'staff',
         request()->routeIs('manager.rules*') => 'rules',
@@ -50,6 +50,7 @@
         'fleet' => [
             $link('Flights', 'manager.flights', request()->routeIs('manager.flights') && ! request()->routeIs('manager.flights.create') && ! request()->routeIs('manager.flights.show')),
             $link('New flight', 'manager.flights.create', request()->routeIs('manager.flights.create')),
+            $link('Schedules', 'manager.schedules.index', request()->routeIs('manager.schedules*')),
             $link('Aircraft fleet', 'manager.aircraft.index', request()->routeIs('manager.aircraft.index')),
             $link('New aircraft', 'manager.aircraft.create', request()->routeIs('manager.aircraft.create')),
         ],

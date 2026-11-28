@@ -37,6 +37,7 @@
                     <thead class="bg-gray-50 text-left text-gray-500">
                         <tr>
                             <th class="px-4 py-2 font-medium">Passenger</th>
+                            <th class="px-4 py-2 font-medium">Email</th>
                             <th class="px-4 py-2 font-medium">Documents</th>
                             <th class="px-4 py-2 font-medium">Entry</th>
                             <th class="px-4 py-2 font-medium">Seat</th>
@@ -45,7 +46,11 @@
                     </thead>
                     <tbody class="divide-y divide-gray-100">
                         @foreach ($rows as $row)
-                            @php($passenger = $row['passenger'])
+                            @php
+                                $passenger = $row['passenger'];
+                                $emailLabel = app(\App\Services\PassengerService::class)->noticeEmailLabel($passenger);
+                                $editingGroupEmail = old('_email_passenger_id') == $passenger->id || ($errors->has('email') && (int) old('_email_passenger_id') === $passenger->id);
+                            @endphp
                             <tr class="passenger-row align-top"
                                 data-passenger-id="{{ $passenger->id }}"
                                 data-type="{{ $passenger->type->value }}"
@@ -58,6 +63,26 @@
                                         <x-status-badge :status="$passenger->status" />
                                     </p>
                                     <a href="{{ route('checkin.passengers.show', $passenger) }}" class="text-xs font-medium hover:underline" style="color: var(--arcs-accent-text);">Open</a>
+                                </td>
+                                <td class="px-4 py-3 text-sm">
+                                    <p class="text-gray-700">{{ $emailLabel }}</p>
+                                    <details class="mt-1" @if ($editingGroupEmail) open @endif>
+                                        <summary class="cursor-pointer text-xs font-medium hover:underline" style="color: var(--arcs-accent-text);">
+                                            {{ trim((string) $passenger->email) !== '' ? 'Edit' : 'Add' }}
+                                        </summary>
+                                        <form method="POST" action="{{ route('checkin.passengers.email', $passenger) }}" class="mt-2 space-y-2">
+                                            @csrf
+                                            @method('PUT')
+                                            <input type="hidden" name="_email_passenger_id" value="{{ $passenger->id }}">
+                                            <x-text-input name="email" type="email" class="block w-full text-sm"
+                                                :value="old('_email_passenger_id') == $passenger->id ? old('email', $passenger->email) : $passenger->email"
+                                                maxlength="255" autocomplete="off" placeholder="email or blank" />
+                                            @if ($editingGroupEmail)
+                                                <x-input-error :messages="$errors->get('email')" />
+                                            @endif
+                                            <button type="submit" class="arcs-btn-primary !min-h-0 px-2 py-1 text-xs">Save</button>
+                                        </form>
+                                    </details>
                                 </td>
                                 <td class="px-4 py-3">
                                     <x-status-badge :label="$row['documentStatus']" :status="$row['documentStatus'] === 'OK' ? 'Succeeded' : 'Failed'" />

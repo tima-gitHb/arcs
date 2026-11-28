@@ -66,16 +66,47 @@ class BoardingPassService
     }
 
     /**
-     * Email boarding-pass and bag-tag PDFs to the passenger (or reservation contact).
+     * Resend the check-in complete mail (Done step). Same address order and failure handling as
+     * the first send; writes a checkin_email_resent audit when an address exists.
+     *
+     * @return string|null Address used, or null when there is no email to send to.
+     */
+    public function resendCheckInEmail(Passenger $passenger, User $by, ?SegmentDirection $direction = null, ?int $leg = null): ?string
+    {
+        $leg ??= $this->journeys->legFor($passenger, $by, $direction);
+        $direction ??= $this->journeys->segmentsOfLeg($passenger->reservation, $leg)->first()?->direction
+            ?? $this->journeys->directionFor($passenger, $by);
+
+        $email = app(PassengerService::class)->noticeEmail($passenger);
+        if ($email === null) {
+            return null;
+        }
+
+        AuditEntry::create([
+            'passenger_id' => $passenger->id,
+            'field' => 'checkin_email_resent',
+            'old_value' => null,
+            'new_value' => mb_substr($email, 0, 255),
+            'user_id' => $by->id,
+            'changed_at' => now(),
+        ]);
+
+        $this->sendCheckInEmail($passenger, $direction, $by, $leg);
+
+        return $email;
+    }
+
+    /**
+     * Email boarding-pass and bag-tag PDFs to the passenger email, else the reservation contact.
      * No address → skip. Send failure → log + audit_log, check-in already committed.
      */
     private function sendCheckInEmail(Passenger $passenger, SegmentDirection $direction, User $by, ?int $leg = null): void
     {
         $passenger->loadMissing('reservation');
-        // No passengers.email column yet: reservation contact only. Ready for a future passenger email.
-        $email = trim((string) ($passenger->email ?? $passenger->reservation->contact_email ?? ''));
+        // passengers.email first, then reservations.contact_email (CR-12).
+        $email = app(PassengerService::class)->noticeEmail($passenger);
 
-        if ($email === '') {
+        if ($email === null) {
             return;
         }
 

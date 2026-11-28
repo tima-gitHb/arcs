@@ -18,16 +18,19 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
 - Desktop browsers only (Chrome, Edge).
 
 ## Domain rules (never break these)
-- **Passenger status** (enum `PassengerStatus`): `Booked`, `CheckedIn`, `Boarded`, `Cancelled`, `NoShow`.
+- **Passenger status** (enum `PassengerStatus`): `Booked`, `CheckedIn`, `Boarded`, `Cancelled`, `NoShow`, `Exchanged`.
   - Allowed moves only:
     - Booked → CheckedIn (check-in staff; flight status `CheckinOpen`; inside the check-in window; valid travel document) — SR-6, SR-23, SR-30
     - Booked → CheckedIn at the gate, after check-in has closed and before boarding closes: late check-in,
       approved on the spot by a Manager with a written reason (`gate_overrides` row). Skips only the window and
       flight-status rule; documents and seat still apply — `StatusService::lateCheckIn()`, SR-29
     - Booked → Cancelled (reservation staff; seat released) — SR-5
+    - Booked → Exchanged (reservation staff, ticket exchange / CR-19): `StatusService::exchangeCoupons()` when a
+      leg is replaced; old seats released; new coupons stay Booked on the new flights. Exchanged coupons are
+      inactive on check-in lists and manifests (`isInactiveOnFlight()`).
     - CheckedIn → Boarded (gate staff; flight status `Boarding`) — SR-10
     - CheckedIn → NoShow (automatically when gate staff close boarding) — SR-12
-  - `Boarded`, `Cancelled`, `NoShow` are final.
+  - `Boarded`, `Cancelled`, `NoShow`, `Exchanged` are final.
 - **Only `App\Services\StatusService` may change a passenger's status.** It checks the rule,
   saves the change and writes an `audit_log` row (SR-26). Never set a status anywhere else.
 - **Segments and coupons** (B13b, design: `docs/design/B13b-segments.md`):
@@ -108,14 +111,15 @@ Requirements: `docs/ARCS_BRD_v1.0.docx` (BRD). Every feature traces to an SR-ID 
   Schengen: for a destination in `config/schengen.php`, a valid visa or residence permit from any member counts, not
   only one from the destination. The 90/180-day stay limit is not checked. Transit rules are not covered.
 - Staff never type or read country codes: the database stores ISO-2 codes, `App\Services\CountryList` gives the names.
-- Out of scope (never build): refunds (also: cancelling only one direction of a journey), online/passenger check-in,
-  blocking automatic visa checks and live/external visa or APIS checks, external systems (GDS, APIS),
-  transit visa rules, payroll.
+- Out of scope (never build): online/passenger check-in, blocking automatic visa checks and live/external visa
+  or APIS checks, external systems (GDS, APIS), transit visa rules, payroll.
+  (Refunds CR-18, exchanges CR-19 and weekly schedules CR-17 are built under change control.)
 
-## Database (22 tables)
+## Database (24 tables)
 users, aircraft, seats, flights, reservations, passengers, seat_assignments, bags,
 boarding_passes, special_services, travel_documents, audit_log, baggage_allowances,
-gate_overrides, settings, entry_rules, fares, fees, payments, airports, reservation_segments, coupons.
+gate_overrides, settings, entry_rules, fares, fees, payments, airports, reservation_segments, coupons,
+flight_schedules, trip_fares.
 - **Never edit an existing migration** once it is on `dev` or `main`. Schema change = new migration,
   agreed with the team first.
 - Foreign keys always declared (`constrained()`), with `cascadeOnDelete()` only for seats → aircraft.
@@ -143,6 +147,8 @@ gate_overrides, settings, entry_rules, fares, fees, payments, airports, reservat
     the seat's, else the booked `passengers.cabin_class`; an infant uses the adult's. Extras: `extra_bags`, `extra_kg`.
   - Prices: `FareService::quote($passengers, $extras)` gives lines and a total in cents, from the `fares` and `fees`
     tables. Enum `FeeCode`. Show amounts with `Money::format()`.
+    Cancellation / Change fees (Sprint 4): `FeeCode::Cancellation` / `FeeCode::Change`;
+    `FareService::cancellationFee($passengers, $legs)` and `changeFee($passengers, $legs)` (per passenger × per leg).
   - **Route fares** (B13b, SR-69): a `fares` row with `origin_airport_code` + `destination_airport_code` is the price on
     that route; a row with neither is the **default**. `quote(..., origin: 'BEY', destination: 'IST')` uses the route
     fare when it exists, else the default; without a route it uses the default, as before. One fare per
@@ -152,6 +158,24 @@ gate_overrides, settings, entry_rules, fares, fees, payments, airports, reservat
     The Fares page with a route selector is card M14; the booking screen using route fares is card R11/R12.
   - Payments: `PaymentService::charge(...)` through `App\Contracts\PaymentGateway` (bound to `FakeCardGateway`: 4242 4242
     4242 4242 accepted, anything else declined). Card data travels in `CardDetails`. Enums `PaymentKind`, `PaymentStatus`.
+  - **Refunds** (CR-18): `RefundService` + `PaymentService::refund`. Kind `PaymentKind::Refund`, status
+    `PaymentStatus::Refunded`, linked with `refund_of_payment_id`; amount is positive cents; optional `breakdown` JSON
+    (same structure as the original fare charge, with a fallback when old bookings have no snapshot). Net revenue
+    on Sales / dashboard subtracts refunds. Cancelling one leg of a multi-city journey is supported.
+  - **Exchanges** (CR-19): `ExchangeService` changes one leg (same origin→destination) for selected passengers.
+    Pricing: new leg fare − paid for that leg; higher → difference + change fee; lower/equal → fee only (no fare
+    refund). Charge is `PaymentKind::Exchange`. Old coupons → Exchanged via StatusService; new segments/coupons/seats;
+    same PNR; e-ticket resent with a "Changed on …" line.
+  - **Weekly schedules** (CR-17): `FlightSchedule` + `GenerateFlightsFromSchedule` (Manager UI and
+    `php artisan arcs:generate-flights`). Local departure clock; aircraft clash skips a date; edits touch future
+    unbooked flights only.
+  - **FlightStatusGate** / `FlightAction`: shared allow/deny for book, check-in, refund, exchange, etc. Prefer the
+    gate over ad-hoc status lists in controllers.
+  - **ConnectionTime**: labels and "tight" connection chips between two flights (check-in / itinerary).
+  - **Check-in per leg** (C23 / CR-16): `reservation_segments.leg`; `JourneyService::legFor` / `couponsOfLeg` /
+    `flightsOfLeg`. Check-in moves a whole leg; boarding stays per flight.
+  - **Passenger email** (CR-12): `passengers.email` optional; check-in / boarding-pass mail uses passenger email,
+    else `reservations.contact_email`. Desk edits go through `PassengerService::updateEmail` (audit field `email`).
   - Reservation contact: `reservations.contact_email`, `contact_phone`; rules in `ReservationContactRules::rules()`.
   - Cabins: enum `CabinClass` is Business, Premium, Economy. `AircraftService` places `premium_rows` after the Business rows.
   - Flight audit rows: `AuditEntry::forFlight(...)` (`audit_log.flight_id`; `passenger_id` can be null).

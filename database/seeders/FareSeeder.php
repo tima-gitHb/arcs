@@ -39,11 +39,14 @@ class FareSeeder extends Seeder
         }
 
         // Existing fee codes; amounts kept so pricing tests stay stable.
+        // Cancellation / Change: per passenger per leg (Sprint 4 Feature 1).
         $fees = [
             [FeeCode::ExtraBag, 5000],
             [FeeCode::ExcessKg, 1000],
             [FeeCode::SportsEquipment, 7500],
             [FeeCode::Pet, 6000],
+            [FeeCode::Cancellation, 7500],
+            [FeeCode::Change, 5000],
         ];
 
         foreach ($fees as [$code, $cents]) {

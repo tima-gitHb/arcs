@@ -97,8 +97,18 @@ SESSION_LIFETIME=90        # log out after 90 minutes without activity (SR-39)
 php artisan migrate:fresh --seed
 ```
 
-This creates the 15 ARCS tables plus four sample flights (ME 201, ME 305, ME 110, ME 422) with passengers.
+This creates the ARCS tables plus sample flights with passengers, and weekly schedules
+(AR211/212 BEY–CDG, AR264/265 BEY–IST, AR401/402 BEY–DXB, …) valid for three months.
 Times are relative to now, so the data works on the day you seed it. Run it again any time to reset.
+
+To create (or top up) dated flights from every active weekly schedule:
+
+```bash
+php artisan arcs:generate-flights
+```
+
+Safe to re-run: existing flight numbers on the same local date are skipped. Use `--weeks=8` (default)
+to choose how far ahead to generate.
 
 **7. Start the app**
 

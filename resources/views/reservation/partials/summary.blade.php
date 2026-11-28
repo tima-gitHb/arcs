@@ -5,6 +5,9 @@
         @if ($reservation->isGroup())
             <span class="ml-2 align-middle rounded-full px-2 py-0.5 font-sans text-xs font-semibold uppercase tracking-wide text-white" style="background: var(--arcs-navy); letter-spacing: 0.06em;">Group</span>
         @endif
+        @if ($reservation->isCancelled())
+            <span class="ml-2 align-middle rounded-full px-2 py-0.5 font-sans text-xs font-semibold uppercase tracking-wide" style="background: #FCE8E6; color: var(--arcs-error); letter-spacing: 0.06em;">Cancelled</span>
+        @endif
     </p>
 
     <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
@@ -23,6 +26,49 @@
             </dd>
         </div>
     </dl>
+
+    @unless ($reservation->isCancelled())
+        <div class="mt-6 flex flex-wrap gap-2">
+            <a href="{{ route('reservation.refund', $reservation) }}" class="arcs-btn-danger !min-h-0 px-3 py-1.5 text-sm">
+                Cancel and refund
+            </a>
+        </div>
+    @endunless
+
+    @php
+        $legNumbers = $reservation->segments->pluck('leg')->map(fn ($l) => (int) $l)->unique()->sort()->values();
+    @endphp
+    @if ($legNumbers->isNotEmpty() && ! $reservation->isCancelled())
+        <h2 class="mt-8 text-base font-semibold text-gray-900">Itinerary</h2>
+        <div class="mt-3 space-y-3">
+            @foreach ($legNumbers as $legNo)
+                @php $legSegs = $reservation->segments->where('leg', $legNo); @endphp
+                <div class="rounded-[14px] border px-4 py-3" style="border-color: var(--arcs-border);">
+                    <div class="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                            <p class="text-sm font-semibold">Leg {{ $legNo }}</p>
+                            @foreach ($legSegs as $segment)
+                                @php
+                                    $activeOnFlight = $reservation->passengers->contains(fn ($p) => $p->coupons->contains(
+                                        fn ($c) => $c->flight_id === $segment->flight_id && $c->status === \App\Enums\PassengerStatus::Booked
+                                    ));
+                                @endphp
+                                <p @class(['mt-1 text-sm arcs-mono', 'text-gray-400 line-through' => ! $activeOnFlight])>
+                                    {{ $segment->flight->flight_no }} · {{ $segment->flight->origin }}→{{ $segment->flight->destination }}
+                                    @unless ($activeOnFlight)
+                                        <span class="ml-1 font-sans text-xs no-underline">Exchanged / inactive</span>
+                                    @endunless
+                                </p>
+                            @endforeach
+                        </div>
+                        <a href="{{ route('reservation.exchange', [$reservation, $legNo]) }}" class="text-sm font-medium hover:underline" style="color: var(--arcs-accent-text);">
+                            Change this leg
+                        </a>
+                    </div>
+                </div>
+            @endforeach
+        </div>
+    @endif
 
     <h2 class="mt-8 text-base font-semibold text-gray-900">Passengers</h2>
 

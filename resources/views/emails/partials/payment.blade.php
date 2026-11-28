@@ -11,9 +11,11 @@
             $paidAt .= ' UTC';
         }
     }
+    $amountLabel = $label ?? 'Amount paid';
+    $amountCents = $amountOverride ?? $payment?->amount_cents;
 @endphp
 @if ($payment)
-**Amount paid:** {{ Money::format($payment->amount_cents) }}
+**{{ $amountLabel }}:** {{ Money::format((int) $amountCents) }}
 
 {{ $payment->card_brand }} ••••{{ $payment->card_last4 }} · reference {{ $payment->gateway_reference }}@if ($paidAt) · {{ $paidAt }}@endif
 @endif

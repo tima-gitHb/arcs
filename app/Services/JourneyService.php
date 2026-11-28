@@ -291,6 +291,18 @@ class JourneyService
     {
         return $this->segments($reservation)
             ->where('leg', $leg)
+            ->filter(function (ReservationSegment $segment) {
+                // Drop segments whose coupons are all Exchanged (Sprint 4 Feature 3).
+                // Cancelled segments stay so check-in/refund still see them.
+                $query = Coupon::query()->where('reservation_segment_id', $segment->id);
+                if (! (clone $query)->exists()) {
+                    return true;
+                }
+
+                return (clone $query)
+                    ->where('status', '!=', PassengerStatus::Exchanged->value)
+                    ->exists();
+            })
             ->values();
     }
 
@@ -308,6 +320,7 @@ class JourneyService
 
     /**
      * Coupons of one leg, in journey order (C23 / CR-16).
+     * Exchanged coupons are omitted (inactive on the itinerary / check-in).
      *
      * @return Collection<int, Coupon>
      */
@@ -318,8 +331,9 @@ class JourneyService
             ->join('reservation_segments', 'reservation_segments.id', '=', 'coupons.reservation_segment_id')
             ->where('coupons.passenger_id', $passenger->id)
             ->where('reservation_segments.leg', $leg)
+            ->where('coupons.status', '!=', PassengerStatus::Exchanged->value)
             ->orderBy('reservation_segments.sequence')
-            ->with('flight')
+            ->with(['flight', 'segment'])
             ->get();
     }
 
@@ -425,6 +439,91 @@ class JourneyService
         }
 
         return true;
+    }
+
+    /**
+     * A replacement set of flights for one leg must keep the same origin→destination, connect
+     * inside the leg, be bookable, and sit between the previous and next legs (Sprint 4 Feature 3).
+     *
+     * @param  list<Flight>  $newFlights
+     *
+     * @throws InvalidJourney
+     */
+    public function assertLegReplacement(Reservation $reservation, int $leg, array $newFlights): void
+    {
+        if ($newFlights === []) {
+            throw new InvalidJourney('Choose at least one flight for the new leg.');
+        }
+
+        $current = $this->flightsOfLeg($reservation, $leg);
+        if ($current->isEmpty()) {
+            throw new InvalidJourney("Leg {$leg} is not on this booking.");
+        }
+
+        $origin = $current->first()->origin;
+        $destination = $current->last()->destination;
+        if ($newFlights[0]->origin !== $origin || end($newFlights)->destination !== $destination) {
+            throw new InvalidJourney(
+                "The new leg must keep the route {$origin}→{$destination} (date/flight change only).",
+            );
+        }
+
+        $seen = [];
+        foreach ($newFlights as $flight) {
+            if (isset($seen[$flight->id])) {
+                throw new InvalidJourney("{$flight->flight_no} is in the new leg twice.");
+            }
+            $seen[$flight->id] = true;
+
+            if (! FlightStatusGate::allows($flight, FlightAction::Book)) {
+                throw new InvalidJourney("{$flight->flight_no} is {$flight->status->label()}: it cannot be booked.");
+            }
+        }
+
+        if (count($newFlights) > self::MAX_FLIGHTS_PER_DIRECTION) {
+            throw new InvalidJourney('At most '.self::MAX_FLIGHTS_PER_DIRECTION.' flights in each leg.');
+        }
+
+        for ($i = 1; $i < count($newFlights); $i++) {
+            $this->ensureConnects($newFlights[$i - 1], $newFlights[$i]);
+        }
+
+        $legNumbers = $this->legNumbers($reservation);
+        $prevLeg = null;
+        $nextLeg = null;
+        foreach ($legNumbers as $number) {
+            if ($number < $leg) {
+                $prevLeg = $number;
+            }
+            if ($number > $leg && $nextLeg === null) {
+                $nextLeg = $number;
+            }
+        }
+
+        if ($prevLeg !== null) {
+            $previous = $this->flightsOfLeg($reservation, $prevLeg)->last();
+            if ($previous?->arrives_at === null) {
+                throw new InvalidJourney("Set the arrival time of {$previous->flight_no} first.");
+            }
+            if ($newFlights[0]->departure_at->lt($previous->arrives_at)) {
+                throw new InvalidJourney(
+                    "The new leg departs before the previous leg lands ({$previous->flight_no} lands after {$newFlights[0]->flight_no} departs).",
+                );
+            }
+        }
+
+        if ($nextLeg !== null) {
+            $next = $this->flightsOfLeg($reservation, $nextLeg)->first();
+            $lastNew = end($newFlights);
+            if ($lastNew->arrives_at === null) {
+                throw new InvalidJourney("Set the arrival time of {$lastNew->flight_no} first.");
+            }
+            if ($next->departure_at->lt($lastNew->arrives_at)) {
+                throw new InvalidJourney(
+                    "The new leg lands after the next leg departs ({$lastNew->flight_no} lands after {$next->flight_no} departs).",
+                );
+            }
+        }
     }
 
     /**

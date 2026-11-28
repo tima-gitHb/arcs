@@ -61,7 +61,7 @@ class ManifestService
             ->join('coupons', 'coupons.id', '=', 'seat_assignments.coupon_id')
             ->join('seats', 'seats.id', '=', 'seat_assignments.seat_id')
             ->where('seat_assignments.flight_id', $flight->id)
-            ->where('coupons.status', '!=', PassengerStatus::Cancelled->value)
+            ->whereNotIn('coupons.status', [PassengerStatus::Cancelled->value, PassengerStatus::Exchanged->value])
             ->toBase()
             ->get(['seats.seat_no', 'coupons.status']);
 
@@ -194,7 +194,7 @@ class ManifestService
         return $query
             ->whereHas('coupons', fn ($coupon) => $coupon
                 ->where('coupons.flight_id', $flight->id)
-                ->where('coupons.status', '!=', PassengerStatus::Cancelled->value))
+                ->whereNotIn('coupons.status', [PassengerStatus::Cancelled->value, PassengerStatus::Exchanged->value]))
             ->with([
                 'coupon' => fn ($coupon) => $coupon->where('coupons.flight_id', $flight->id),
                 'coupon.checkedInBy.user',

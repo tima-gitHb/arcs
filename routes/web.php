@@ -25,11 +25,13 @@ use App\Http\Controllers\Manager\DashboardController;
 use App\Http\Controllers\Manager\FareController;
 use App\Http\Controllers\Manager\FlightController;
 use App\Http\Controllers\Manager\FlightListController;
+use App\Http\Controllers\Manager\FlightScheduleController;
 use App\Http\Controllers\Manager\PaymentReportController;
 use App\Http\Controllers\Manager\RuleController;
 use App\Http\Controllers\Manager\SalesController;
 use App\Http\Controllers\Manager\TripFareController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Reservation\ExchangeController;
 use App\Http\Controllers\Reservation\ReservationController;
 use Illuminate\Support\Facades\Route;
 
@@ -61,6 +63,13 @@ Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('re
     Route::get('/passengers/{passenger}/edit', [ReservationController::class, 'edit'])->name('edit');
     Route::put('/passengers/{passenger}', [ReservationController::class, 'update'])->name('update');
     Route::post('/passengers/{passenger}/cancel', [ReservationController::class, 'cancel'])->name('cancel');
+    Route::get('/reservations/{reservation}/refund', [ReservationController::class, 'refundForm'])->name('refund');
+    Route::post('/reservations/{reservation}/refund/preview', [ReservationController::class, 'refundPreview'])->name('refund.preview');
+    Route::post('/reservations/{reservation}/refund', [ReservationController::class, 'refundConfirm'])->name('refund.confirm');
+    Route::get('/reservations/{reservation}/exchange/{leg}', [ExchangeController::class, 'form'])->name('exchange');
+    Route::post('/reservations/{reservation}/exchange/{leg}/search', [ExchangeController::class, 'search'])->name('exchange.search');
+    Route::post('/reservations/{reservation}/exchange/{leg}/review', [ExchangeController::class, 'review'])->name('exchange.review');
+    Route::post('/reservations/{reservation}/exchange/{leg}', [ExchangeController::class, 'confirm'])->name('exchange.confirm');
 });
 
 // Check-in staff, at their station: only flights departing from it (B13a).
@@ -69,6 +78,8 @@ Route::middleware(['auth', 'role:checkin', 'station'])->prefix('checkin')->name(
     Route::get('/flights/{flight}', [FlightCheckinController::class, 'show'])->name('flights.show');
     Route::get('/passengers/{passenger}', [CheckinController::class, 'show'])->name('passengers.show');
     Route::post('/passengers/{passenger}/confirm', [CheckinController::class, 'confirm'])->name('passengers.confirm');
+    Route::put('/passengers/{passenger}/email', [CheckinController::class, 'updateEmail'])->name('passengers.email');
+    Route::post('/passengers/{passenger}/email/resend', [CheckinController::class, 'resendEmail'])->name('passengers.email.resend');
     Route::post('/passengers/{passenger}/documents', [TravelDocumentController::class, 'store'])->name('documents.store');
     Route::put('/documents/{document}', [TravelDocumentController::class, 'update'])->name('documents.update');
     Route::post('/documents/{document}/verify', [TravelDocumentController::class, 'verify'])->name('documents.verify');
@@ -124,6 +135,14 @@ Route::middleware(['auth', 'role:manager'])->prefix('manager')->name('manager.')
     Route::get('/aircraft', [AircraftController::class, 'index'])->name('aircraft.index');
     Route::get('/aircraft/create', [AircraftController::class, 'create'])->name('aircraft.create');
     Route::post('/aircraft', [AircraftController::class, 'store'])->name('aircraft.store');
+    Route::get('/schedules', [FlightScheduleController::class, 'index'])->name('schedules.index');
+    Route::get('/schedules/create', [FlightScheduleController::class, 'create'])->name('schedules.create');
+    Route::post('/schedules', [FlightScheduleController::class, 'store'])->name('schedules.store');
+    Route::get('/schedules/{schedule}', [FlightScheduleController::class, 'show'])->name('schedules.show');
+    Route::get('/schedules/{schedule}/edit', [FlightScheduleController::class, 'edit'])->name('schedules.edit');
+    Route::put('/schedules/{schedule}', [FlightScheduleController::class, 'update'])->name('schedules.update');
+    Route::post('/schedules/{schedule}/generate', [FlightScheduleController::class, 'generate'])->name('schedules.generate');
+    Route::post('/schedules/{schedule}/flights/{flight}/cancel', [FlightScheduleController::class, 'cancelDate'])->name('schedules.cancel-date');
     Route::get('/accounts', [AccountController::class, 'index'])->name('accounts');
     Route::get('/accounts/create', [AccountController::class, 'create'])->name('accounts.create');
     Route::post('/accounts', [AccountController::class, 'store'])->name('accounts.store');

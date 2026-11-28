@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PassengerStatus;
 use App\Enums\PaymentKind;
 use App\Enums\PaymentStatus;
 use App\Enums\SegmentDirection;
@@ -89,5 +90,22 @@ class Reservation extends Model
     public function isGroup(): bool
     {
         return $this->passengers()->count() >= Limits::groupBookingMinPassengers();
+    }
+
+    /**
+     * Every passenger's coupons are Cancelled (Sprint 4 Feature 2).
+     */
+    public function isCancelled(): bool
+    {
+        $this->loadMissing('passengers.coupons');
+
+        if ($this->passengers->isEmpty()) {
+            return false;
+        }
+
+        return $this->passengers->every(
+            fn ($passenger) => $passenger->coupons->isNotEmpty()
+                && $passenger->coupons->every(fn ($coupon) => $coupon->status === PassengerStatus::Cancelled),
+        );
     }
 }

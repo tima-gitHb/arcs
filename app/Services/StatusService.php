@@ -185,7 +185,6 @@ class StatusService
 
     /**
      * Booked -> Cancelled for the whole journey; every seat is released (SR-5).
-     * Cancelling one direction only would be a partial refund: out of scope.
      */
     public function cancel(Passenger $passenger, User $by): void
     {
@@ -201,6 +200,103 @@ class StatusService
 
             foreach ($coupons as $coupon) {
                 $this->changeCouponStatus($coupon, PassengerStatus::Cancelled, $by);
+            }
+
+            $passenger->unsetRelation('coupon');
+        });
+    }
+
+    /**
+     * Booked -> Cancelled for selected coupons only (Sprint 4 Feature 2 partial refund).
+     * Seats on those flights are released; other coupons are untouched.
+     *
+     * @param  list<int>|Collection<int, Coupon>  $coupons
+     */
+    public function cancelCoupons(Passenger $passenger, User $by, iterable $coupons): void
+    {
+        DB::transaction(function () use ($passenger, $by, $coupons) {
+            $this->lock($passenger);
+
+            $ids = collect($coupons)->map(function ($coupon) {
+                return $coupon instanceof Coupon ? $coupon->id : (int) $coupon;
+            })->unique()->values()->all();
+
+            if ($ids === []) {
+                throw new InvalidStatusChange('Nothing to cancel');
+            }
+
+            $locked = Coupon::query()
+                ->where('passenger_id', $passenger->id)
+                ->whereIn('id', $ids)
+                ->with('flight')
+                ->lockForUpdate()
+                ->get();
+
+            if ($locked->count() !== count($ids)) {
+                throw new InvalidStatusChange('Coupon does not belong to this passenger');
+            }
+
+            foreach ($locked as $coupon) {
+                if ($coupon->status !== PassengerStatus::Booked) {
+                    throw new InvalidStatusChange('Only a booked passenger can be cancelled');
+                }
+            }
+
+            SeatAssignment::query()
+                ->where('passenger_id', $passenger->id)
+                ->whereIn('flight_id', $locked->pluck('flight_id'))
+                ->delete();
+
+            foreach ($locked as $coupon) {
+                $this->changeCouponStatus($coupon, PassengerStatus::Cancelled, $by);
+            }
+
+            $passenger->unsetRelation('coupon');
+        });
+    }
+
+    /**
+     * Booked -> Exchanged for selected coupons (Sprint 4 Feature 3). Seats on those flights released.
+     *
+     * @param  list<int>|Collection<int, Coupon>  $coupons
+     */
+    public function exchangeCoupons(Passenger $passenger, User $by, iterable $coupons): void
+    {
+        DB::transaction(function () use ($passenger, $by, $coupons) {
+            $this->lock($passenger);
+
+            $ids = collect($coupons)->map(function ($coupon) {
+                return $coupon instanceof Coupon ? $coupon->id : (int) $coupon;
+            })->unique()->values()->all();
+
+            if ($ids === []) {
+                throw new InvalidStatusChange('Nothing to exchange');
+            }
+
+            $locked = Coupon::query()
+                ->where('passenger_id', $passenger->id)
+                ->whereIn('id', $ids)
+                ->with('flight')
+                ->lockForUpdate()
+                ->get();
+
+            if ($locked->count() !== count($ids)) {
+                throw new InvalidStatusChange('Coupon does not belong to this passenger');
+            }
+
+            foreach ($locked as $coupon) {
+                if ($coupon->status !== PassengerStatus::Booked) {
+                    throw new InvalidStatusChange('Only a booked coupon can be exchanged');
+                }
+            }
+
+            SeatAssignment::query()
+                ->where('passenger_id', $passenger->id)
+                ->whereIn('flight_id', $locked->pluck('flight_id'))
+                ->delete();
+
+            foreach ($locked as $coupon) {
+                $this->changeCouponStatus($coupon, PassengerStatus::Exchanged, $by);
             }
 
             $passenger->unsetRelation('coupon');

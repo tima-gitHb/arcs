@@ -245,8 +245,278 @@ class FareService
     }
 
     /**
-     * @return array{label: string, quantity: int, unit_cents: int, amount_cents: int}
+     * Per-passenger, per-flight fare cents for a booking (no extras). Trip fares that cover
+     * several flights are split in proportion to each flight's route fare (Sprint 4 Feature 2).
+     *
+     * @return list<array{passenger_id: int, flight_id: int, leg: int, amount_cents: int}>
      */
+    public function passengerFlightBreakdown(Reservation $reservation): array
+    {
+        $reservation->loadMissing(['segments.flight', 'passengers']);
+        $items = [];
+
+        $legs = app(JourneyService::class)->legs($reservation);
+        $hasReturn = $reservation->segments->contains(
+            fn (ReservationSegment $segment) => $segment->direction === SegmentDirection::Return,
+        );
+
+        if ($legs->count() > 1 && ! $hasReturn) {
+            foreach ($legs as $index => $segments) {
+                $legNo = (int) ($segments->first()->leg ?? ($index + 1));
+                $origin = $segments->first()->flight->origin;
+                $destination = $segments->last()->flight->destination;
+                $flights = $segments->pluck('flight')->values();
+
+                foreach ($reservation->passengers as $passenger) {
+                    $cabin = $passenger->cabin_class ?? CabinClass::Economy;
+                    $trip = TripFare::query()
+                        ->forTrip($origin, $destination)
+                        ->where('cabin_class', $cabin)
+                        ->where('passenger_type', $passenger->type)
+                        ->first();
+
+                    if ($trip !== null) {
+                        $allocated = $this->splitProportionally(
+                            $trip->one_way_cents,
+                            $flights->mapWithKeys(fn ($flight) => [
+                                $flight->id => $this->fareCents($cabin, $passenger->type, $flight->origin, $flight->destination),
+                            ])->all(),
+                        );
+                        foreach ($flights as $flight) {
+                            $items[] = [
+                                'passenger_id' => $passenger->id,
+                                'flight_id' => $flight->id,
+                                'leg' => $legNo,
+                                'amount_cents' => $allocated[$flight->id] ?? 0,
+                            ];
+                        }
+
+                        continue;
+                    }
+
+                    foreach ($segments as $segment) {
+                        $flight = $segment->flight;
+                        $items[] = [
+                            'passenger_id' => $passenger->id,
+                            'flight_id' => $flight->id,
+                            'leg' => $legNo,
+                            'amount_cents' => $this->fareCents($cabin, $passenger->type, $flight->origin, $flight->destination),
+                        ];
+                    }
+                }
+            }
+
+            return $items;
+        }
+
+        $outbound = $reservation->segments->where('direction', SegmentDirection::Outbound)->values();
+        if ($outbound->isEmpty()) {
+            $outbound = $reservation->segments->values();
+        }
+        $returnSegs = $reservation->segments->where('direction', SegmentDirection::Return)->values();
+        $origin = $outbound->first()->flight->origin;
+        $destination = $outbound->last()->flight->destination;
+
+        foreach ($reservation->passengers as $passenger) {
+            $cabin = $passenger->cabin_class ?? CabinClass::Economy;
+            $trip = TripFare::query()
+                ->forTrip($origin, $destination)
+                ->where('cabin_class', $cabin)
+                ->where('passenger_type', $passenger->type)
+                ->first();
+
+            $outboundFlights = $outbound->pluck('flight')->values();
+            $returnFlights = $returnSegs->pluck('flight')->values();
+
+            if ($trip !== null) {
+                $outCents = $trip->one_way_cents;
+                $retCents = ($hasReturn && $trip->round_trip_cents !== null)
+                    ? max(0, $trip->round_trip_cents - $trip->one_way_cents)
+                    : ($hasReturn ? $trip->one_way_cents : 0);
+
+                if ($hasReturn && $trip->round_trip_cents !== null) {
+                    // Split the whole round-trip across all flights by route weights.
+                    $all = $outboundFlights->concat($returnFlights)->values();
+                    $allocated = $this->splitProportionally(
+                        $trip->round_trip_cents,
+                        $all->mapWithKeys(fn ($flight) => [
+                            $flight->id => $this->fareCents($cabin, $passenger->type, $flight->origin, $flight->destination),
+                        ])->all(),
+                    );
+                    foreach ($outbound as $segment) {
+                        $items[] = [
+                            'passenger_id' => $passenger->id,
+                            'flight_id' => $segment->flight_id,
+                            'leg' => (int) $segment->leg,
+                            'amount_cents' => $allocated[$segment->flight_id] ?? 0,
+                        ];
+                    }
+                    foreach ($returnSegs as $segment) {
+                        $items[] = [
+                            'passenger_id' => $passenger->id,
+                            'flight_id' => $segment->flight_id,
+                            'leg' => (int) $segment->leg,
+                            'amount_cents' => $allocated[$segment->flight_id] ?? 0,
+                        ];
+                    }
+
+                    continue;
+                }
+
+                $outAlloc = $this->splitProportionally(
+                    $outCents,
+                    $outboundFlights->mapWithKeys(fn ($flight) => [
+                        $flight->id => $this->fareCents($cabin, $passenger->type, $flight->origin, $flight->destination),
+                    ])->all(),
+                );
+                foreach ($outbound as $segment) {
+                    $items[] = [
+                        'passenger_id' => $passenger->id,
+                        'flight_id' => $segment->flight_id,
+                        'leg' => (int) $segment->leg,
+                        'amount_cents' => $outAlloc[$segment->flight_id] ?? 0,
+                    ];
+                }
+                if ($hasReturn) {
+                    $retAlloc = $this->splitProportionally(
+                        $retCents,
+                        $returnFlights->mapWithKeys(fn ($flight) => [
+                            $flight->id => $this->fareCents($cabin, $passenger->type, $flight->origin, $flight->destination),
+                        ])->all(),
+                    );
+                    foreach ($returnSegs as $segment) {
+                        $items[] = [
+                            'passenger_id' => $passenger->id,
+                            'flight_id' => $segment->flight_id,
+                            'leg' => (int) $segment->leg,
+                            'amount_cents' => $retAlloc[$segment->flight_id] ?? 0,
+                        ];
+                    }
+                }
+
+                continue;
+            }
+
+            foreach ($reservation->segments as $segment) {
+                $flight = $segment->flight;
+                $items[] = [
+                    'passenger_id' => $passenger->id,
+                    'flight_id' => $flight->id,
+                    'leg' => (int) $segment->leg,
+                    'amount_cents' => $this->fareCents($cabin, $passenger->type, $flight->origin, $flight->destination),
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Split $total across keys by weight; cents sum exactly to $total (largest remainder).
+     *
+     * @param  array<int|string, int>  $weights
+     * @return array<int|string, int>
+     */
+    private function splitProportionally(int $total, array $weights): array
+    {
+        if ($weights === []) {
+            return [];
+        }
+
+        $sum = array_sum($weights);
+        if ($sum <= 0) {
+            $each = intdiv($total, count($weights));
+            $result = array_fill_keys(array_keys($weights), $each);
+            $result[array_key_first($result)] += $total - array_sum($result);
+
+            return $result;
+        }
+
+        $raw = [];
+        $floors = [];
+        foreach ($weights as $key => $weight) {
+            $exact = $total * $weight / $sum;
+            $floors[$key] = (int) floor($exact);
+            $raw[$key] = $exact - $floors[$key];
+        }
+        $left = $total - array_sum($floors);
+        arsort($raw);
+        foreach (array_keys($raw) as $key) {
+            if ($left <= 0) {
+                break;
+            }
+            $floors[$key]++;
+            $left--;
+        }
+
+        return $floors;
+    }
+
+    /**
+     * Fare for one leg's flights for the given passengers (same rules as booking: trip fare
+     * origin→final dest when set, else per-route sum). Used by ticket exchange (Sprint 4 Feature 3).
+     *
+     * @param  list<Passenger>|Collection<int, Passenger>  $passengers
+     * @param  list<Flight>|Collection<int, \App\Models\Flight>  $flights
+     */
+    public function quoteLegFlights($passengers, $flights): Quote
+    {
+        $flightList = collect($flights)->values();
+        if ($flightList->isEmpty()) {
+            return new Quote([], 0, self::CURRENCY);
+        }
+
+        $passengerRows = collect($passengers)->map(fn (Passenger $passenger) => [
+            'cabin_class' => $passenger->cabin_class ?? CabinClass::Economy,
+            'type' => $passenger->type,
+        ])->all();
+
+        $origin = $flightList->first()->origin;
+        $destination = $flightList->last()->destination;
+
+        $trip = $this->tripFareLines($passengerRows, $origin, $destination, hasReturn: false);
+        if ($trip !== null) {
+            return new Quote($trip, array_sum(array_column($trip, 'amount_cents')), self::CURRENCY);
+        }
+
+        $lines = [];
+        foreach ($flightList as $flight) {
+            foreach ($this->quote($passengerRows, origin: $flight->origin, destination: $flight->destination)->lines as $line) {
+                $lines[] = ['label' => "{$flight->origin}→{$flight->destination} {$flight->flight_no}: {$line['label']}"] + $line;
+            }
+        }
+
+        return new Quote($lines, array_sum(array_column($lines, 'amount_cents')), self::CURRENCY);
+    }
+
+    /**
+     * Cancellation fee: amount × passengers × legs (Sprint 4 Feature 1).
+     */
+    public function cancellationFee(int $passengers, int $legs): Quote
+    {
+        $quantity = max(0, $passengers) * max(0, $legs);
+
+        return new Quote(
+            $quantity > 0 ? [$this->feeLine(FeeCode::Cancellation, $quantity)] : [],
+            $quantity > 0 ? $this->feeLine(FeeCode::Cancellation, $quantity)['amount_cents'] : 0,
+            self::CURRENCY,
+        );
+    }
+
+    /**
+     * Change fee: amount × passengers × legs (Sprint 4 Feature 1).
+     */
+    public function changeFee(int $passengers, int $legs): Quote
+    {
+        $quantity = max(0, $passengers) * max(0, $legs);
+
+        return new Quote(
+            $quantity > 0 ? [$this->feeLine(FeeCode::Change, $quantity)] : [],
+            $quantity > 0 ? $this->feeLine(FeeCode::Change, $quantity)['amount_cents'] : 0,
+            self::CURRENCY,
+        );
+    }
+
     private function feeLine(FeeCode $code, int $quantity): array
     {
         $cents = Fee::query()->where('code', $code)->value('amount_cents');

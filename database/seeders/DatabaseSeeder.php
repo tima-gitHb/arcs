@@ -25,6 +25,7 @@ class DatabaseSeeder extends Seeder
             RouteFareSeeder::class,
             TripFareSeeder::class,
             FlightSeeder::class,
+            ScheduleSeeder::class,
             BookingSeeder::class,
             PaymentSeeder::class,
         ]);

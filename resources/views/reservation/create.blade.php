@@ -1430,6 +1430,7 @@
                 row.querySelector('.seat-field').classList.toggle('hidden', type === 'Infant');
                 cabinField.classList.toggle('hidden', type === 'Infant');
                 extrasField.classList.toggle('hidden', type === 'Infant');
+                row.querySelector('.email-field')?.classList.toggle('hidden', type === 'Infant');
                 cabinSelect.required = type !== 'Infant';
 
                 if (type === 'Infant') {
@@ -1438,6 +1439,10 @@
                     });
                     row.querySelector('.passenger-extra-bags').value = '0';
                     row.querySelector('.passenger-extra-kg').value = '0';
+                    const emailInput = row.querySelector('.passenger-email');
+                    if (emailInput) {
+                        emailInput.value = '';
+                    }
                 }
 
                 const select = row.querySelector('.accompanying-adult');

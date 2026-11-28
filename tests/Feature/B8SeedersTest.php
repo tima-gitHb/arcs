@@ -278,8 +278,10 @@ class B8SeedersTest extends TestCase
     {
         $this->assertSame(9, Fare::query()->defaults()->count());
         $this->assertGreaterThan(9, Fare::query()->whereNotNull('origin_airport_code')->count());
-        $this->assertSame(4, Fee::count());
+        $this->assertSame(6, Fee::count());
         $this->assertSame(5000, Fee::where('code', 'ExtraBag')->value('amount_cents'));
+        $this->assertSame(7500, Fee::where('code', 'Cancellation')->value('amount_cents'));
+        $this->assertSame(5000, Fee::where('code', 'Change')->value('amount_cents'));
 
         $this->assertTrue(Payment::where('status', PaymentStatus::Failed)->where('kind', PaymentKind::Fare)->exists());
         $succeeded = Payment::where('status', PaymentStatus::Succeeded)->where('kind', PaymentKind::Fare)->first();

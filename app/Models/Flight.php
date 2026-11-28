@@ -47,6 +47,7 @@ class Flight extends Model
         'origin',
         'destination',
         'aircraft_id',
+        'flight_schedule_id',
         'departure_at',
         'arrives_at',
         'gate',
@@ -72,6 +73,11 @@ class Flight extends Model
     public function aircraft(): BelongsTo
     {
         return $this->belongsTo(Aircraft::class);
+    }
+
+    public function schedule(): BelongsTo
+    {
+        return $this->belongsTo(FlightSchedule::class, 'flight_schedule_id');
     }
 
     public function originAirport(): BelongsTo

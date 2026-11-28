@@ -74,9 +74,16 @@ class ReservationService
 
             foreach ($passengers as $index => $row) {
                 $type = PassengerType::from($row['type']);
+                $email = null;
+                if ($type !== PassengerType::Infant) {
+                    $raw = trim((string) ($row['email'] ?? ''));
+                    $email = $raw !== '' ? $raw : null;
+                }
+
                 $created[$index] = $reservation->passengers()->create([
                     'first_name' => $row['first_name'],
                     'last_name' => $row['last_name'],
+                    'email' => $email,
                     'type' => $row['type'],
                     'date_of_birth' => $row['date_of_birth'],
                     'cabin_class' => $type === PassengerType::Infant
@@ -135,17 +142,45 @@ class ReservationService
         User $agent,
     ): Payment {
         $quote = $this->fares->journeyQuote($reservation);
+        $fareItems = $this->fares->passengerFlightBreakdown($reservation);
 
+        $extraBagFee = (int) (Fee::query()->where('code', FeeCode::ExtraBag)->value('amount_cents') ?? 0);
+        $extraKgFee = (int) (Fee::query()->where('code', FeeCode::ExcessKg)->value('amount_cents') ?? 0);
         $extraBags = 0;
         $extraKg = 0;
+        $extraItems = [];
         foreach ($created as $passenger) {
             $extraBags += $passenger->extra_bags;
             $extraKg += $passenger->extra_kg;
+            if ($passenger->extra_bags > 0) {
+                $extraItems[] = [
+                    'passenger_id' => $passenger->id,
+                    'flight_id' => $reservation->flight_id,
+                    'leg' => 1,
+                    'amount_cents' => $passenger->extra_bags * $extraBagFee,
+                    'type' => 'extra',
+                ];
+            }
+            if ($passenger->extra_kg > 0) {
+                $extraItems[] = [
+                    'passenger_id' => $passenger->id,
+                    'flight_id' => $reservation->flight_id,
+                    'leg' => 1,
+                    'amount_cents' => $passenger->extra_kg * $extraKgFee,
+                    'type' => 'extra',
+                ];
+            }
         }
 
         $amount = $quote->totalCents
-            + $extraBags * (int) (Fee::query()->where('code', FeeCode::ExtraBag)->value('amount_cents') ?? 0)
-            + $extraKg * (int) (Fee::query()->where('code', FeeCode::ExcessKg)->value('amount_cents') ?? 0);
+            + $extraBags * $extraBagFee
+            + $extraKg * $extraKgFee;
+
+        $items = array_map(
+            fn (array $item) => $item + ['type' => 'fare'],
+            $fareItems,
+        );
+        array_push($items, ...$extraItems);
 
         $payment = $this->payments->charge(
             $card,
@@ -153,6 +188,7 @@ class ReservationService
             PaymentKind::Fare,
             $agent,
             reservation: $reservation,
+            breakdown: ['items' => $items],
         );
 
         if ($payment->status !== PaymentStatus::Succeeded) {

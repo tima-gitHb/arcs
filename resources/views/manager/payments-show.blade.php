@@ -43,8 +43,36 @@
                     </div>
                     <div>
                         <dt class="text-gray-500">Total</dt>
-                        <dd class="text-lg font-bold">{{ \App\Support\Money::format($payment->amount_cents) }}</dd>
+                        <dd class="text-lg font-bold">
+                            @if ($payment->isRefund())−@endif{{ \App\Support\Money::format($payment->amount_cents) }}
+                        </dd>
                     </div>
+                    @if ($payment->refundOf)
+                        <div class="sm:col-span-2">
+                            <dt class="text-gray-500">Original payment</dt>
+                            <dd class="font-medium">
+                                <a href="{{ route('manager.payments.show', $payment->refundOf) }}" class="hover:underline" style="color: var(--arcs-accent-text);">
+                                    #{{ $payment->refundOf->id }} · {{ \App\Support\Money::format($payment->refundOf->amount_cents) }}
+                                    · {{ $payment->refundOf->status->label() }}
+                                </a>
+                            </dd>
+                        </div>
+                    @endif
+                    @if ($payment->refunds->isNotEmpty())
+                        <div class="sm:col-span-2">
+                            <dt class="text-gray-500">Refunds</dt>
+                            <dd class="space-y-1 font-medium">
+                                @foreach ($payment->refunds as $refundRow)
+                                    <div>
+                                        <a href="{{ route('manager.payments.show', $refundRow) }}" class="hover:underline" style="color: var(--arcs-accent-text);">
+                                            #{{ $refundRow->id }} · {{ \App\Support\Money::format($refundRow->amount_cents) }}
+                                        </a>
+                                        <span class="ml-2 rounded-full px-2 py-0.5 text-xs font-semibold" style="background: #E8F0FE;">Refunded</span>
+                                    </div>
+                                @endforeach
+                            </dd>
+                        </div>
+                    @endif
                 </dl>
             </x-panel>
 

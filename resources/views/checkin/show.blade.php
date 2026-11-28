@@ -18,7 +18,7 @@
         // Booked opens on Documents. Checked in (and later statuses) open on Done.
         // A validation error, an open edit, or Change seat opens that step instead.
         $initialStep = $legStatus === \App\Enums\PassengerStatus::Booked ? 0 : 5;
-        if ($errors->getBag('addDocument')->any() || $errors->getBag('editDocument')->any() || $editing) {
+        if ($errors->getBag('addDocument')->any() || $errors->getBag('editDocument')->any() || $editing || $errors->has('email') || old('_email_form') === '1') {
             $initialStep = 0;
         } elseif ($changingSeat || $errors->has('seat_id') || $errors->has('seat')) {
             $initialStep = 1;
@@ -296,6 +296,43 @@
 
         <div class="space-y-6">
             <div x-show="step === 0" class="space-y-6">
+                @php
+                    $emailService = app(\App\Services\PassengerService::class);
+                    $emailLabel = $emailService->noticeEmailLabel($passenger);
+                    $editingEmail = old('_email_form') === '1' || $errors->has('email');
+                @endphp
+                <x-panel title="Email for boarding passes">
+                    <div class="flex flex-wrap items-start justify-between gap-3 text-sm">
+                        <p class="text-gray-800">
+                            <span class="font-medium">{{ $emailLabel }}</span>
+                        </p>
+                        @unless ($editingEmail)
+                            <button type="button" class="text-xs font-medium hover:underline" style="color: var(--arcs-accent-text);"
+                                onclick="this.closest('[x-show]').querySelector('[data-email-form]').classList.remove('hidden'); this.classList.add('hidden');">
+                                {{ trim((string) $passenger->email) !== '' ? 'Edit' : 'Add' }}
+                            </button>
+                        @endunless
+                    </div>
+                    <form method="POST" action="{{ route('checkin.passengers.email', $passenger) }}"
+                        @class(['mt-4 space-y-3', 'hidden' => ! $editingEmail]) data-email-form>
+                        @csrf
+                        @method('PUT')
+                        <input type="hidden" name="_email_form" value="1">
+                        <div>
+                            <x-input-label for="passenger-email" value="Email" />
+                            <x-text-input id="passenger-email" name="email" type="email" class="mt-1 block w-full"
+                                :value="old('email', $passenger->email)" maxlength="255" autocomplete="off"
+                                placeholder="Leave blank to use the booking contact" />
+                            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+                            <p class="mt-1 text-xs text-gray-500">Clear the field to fall back to the booking contact.</p>
+                        </div>
+                        <div class="flex flex-wrap gap-2">
+                            <x-primary-button>Save email</x-primary-button>
+                            <a href="{{ route('checkin.passengers.show', request()->route()->parameters()) }}" class="arcs-btn-ghost">Cancel</a>
+                        </div>
+                    </form>
+                </x-panel>
+
                 <x-panel>
                     <div class="flex flex-wrap items-baseline justify-between gap-2">
                         <h2 class="text-base font-semibold text-gray-900">Travel documents</h2>
@@ -522,12 +559,24 @@
                                     </p>
                                 </div>
                             </div>
-                            @if ($passenger->reservation->contact_email)
+                            @php($doneEmail = app(\App\Services\PassengerService::class)->noticeEmail($passenger))
+                            @if ($doneEmail)
                                 <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold" style="background: #E0EEF9; color: #1E4E79;">
-                                    Email sent with boarding passes and bag tags
+                                    Email sent to {{ $doneEmail }}
+                                </span>
+                            @else
+                                <span class="inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold" style="background: #F3F4F6; color: #4B5563;">
+                                    No email
                                 </span>
                             @endif
                         </div>
+                        @if ($doneEmail)
+                            <form method="POST" action="{{ route('checkin.passengers.email.resend', $passenger) }}" class="mt-4">
+                                @csrf
+                                <input type="hidden" name="leg" value="{{ $activeLeg }}">
+                                <button type="submit" class="arcs-btn-secondary">Resend email</button>
+                            </form>
+                        @endif
                     </x-panel>
                 @endif
 

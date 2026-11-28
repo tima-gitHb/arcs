@@ -47,6 +47,7 @@
                     <select id="status" name="status" class="arcs-input mt-1 block w-full">
                         <option value="" @selected(($statusFilter ?? '') === '')>All</option>
                         <option value="paid" @selected(($statusFilter ?? '') === 'paid')>Paid</option>
+                        <option value="refunded" @selected(($statusFilter ?? '') === 'refunded')>Refunded</option>
                         <option value="failed" @selected(($statusFilter ?? '') === 'failed')>Failed</option>
                     </select>
                 </div>
@@ -65,7 +66,7 @@
                 </span>
             @endforeach
             <span class="rounded-full px-3 py-1.5" style="background: #EEF0F4;">
-                <span class="text-gray-500">Total</span>
+                <span class="text-gray-500">Net total</span>
                 <span data-total="grand" class="ml-1 font-medium text-gray-900">{{ \App\Support\Money::format($grandCents) }}</span>
             </span>
             <span class="rounded-full px-3 py-1.5" style="background: #FCE8E6;">
@@ -96,17 +97,22 @@
                             @php
                                 $linked = $payment->reservation ?? $payment->passenger?->reservation;
                                 $paid = $payment->status === \App\Enums\PaymentStatus::Succeeded;
+                                $isRefund = $payment->isRefund();
+                                $badgeBg = $paid ? '#E6F4EA' : ($isRefund ? '#E8F0FE' : '#FCE8E6');
+                                $badgeColor = $paid ? 'var(--arcs-success)' : ($isRefund ? 'var(--arcs-accent-text)' : 'var(--arcs-error)');
                             @endphp
-                            <tr data-payment="{{ $payment->id }}" @class(['text-red-600' => ! $paid])>
+                            <tr data-payment="{{ $payment->id }}" @class(['text-red-600' => ! $paid && ! $isRefund])>
                                 <td class="whitespace-nowrap" data-cell="date"><x-station-time :at="$payment->created_at" format="d M Y H:i" /></td>
                                 <td data-cell="flight">{{ $linked?->flight?->flight_no }}</td>
                                 <td class="arcs-mono" data-cell="pnr">{{ $linked?->pnr }}</td>
                                 <td data-cell="passenger">{{ $payment->passenger ? $payment->passenger->first_name.' '.$payment->passenger->last_name : 'Whole booking' }}</td>
                                 <td data-cell="kind">{{ $payment->kind->label() }}</td>
-                                <td class="whitespace-nowrap" data-cell="amount">{{ \App\Support\Money::format($payment->amount_cents) }}</td>
+                                <td class="whitespace-nowrap" data-cell="amount">
+                                    @if ($isRefund)-@endif{{ \App\Support\Money::format($payment->amount_cents) }}
+                                </td>
                                 <td class="whitespace-nowrap" data-cell="card">{{ $payment->card_brand }} ••••{{ $payment->card_last4 }}</td>
                                 <td data-cell="status">
-                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" style="background: {{ $paid ? '#E6F4EA' : '#FCE8E6' }}; color: {{ $paid ? 'var(--arcs-success)' : 'var(--arcs-error)' }};">
+                                    <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" style="background: {{ $badgeBg }}; color: {{ $badgeColor }};">
                                         {{ $payment->status->label() }}
                                     </span>
                                 </td>
