@@ -251,6 +251,7 @@ class DashboardController extends Controller
             PaymentKind::ExcessBaggage,
             PaymentKind::Fee,
             PaymentKind::Upgrade,
+            PaymentKind::Exchange,
         ])->sum('amount_cents');
         // Net ticket revenue: fare charges − refunds (Sprint 4 Feature 2).
         $ticketCents = $ticketGross - $refundCents;

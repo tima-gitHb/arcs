@@ -175,11 +175,12 @@ class SalesController extends Controller
         $extras = $totals[PaymentKind::ExtraBag->value]
             + $totals[PaymentKind::ExcessBaggage->value]
             + $totals[PaymentKind::Fee->value]
-            + $totals[PaymentKind::Upgrade->value];
+            + $totals[PaymentKind::Upgrade->value]
+            + ($totals[PaymentKind::Exchange->value] ?? 0);
 
         $refunds = $totals[PaymentKind::Refund->value] ?? 0;
         $totals['extras'] = $extras;
-        // Net revenue: charges − refunds (Sprint 4 Feature 2).
+        // Net revenue: charges − refunds (Sprint 4).
         $totals['grand'] = $totals[PaymentKind::Fare->value] + $extras - $refunds;
 
         return $totals;
@@ -268,7 +269,10 @@ class SalesController extends Controller
         // and Fee = fees. Refunds reduce net total (Sprint 4 Feature 2).
         $fares = $revenue[PaymentKind::Fare->value] ?? 0;
         $refunds = $revenue[PaymentKind::Refund->value] ?? 0;
-        $fees = $revenue->except([PaymentKind::Fare->value, PaymentKind::Refund->value])->sum();
+        $fees = $revenue->except([
+            PaymentKind::Fare->value,
+            PaymentKind::Refund->value,
+        ])->sum();
 
         return [
             'flight' => $flight,

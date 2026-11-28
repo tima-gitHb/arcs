@@ -31,6 +31,7 @@ use App\Http\Controllers\Manager\RuleController;
 use App\Http\Controllers\Manager\SalesController;
 use App\Http\Controllers\Manager\TripFareController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Reservation\ExchangeController;
 use App\Http\Controllers\Reservation\ReservationController;
 use Illuminate\Support\Facades\Route;
 
@@ -65,6 +66,10 @@ Route::middleware(['auth', 'role:reservation'])->prefix('reservation')->name('re
     Route::get('/reservations/{reservation}/refund', [ReservationController::class, 'refundForm'])->name('refund');
     Route::post('/reservations/{reservation}/refund/preview', [ReservationController::class, 'refundPreview'])->name('refund.preview');
     Route::post('/reservations/{reservation}/refund', [ReservationController::class, 'refundConfirm'])->name('refund.confirm');
+    Route::get('/reservations/{reservation}/exchange/{leg}', [ExchangeController::class, 'form'])->name('exchange');
+    Route::post('/reservations/{reservation}/exchange/{leg}/search', [ExchangeController::class, 'search'])->name('exchange.search');
+    Route::post('/reservations/{reservation}/exchange/{leg}/review', [ExchangeController::class, 'review'])->name('exchange.review');
+    Route::post('/reservations/{reservation}/exchange/{leg}', [ExchangeController::class, 'confirm'])->name('exchange.confirm');
 });
 
 // Check-in staff, at their station: only flights departing from it (B13a).

@@ -293,6 +293,27 @@ class RefundService
     }
 
     /**
+     * Stored booking breakdown, or FareService structure scaled to what was paid (Sprint 4).
+     *
+     * @return list<array{passenger_id: int, flight_id: int, leg: int, amount_cents: int, type?: string}>
+     */
+    public function breakdownFor(Reservation $reservation): array
+    {
+        return $this->breakdownItems($reservation, $reservation->farePayment());
+    }
+
+    /**
+     * Paid fare cents for the given coupons (uses stored breakdown / fallback).
+     *
+     * @param  Collection<int, Coupon>  $coupons
+     * @return array{total: int, by_coupon: array<int, int>}
+     */
+    public function paidForCoupons(Reservation $reservation, Collection $coupons): array
+    {
+        return $this->selectedFareCents($this->breakdownFor($reservation), $coupons);
+    }
+
+    /**
      * @return list<array{passenger_id: int, flight_id: int, leg: int, amount_cents: int, type?: string}>
      */
     private function breakdownItems(Reservation $reservation, ?Payment $payment): array

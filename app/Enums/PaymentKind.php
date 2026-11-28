@@ -10,6 +10,7 @@ enum PaymentKind: string
     case Fee = 'Fee';
     case Upgrade = 'Upgrade';
     case Refund = 'Refund';
+    case Exchange = 'Exchange';
 
     public function label(): string
     {
@@ -20,6 +21,7 @@ enum PaymentKind: string
             self::Fee => 'Fee',
             self::Upgrade => 'Cabin upgrade',
             self::Refund => 'Refund',
+            self::Exchange => 'Ticket exchange',
         };
     }
 }

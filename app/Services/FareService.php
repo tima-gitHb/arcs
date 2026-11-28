@@ -453,6 +453,43 @@ class FareService
     }
 
     /**
+     * Fare for one leg's flights for the given passengers (same rules as booking: trip fare
+     * origin→final dest when set, else per-route sum). Used by ticket exchange (Sprint 4 Feature 3).
+     *
+     * @param  list<Passenger>|Collection<int, Passenger>  $passengers
+     * @param  list<Flight>|Collection<int, \App\Models\Flight>  $flights
+     */
+    public function quoteLegFlights($passengers, $flights): Quote
+    {
+        $flightList = collect($flights)->values();
+        if ($flightList->isEmpty()) {
+            return new Quote([], 0, self::CURRENCY);
+        }
+
+        $passengerRows = collect($passengers)->map(fn (Passenger $passenger) => [
+            'cabin_class' => $passenger->cabin_class ?? CabinClass::Economy,
+            'type' => $passenger->type,
+        ])->all();
+
+        $origin = $flightList->first()->origin;
+        $destination = $flightList->last()->destination;
+
+        $trip = $this->tripFareLines($passengerRows, $origin, $destination, hasReturn: false);
+        if ($trip !== null) {
+            return new Quote($trip, array_sum(array_column($trip, 'amount_cents')), self::CURRENCY);
+        }
+
+        $lines = [];
+        foreach ($flightList as $flight) {
+            foreach ($this->quote($passengerRows, origin: $flight->origin, destination: $flight->destination)->lines as $line) {
+                $lines[] = ['label' => "{$flight->origin}→{$flight->destination} {$flight->flight_no}: {$line['label']}"] + $line;
+            }
+        }
+
+        return new Quote($lines, array_sum(array_column($lines, 'amount_cents')), self::CURRENCY);
+    }
+
+    /**
      * Cancellation fee: amount × passengers × legs (Sprint 4 Feature 1).
      */
     public function cancellationFee(int $passengers, int $legs): Quote

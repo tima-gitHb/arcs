@@ -51,6 +51,27 @@
                     </div>
                 @endif
 
+                @if (session('exchange_receipt'))
+                    @php $receipt = session('exchange_receipt'); @endphp
+                    <div class="mt-4 rounded-[14px] border px-4 py-4" style="border-color: var(--arcs-success); background: var(--arcs-success-bg);" role="status">
+                        <p class="text-sm font-semibold" style="color: var(--arcs-success);">Exchange receipt</p>
+                        <p class="mt-1 text-lg font-bold text-gray-900">
+                            @if (($receipt['charge_cents'] ?? 0) > 0)
+                                Charged {{ \App\Support\Money::format($receipt['charge_cents']) }}
+                                @if (! empty($receipt['card_brand']))
+                                    to {{ $receipt['card_brand'] }} ••••{{ $receipt['card_last4'] }}
+                                @endif
+                            @else
+                                No card charge
+                            @endif
+                        </p>
+                        <p class="mt-1 text-sm text-gray-600">{{ $receipt['change_note'] ?? '' }}</p>
+                        @if (! empty($receipt['difference_not_refunded']))
+                            <p class="mt-1 text-sm" style="color: #5C4810;">The fare difference is not refunded.</p>
+                        @endif
+                    </div>
+                @endif
+
                 @if ($reservation)
                     <div class="mt-4">
                         @include('reservation.partials.summary', ['reservation' => $reservation])

@@ -29,7 +29,7 @@ class CheckinFlightService
                 'passengers' => fn ($query) => $query
                     ->whereHas('coupons', fn ($coupons) => $coupons
                         ->where('flight_id', $flight->id)
-                        ->where('status', '!=', PassengerStatus::Cancelled))
+                        ->whereNotIn('status', [PassengerStatus::Cancelled->value, PassengerStatus::Exchanged->value]))
                     ->with(['coupon' => fn ($coupon) => $coupon->where('coupons.flight_id', $flight->id)])
                     ->orderBy('id'),
             ])
@@ -39,7 +39,9 @@ class CheckinFlightService
                     $match->where('pnr', 'like', strtoupper($filter))
                         ->orWhereHas('passengers', function ($passengers) use ($like, $flight) {
                             $passengers
-                                ->whereHas('coupons', fn ($coupons) => $coupons->where('flight_id', $flight->id))
+                                ->whereHas('coupons', fn ($coupons) => $coupons
+                                    ->where('flight_id', $flight->id)
+                                    ->whereNotIn('status', [PassengerStatus::Cancelled->value, PassengerStatus::Exchanged->value]))
                                 ->where(function ($name) use ($like) {
                                     $name->where('last_name', 'like', $like)
                                         ->orWhere('first_name', 'like', $like);

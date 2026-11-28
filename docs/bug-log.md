@@ -370,3 +370,27 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Where: B13bMigrationTest B13B_STEPS
 - Fix: 12 → 13
 - Status: Fixed
+
+## BUG-033 · Hiding Cancelled coupons from couponsOfLeg broke check-in refusal
+- Date / who: 28 Nov 2026 · Auto (Sprint 4 Feature 3)
+- Card / branch: Feature 3 · feature/fees-weekly-schedules
+- Where: JourneyService::couponsOfLeg / StatusService::checkIn
+- Severity: Major
+- Steps: 1. Cancel a passenger 2. Attempt check-in (or late check-in)
+- Expected: "Reservation cancelled"
+- Actual: 500 — Attempt to read property "flight" on null (empty coupon set skipped ensureBooked)
+- Status: Fixed
+- Fix: omit only Exchanged from couponsOfLeg; keep Cancelled so ensureBooked still throws. segmentsOfLeg drops all-Exchanged segments only.
+- Retested: B7StatusServiceTest, C1CheckinSearchTest, G5LateCheckInTest, ExchangeTest
+
+## BUG-034 · composer test:mysql hit default 300s process timeout
+- Date / who: 28 Nov 2026 · Auto (Sprint 4 Feature 3)
+- Card / branch: Feature 3 · feature/fees-weekly-schedules
+- Where: composer test:mysql (Composer Process.php timeout)
+- Severity: Minor
+- Steps: 1. Run `composer test:mysql` on a cold machine after Feature 3
+- Expected: suite finishes
+- Actual: process killed at 300s mid-suite
+- Status: Workaround
+- Fix: run with `COMPOSER_PROCESS_TIMEOUT=0` (or raise timeout). Suite then green (958).
+- Retested: composer test:mysql with timeout disabled

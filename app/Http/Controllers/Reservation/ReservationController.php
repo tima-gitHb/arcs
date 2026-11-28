@@ -333,7 +333,13 @@ class ReservationController extends Controller
                 $error = 'Enter a 6-character PNR.';
             } else {
                 $reservation = Reservation::query()
-                    ->with(['flight', 'passengers.accompanyingAdult', 'passengers.seatAssignment.seat'])
+                    ->with([
+                        'flight',
+                        'segments.flight',
+                        'passengers.accompanyingAdult',
+                        'passengers.seatAssignment.seat',
+                        'passengers.coupons',
+                    ])
                     ->where('pnr', $pnr)
                     ->first();
 
