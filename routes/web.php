@@ -78,6 +78,8 @@ Route::middleware(['auth', 'role:checkin', 'station'])->prefix('checkin')->name(
     Route::get('/flights/{flight}', [FlightCheckinController::class, 'show'])->name('flights.show');
     Route::get('/passengers/{passenger}', [CheckinController::class, 'show'])->name('passengers.show');
     Route::post('/passengers/{passenger}/confirm', [CheckinController::class, 'confirm'])->name('passengers.confirm');
+    Route::put('/passengers/{passenger}/email', [CheckinController::class, 'updateEmail'])->name('passengers.email');
+    Route::post('/passengers/{passenger}/email/resend', [CheckinController::class, 'resendEmail'])->name('passengers.email.resend');
     Route::post('/passengers/{passenger}/documents', [TravelDocumentController::class, 'store'])->name('documents.store');
     Route::put('/documents/{document}', [TravelDocumentController::class, 'update'])->name('documents.update');
     Route::post('/documents/{document}/verify', [TravelDocumentController::class, 'verify'])->name('documents.verify');

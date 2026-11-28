@@ -8,11 +8,13 @@ use App\Exceptions\EntryReasonRequired;
 use App\Exceptions\ExcessBaggageUnpaid;
 use App\Exceptions\InvalidStatusChange;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Checkin\UpdatePassengerEmailRequest;
 use App\Models\Passenger;
 use App\Models\SeatAssignment;
 use App\Services\BoardingPassService;
 use App\Services\EntryRequirementChecker;
 use App\Services\JourneyService;
+use App\Services\PassengerService;
 use App\Services\SeatService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -190,5 +192,40 @@ class CheckinController extends Controller
         }
 
         return $screen->with('success', $passenger->first_name.' '.$passenger->last_name.' checked in.');
+    }
+
+    /**
+     * Set or clear passengers.email at the desk (CR-12). Station middleware applies.
+     */
+    public function updateEmail(UpdatePassengerEmailRequest $request, Passenger $passenger, PassengerService $passengers): RedirectResponse
+    {
+        $passengers->updateEmail($passenger, $request->validated('email'), $request->user());
+
+        return back()->with('success', 'Email saved');
+    }
+
+    /**
+     * Resend the check-in complete mail to the address currently used (CR-12).
+     */
+    public function resendEmail(
+        Request $request,
+        Passenger $passenger,
+        BoardingPassService $passes,
+        JourneyService $journeys,
+    ): RedirectResponse {
+        $leg = $request->integer('leg') ?: $journeys->legFor($passenger, $request->user());
+        $screen = redirect()->route(
+            'checkin.passengers.show',
+            $journeys->hasMultipleLegs($passenger->reservation)
+                ? ['passenger' => $passenger, 'leg' => $leg]
+                : $passenger,
+        );
+
+        $sentTo = $passes->resendCheckInEmail($passenger, $request->user(), null, $leg);
+        if ($sentTo === null) {
+            return $screen->with('error', 'No email to send to.');
+        }
+
+        return $screen->with('success', 'Email resent to '.$sentTo);
     }
 }

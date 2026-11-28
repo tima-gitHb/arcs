@@ -78,6 +78,22 @@
             <x-input-error :messages="$errors->get('passengers.'.$index.'.date_of_birth')" class="mt-2" />
         </div>
 
+        <div class="email-field sm:col-span-2 {{ $type === 'Infant' ? 'hidden' : '' }}">
+            <x-input-label :for="'passenger-'.$index.'-email'" value="Email (optional)" />
+            <x-text-input
+                :id="'passenger-'.$index.'-email'"
+                class="passenger-email mt-1 block w-full"
+                type="email"
+                :name="'passengers['.$index.'][email]'"
+                :value="$passenger['email'] ?? ''"
+                maxlength="255"
+                autocomplete="off"
+                placeholder="boarding passes…"
+            />
+            <p class="mt-1 text-xs text-gray-500">Used for boarding-pass email at check-in. Otherwise the booking contact is used.</p>
+            <x-input-error :messages="$errors->get('passengers.'.$index.'.email')" class="mt-2" />
+        </div>
+
         <div class="cabin-field sm:col-span-2 {{ $type === 'Infant' ? 'hidden' : '' }}">
             <x-input-label :for="'passenger-'.$index.'-cabin-class'" value="Cabin class" />
             <select

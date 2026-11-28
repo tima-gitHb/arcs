@@ -74,9 +74,16 @@ class ReservationService
 
             foreach ($passengers as $index => $row) {
                 $type = PassengerType::from($row['type']);
+                $email = null;
+                if ($type !== PassengerType::Infant) {
+                    $raw = trim((string) ($row['email'] ?? ''));
+                    $email = $raw !== '' ? $raw : null;
+                }
+
                 $created[$index] = $reservation->passengers()->create([
                     'first_name' => $row['first_name'],
                     'last_name' => $row['last_name'],
+                    'email' => $email,
                     'type' => $row['type'],
                     'date_of_birth' => $row['date_of_birth'],
                     'cabin_class' => $type === PassengerType::Infant

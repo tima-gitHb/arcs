@@ -151,6 +151,7 @@ class StoreReservationRequest extends FormRequest
             'passengers' => ['required', 'array', 'min:1', 'max:'.$maxPax],
             'passengers.*.first_name' => ['required', 'string', 'max:255'],
             'passengers.*.last_name' => ['required', 'string', 'max:255'],
+            'passengers.*.email' => ['nullable', 'email', 'max:255'],
             'passengers.*.type' => ['required', Rule::enum(PassengerType::class)],
             'passengers.*.cabin_class' => ['nullable', Rule::enum(CabinClass::class)],
             'passengers.*.date_of_birth' => ['required', 'date', 'before_or_equal:today'],

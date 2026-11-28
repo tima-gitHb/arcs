@@ -394,3 +394,15 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Workaround
 - Fix: run with `COMPOSER_PROCESS_TIMEOUT=0` (or raise timeout). Suite then green (958).
 - Retested: composer test:mysql with timeout disabled
+
+## BUG-035 · Clearing passenger email wrote null into audit_log.new_value
+- Date / who: 28 Nov 2026 · Auto (CR-12 passenger email)
+- Card / branch: feature/C19-passenger-email-checkin
+- Where: PassengerService::updateEmail
+- Severity: Major
+- Steps: 1. Set a passenger email 2. Clear it at the check-in desk
+- Expected: email cleared; audit old → "" 
+- Actual: SQL NOT NULL on audit_log.new_value
+- Status: Fixed
+- Fix: store empty string for cleared old/new email values (column is NOT NULL)
+- Retested: PassengerEmailCheckinTest
