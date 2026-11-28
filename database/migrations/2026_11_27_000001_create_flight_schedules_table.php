@@ -14,8 +14,8 @@ return new class extends Migration
         Schema::create('flight_schedules', function (Blueprint $table) {
             $table->id();
             $table->string('flight_no', 10);
-            $table->string('origin', 3);
-            $table->string('destination', 3);
+            $table->char('origin', 3);
+            $table->char('destination', 3);
             $table->foreignId('aircraft_id')->constrained('aircraft');
             // ISO weekdays 1=Mon … 7=Sun as JSON array of ints.
             $table->json('days_of_week');

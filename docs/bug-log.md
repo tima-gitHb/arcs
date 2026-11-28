@@ -406,3 +406,15 @@ Entries are numbered in date order (oldest first). Renumbered 18 Nov 2026 so BUG
 - Status: Fixed
 - Fix: store empty string for cleared old/new email values (column is NOT NULL)
 - Retested: PassengerEmailCheckinTest
+
+## BUG-036 · flight_schedules migration failed on TiDB (foreign key type mismatch)
+- Date / who: 28 Nov 2026 · Tima
+- Card / branch: Weekly schedules · deploying dev to the shared TiDB database
+- Where: 2026_11_27_000001_create_flight_schedules_table
+- Steps: 1. php artisan migrate on TiDB
+- Expected: table created with foreign keys to airports
+- Actual: error 3780 — origin/destination were VARCHAR(3), airports.code is CHAR(3); MySQL accepts it, TiDB does not
+- Severity: Major
+- Status: Fixed
+- Fix: origin and destination created as CHAR(3), same as airports.code; half-created table dropped on TiDB. Migration edited in place because it had never run on the shared database.
+- Retested: 28 Nov 2026 · migrate on TiDB OK, full suite green
